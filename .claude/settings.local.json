@@ -13,7 +13,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "WebSearch",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(curl:*)"
     ],
     "defaultMode": "acceptEdits"
   }
