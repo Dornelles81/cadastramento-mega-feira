@@ -1,0 +1,124 @@
+/* Mega Feira Brand Theme */
+
+/* Custom gradient backgrounds */
+.mega-gradient {
+  background: linear-gradient(135deg, #7CC69B 0%, #5AB379 100%);
+}
+
+.feira-gradient {
+  background: linear-gradient(135deg, #2D3436 0%, #474c51 100%);
+}
+
+/* Button hover effects with brand colors */
+.btn-mega {
+  @apply bg-mega-500 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300;
+  box-shadow: 0 4px 12px rgba(124, 198, 155, 0.3);
+}
+
+.btn-mega:hover {
+  @apply bg-mega-600 transform scale-105;
+  box-shadow: 0 6px 16px rgba(124, 198, 155, 0.4);
+}
+
+.btn-feira {
+  @apply bg-feira-800 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300;
+  box-shadow: 0 4px 12px rgba(45, 52, 54, 0.3);
+}
+
+.btn-feira:hover {
+  @apply bg-feira-700 transform scale-105;
+  box-shadow: 0 6px 16px rgba(45, 52, 54, 0.4);
+}
+
+/* Card styles with brand colors */
+.card-mega {
+  @apply bg-white rounded-lg shadow-lg border-2 border-mega-100 transition-all duration-300;
+}
+
+.card-mega:hover {
+  @apply border-mega-300 shadow-xl;
+}
+
+/* Logo pulse animation */
+.logo-pulse {
+  animation: logoPulse 2s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+  }
+}
+
+/* Success animation */
+.success-bounce {
+  animation: successBounce 0.6s ease-out;
+}
+
+@keyframes successBounce {
+  0% {
+    transform: scale(0.3) rotate(-180deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(0deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Form focus states with brand colors */
+.form-input {
+  @apply w-full px-4 py-3 border border-gray-300 rounded-lg text-base transition-all duration-300;
+}
+
+.form-input:focus {
+  @apply ring-2 ring-mega-500 border-mega-500 outline-none;
+  box-shadow: 0 0 0 3px rgba(124, 198, 155, 0.1);
+}
+
+/* Admin panel enhancements */
+.admin-header {
+  background: linear-gradient(135deg, #7CC69B 0%, #2D3436 100%);
+}
+
+/* Loading spinner with brand colors */
+.spinner-mega {
+  border: 3px solid rgba(124, 198, 155, 0.3);
+  border-radius: 50%;
+  border-top: 3px solid #7CC69B;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .btn-mega, .btn-feira {
+    @apply py-4 text-lg;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .btn-mega {
+    @apply border-2 border-mega-700;
+  }
+  
+  .btn-feira {
+    @apply border-2 border-feira-900;
+  }
+}

@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Protect API endpoints from crawling
+Disallow: /api/
+
+# Main sitemap
+Sitemap: https://cadastro-mega-feira.vercel.app/sitemap.xml
+
+# Crawl delay for better server performance
+Crawl-delay: 1

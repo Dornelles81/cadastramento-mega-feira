@@ -1,0 +1,53 @@
+// Prisma schema for NEON database
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Participant {
+  id        String   @id @default(uuid())
+  name      String
+  cpf       String   @unique
+  email     String?
+  phone     String?
+  eventCode String?
+  
+  // Facial data stored directly in NEON
+  faceImageUrl    String?  // NEON blob storage URL
+  faceData        Bytes?   // Encrypted biometric template
+  captureQuality  Float?   // Face detection quality score
+  
+  // Consent and compliance
+  consentAccepted Boolean  @default(false)
+  consentIp       String?
+  consentDate     DateTime?
+  
+  // Mobile capture metadata
+  deviceInfo      String?  // User agent + device details
+  captureLocation String?  // Optional location data
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("participants")
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  eventCode   String   @unique
+  startDate   DateTime
+  endDate     DateTime
+  maxCapacity Int      @default(2000)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  @@map("events")
+}

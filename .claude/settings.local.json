@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(npm install)",
+      "Bash(npx prisma:*)",
+      "Bash(npm run dev:*)",
+      "Bash(move \"pages/api/export/participants/[id]\\image.ts\" \"pages/api/export/participants/[id]/image.ts\")",
+      "Bash(mv:*)",
+      "Bash(git init:*)",
+      "Bash(touch:*)",
+      "Bash(git add:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
+}
