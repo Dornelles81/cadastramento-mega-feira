@@ -10,7 +10,10 @@
       "Bash(mv:*)",
       "Bash(git init:*)",
       "Bash(touch:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebSearch",
+      "Bash(gh:*)"
     ],
     "defaultMode": "acceptEdits"
   }
