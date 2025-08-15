@@ -14,7 +14,15 @@
       "Bash(git commit:*)",
       "WebSearch",
       "Bash(gh:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(start \"\" \"https://github.com/new\")",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(start \"\" \"https://neon.tech\")",
+      "Bash(start \"\" \"https://vercel.com\")",
+      "Bash(git remote set-url:*)",
+      "Bash(start \"\" \"https://netlify.com\")"
     ],
     "defaultMode": "acceptEdits"
   }
