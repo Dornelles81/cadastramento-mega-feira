@@ -7,6 +7,35 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.2.1] - 2025-08-18
+
+### ✨ Adicionado
+- **Interface Inicial Aprimorada**
+  - Novo texto de boas-vindas "Bem-vindo ao APP Mega Feira! 🎯"
+  - Descrição dos benefícios do aplicativo
+  - Guia passo a passo numerado do processo de cadastro
+  - Tempo estimado de conclusão (2 minutos)
+
+- **Termos de Uso Completos**
+  - Modal com 8 seções detalhadas sobre LGPD
+  - Link opcional "📄 Ler termos completos"
+  - Informações sobre coleta, uso e proteção de dados
+  - Direitos do usuário conforme LGPD
+  - Dados de contato para privacidade
+
+### 🔄 Modificado
+- **Tela de Consentimento**
+  - Removidas seções técnicas (O que coletamos, Finalidade, Retenção)
+  - Substituídas por guia visual simples e direto
+  - Texto mais amigável e menos técnico
+
+### 🐛 Corrigido
+- Erro de hidratação do React
+- Data dinâmica substituída por data fixa nos termos
+- Formatação do texto do checkbox
+
+---
+
 ## [1.2.0] - 2025-08-18
 
 ### ✨ Adicionado
