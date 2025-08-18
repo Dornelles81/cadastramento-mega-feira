@@ -29,7 +29,8 @@
       "Bash(node:*)",
       "Bash(rm:*)",
       "Bash(timeout:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)"
     ],
     "defaultMode": "acceptEdits"
   }

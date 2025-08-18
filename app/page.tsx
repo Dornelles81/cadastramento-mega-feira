@@ -20,6 +20,7 @@ interface RegistrationData {
 export default function HomePage() {
   const [currentStep, setCurrentStep] = useState<'consent' | 'personal' | 'capture' | 'success'>('consent')
   const [consentChecked, setConsentChecked] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     name: '',
     cpf: '',
@@ -184,35 +185,69 @@ export default function HomePage() {
                 <MegaFeiraLogo className="text-4xl" />
               </div>
               <h1 className="text-xl font-bold text-gray-800 mb-2">
-                Consentimento LGPD
+                Bem-vindo ao APP Mega Feira! 🎯
               </h1>
-              <p className="text-sm text-gray-600">
-                Precisamos da sua autorização para coletar dados biométricos
+              <p className="text-sm text-gray-600 mb-3">
+                Sua experiência em feiras e eventos começa aqui.
               </p>
-            </div>
-
-            {/* Info Cards */}
-            <div className="bg-white rounded-xl shadow-sm p-5 space-y-4 mb-6">
-              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                <h3 className="font-semibold text-green-800 text-sm mb-2">✅ O que coletamos:</h3>
-                <ul className="text-xs text-green-700 space-y-1">
-                  <li>• Seu nome e CPF</li>
-                  <li>• Sua foto facial</li>
-                  <li>• Dados de consentimento</li>
-                </ul>
-              </div>
-
-              <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                <h3 className="font-semibold text-purple-800 text-sm mb-2">🎯 Finalidade:</h3>
-                <p className="text-xs text-purple-700">
-                  Controle de acesso à Mega Feira via reconhecimento facial
+              <div className="text-xs text-gray-500 text-left bg-gray-50 rounded-lg p-3 mb-3">
+                <p className="mb-2">
+                  Com nosso aplicativo, você tem acesso rápido e seguro aos melhores eventos do setor. 
+                  Através do reconhecimento facial e cadastro simplificado, garantimos:
+                </p>
+                <div className="space-y-1">
+                  <p>✓ <strong>Entrada ágil</strong> - Sem filas, sem papel</p>
+                  <p>✓ <strong>Segurança</strong> - Seus dados protegidos pela LGPD</p>
+                  <p>✓ <strong>Praticidade</strong> - Tudo na palma da sua mão</p>
+                </div>
+                <p className="mt-3 text-center font-semibold text-gray-700">
+                  Vamos começar?
                 </p>
               </div>
+            </div>
 
-              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                <h3 className="font-semibold text-yellow-800 text-sm mb-2">⏰ Retenção:</h3>
-                <p className="text-xs text-yellow-700">
-                  Seus dados serão automaticamente excluídos em 90 dias
+            {/* Steps Guide */}
+            <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+              <h3 className="font-semibold text-gray-800 text-sm mb-3 text-center">
+                📋 Como funciona? É rápido e fácil:
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Aceite os termos</p>
+                    <p className="text-xs text-gray-500">Autorize o uso dos seus dados com segurança</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Preencha seus dados</p>
+                    <p className="text-xs text-gray-500">Informações básicas e documentos (se necessário)</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Tire uma selfie</p>
+                    <p className="text-xs text-gray-500">Foto rápida para reconhecimento no evento</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold">✓</span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Pronto!</p>
+                    <p className="text-xs text-gray-500">Acesso liberado para o evento</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <p className="text-xs text-center text-gray-500">
+                  ⏱️ Tempo estimado: menos de 2 minutos
                 </p>
               </div>
             </div>
@@ -230,10 +265,19 @@ export default function HomePage() {
                       setConsentChecked(e.target.checked)
                     }}
                   />
-                  <span className="text-sm text-gray-700 select-none">
-                    Li e compreendi as informações sobre tratamento dos meus dados
-                  </span>
+                  <span className="text-sm text-gray-700 select-none">Li e aceito os termos de uso e política de privacidade</span>
                 </label>
+                
+                {/* Terms Link */}
+                <div className="mt-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowTerms(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    📄 Ler termos completos
+                  </button>
+                </div>
               </div>
 
               <button
@@ -256,6 +300,136 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* Terms Modal */}
+        {showTerms && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+              <div className="p-6 border-b">
+                <h2 className="text-lg font-bold text-gray-800">
+                  📜 Termos de Uso e Política de Privacidade
+                </h2>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="space-y-4 text-sm text-gray-700">
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">1. COLETA DE DADOS</h3>
+                    <p className="mb-2">
+                      Para garantir seu acesso rápido e seguro ao evento, coletamos:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Nome completo e CPF para identificação</li>
+                      <li>Telefone e e-mail para comunicação</li>
+                      <li>Foto facial para reconhecimento biométrico</li>
+                      <li>Documentos quando solicitados pelo organizador</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">2. USO DOS DADOS</h3>
+                    <p>
+                      Seus dados são utilizados exclusivamente para:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>Controle de acesso ao evento via reconhecimento facial</li>
+                      <li>Comunicação sobre o evento</li>
+                      <li>Segurança dos participantes</li>
+                      <li>Estatísticas internas (dados anonimizados)</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">3. PROTEÇÃO E SEGURANÇA</h3>
+                    <p>
+                      Implementamos medidas técnicas e organizacionais para proteger seus dados:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>Criptografia de dados sensíveis</li>
+                      <li>Acesso restrito e controlado</li>
+                      <li>Servidores seguros com backup</li>
+                      <li>Conformidade com a LGPD (Lei 13.709/2018)</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">4. COMPARTILHAMENTO</h3>
+                    <p>
+                      Seus dados NÃO são vendidos ou compartilhados com terceiros para fins comerciais.
+                      Compartilhamos apenas quando:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>Exigido por lei ou ordem judicial</li>
+                      <li>Necessário para a segurança do evento</li>
+                      <li>Com seu consentimento explícito</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">5. RETENÇÃO E EXCLUSÃO</h3>
+                    <p>
+                      Seus dados são mantidos apenas pelo tempo necessário:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>Dados do evento: 90 dias após o término</li>
+                      <li>Exclusão automática após o período</li>
+                      <li>Você pode solicitar exclusão a qualquer momento</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">6. SEUS DIREITOS</h3>
+                    <p>
+                      Conforme a LGPD, você tem direito a:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                      <li>Acessar seus dados pessoais</li>
+                      <li>Corrigir dados incorretos</li>
+                      <li>Solicitar exclusão dos dados</li>
+                      <li>Revogar consentimento</li>
+                      <li>Portabilidade dos dados</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">7. CONSENTIMENTO</h3>
+                    <p>
+                      Ao aceitar estes termos, você autoriza expressamente a coleta e o tratamento
+                      dos seus dados pessoais e biométricos para as finalidades descritas.
+                      Este consentimento pode ser revogado a qualquer momento.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-gray-800 mb-2">8. CONTATO</h3>
+                    <p>
+                      Para dúvidas ou solicitações sobre seus dados:
+                    </p>
+                    <p className="mt-2">
+                      <strong>E-mail:</strong> privacidade@megafeira.com.br<br/>
+                      <strong>Telefone:</strong> (11) 9999-9999
+                    </p>
+                  </section>
+
+                  <div className="mt-6 pt-4 border-t">
+                    <p className="text-xs text-gray-500 text-center">
+                      Última atualização: 18/08/2025
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 border-t bg-gray-50">
+                <button
+                  onClick={() => setShowTerms(false)}
+                  className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
