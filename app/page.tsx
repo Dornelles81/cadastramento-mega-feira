@@ -1,6 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import DynamicForm from '../components/DynamicForm'
+import EnhancedFaceCapture from '../components/EnhancedFaceCapture'
+import MegaFeiraLogo from '../components/MegaFeiraLogo'
 
 interface RegistrationData {
   name: string
@@ -11,10 +14,12 @@ interface RegistrationData {
   mesa: string
   consent: boolean
   faceImage?: string
+  customData?: any // For dynamic fields
 }
 
 export default function HomePage() {
   const [currentStep, setCurrentStep] = useState<'consent' | 'personal' | 'capture' | 'success'>('consent')
+  const [consentChecked, setConsentChecked] = useState(false)
   const [registrationData, setRegistrationData] = useState<RegistrationData>({
     name: '',
     cpf: '',
@@ -24,40 +29,134 @@ export default function HomePage() {
     consent: false
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [textConfig, setTextConfig] = useState({
+    successText: '✅ Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
+    instructionsText: '📱 Como Usar\n\nNo evento, aproxime seu rosto do terminal de reconhecimento facial para liberar o acesso'
+  })
+
+  // Load text configuration
+  useEffect(() => {
+    loadTextConfig()
+  }, [])
+
+  // Debug consent state
+  useEffect(() => {
+    console.log('Consent state updated:', consentChecked)
+  }, [consentChecked])
+
+  const loadTextConfig = async () => {
+    try {
+      // Note: Public endpoint doesn't need authentication
+      const response = await fetch('/api/public/text-config')
+      if (response.ok) {
+        const data = await response.json()
+        setTextConfig(data)
+      }
+    } catch (error) {
+      console.error('Failed to load text config:', error)
+      // Keep default values on error
+    }
+  }
 
   const handleConsentAccept = () => {
+    console.log('Button clicked! Consent checked:', consentChecked)
     setRegistrationData(prev => ({ ...prev, consent: true }))
     setCurrentStep('personal')
   }
 
-  const handlePersonalDataSubmit = (data: Partial<RegistrationData>) => {
-    setRegistrationData(prev => ({ ...prev, ...data }))
+  const handlePersonalDataSubmit = (data: any) => {
+    // Separate system fields from custom fields
+    const { name, cpf, email, phone, eventCode, evento, mesa, ...customFields } = data
+    
+    // Use evento field (from dynamic form) or eventCode, with fallback
+    const selectedEvent = evento || eventCode || 'MEGA-FEIRA-2025'
+    const selectedMesa = mesa || ''
+    
+    console.log('📝 Form data received:', { name, cpf, evento, mesa })
+    
+    setRegistrationData(prev => ({ 
+      ...prev, 
+      name,
+      cpf,
+      email,
+      phone,
+      event: selectedEvent,
+      mesa: selectedMesa,
+      customData: customFields
+    }))
     setCurrentStep('capture')
   }
 
-  const handleFaceCaptured = async (imageData: string) => {
+  const handleFaceCaptured = async (imageData: string, faceData?: any) => {
     setIsSubmitting(true)
     
+    // Debug registration data
+    console.log('📸 Current registration data:', registrationData)
+    
+    // Ensure eventCode has a value - handle various formats
+    let eventCode = registrationData.event || 'MEGA-FEIRA-2025'
+    
+    // If it's one of the event names, keep it, otherwise use default
+    const validEvents = ['MEGA-FEIRA-2025', 'Expointer', 'Freio de Ouro', 'Morfologia', 'Leilão']
+    if (!validEvents.includes(eventCode)) {
+      console.warn('⚠️ Invalid event code:', eventCode, '- using default')
+      eventCode = 'MEGA-FEIRA-2025'
+    }
+    
+    const payload = {
+      name: registrationData.name || '',
+      cpf: registrationData.cpf && registrationData.cpf.includes('.') ? registrationData.cpf : (registrationData.cpf || '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
+      email: registrationData.email || '',
+      phone: registrationData.phone || '',
+      eventCode: eventCode, // Always send a valid value
+      faceImage: imageData,
+      faceData: faceData, // Azure Face API data
+      consent: registrationData.consent,
+      customData: {
+        ...registrationData.customData,
+        mesa: registrationData.mesa || registrationData.customData?.mesa || ''
+      }
+    }
+    
+    console.log('📤 Sending registration payload:', {
+      ...payload,
+      faceImage: payload.faceImage.substring(0, 50) + '...' // Log truncated image
+    })
+    
     try {
-      const response = await fetch('/api/register-dev', {
+      const response = await fetch('/api/register-fixed', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...registrationData,
-          faceImage: imageData
-        })
+        body: JSON.stringify(payload)
       })
 
       if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Registration successful:', result)
         setCurrentStep('success')
       } else {
-        throw new Error('Erro no cadastro')
+        const errorData = await response.json()
+        console.error('❌ Registration failed:', errorData)
+        
+        // Better error messages
+        let errorMessage = 'Erro desconhecido'
+        if (errorData.message) {
+          if (errorData.message.includes('CPF')) {
+            errorMessage = 'CPF inválido. Por favor, verifique o número digitado.'
+          } else if (errorData.message.includes('já está cadastrado')) {
+            errorMessage = 'Este CPF já está cadastrado no sistema.'
+          } else {
+            errorMessage = errorData.message
+          }
+        }
+        
+        alert(`Erro no cadastro: ${errorMessage}`)
       }
     } catch (error) {
-      console.error('Registration error:', error)
-      alert('Erro no cadastro. Tente novamente.')
+      console.error('💥 Registration error:', error)
+      alert('Erro de conexão. Verifique sua internet e tente novamente.')
     } finally {
       setIsSubmitting(false)
     }
@@ -65,78 +164,96 @@ export default function HomePage() {
 
   if (currentStep === 'consent') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-mega-50 to-mega-100 p-4">
-        <div className="max-w-lg mx-auto">
-          {/* Admin Access Icon - Top Right */}
-          <div className="absolute top-4 right-4">
-            <a
-              href="/admin"
-              className="inline-flex items-center justify-center w-12 h-12 bg-feira-800 text-white rounded-full hover:bg-feira-700 transition-colors shadow-lg"
-              title="Área Administrativa"
-            >
-              <span className="text-xl">⚙️</span>
-            </a>
-          </div>
-          
-          <div className="text-center py-8">
-            <div className="mb-6 flex justify-center">
-              <img 
-                src="/mega-feira-logo.svg" 
-                alt="Mega Feira" 
-                className="h-24 w-auto logo-pulse"
-              />
-            </div>
-            <h1 className="text-2xl font-bold text-feira-800 mb-2">
-              Consentimento LGPD
-            </h1>
-            <p className="text-gray-600 mb-8">
-              Precisamos da sua autorização para coletar dados biométricos
-            </p>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50">
+        {/* Admin Access Icon */}
+        <div className="absolute top-4 right-4 z-10">
+          <a
+            href="/admin"
+            className="inline-flex items-center justify-center w-10 h-10 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors shadow-lg"
+            title="Admin"
+          >
+            <span className="text-lg">⚙️</span>
+          </a>
+        </div>
 
-          <div className="card-mega p-6 space-y-4">
-            <div className="bg-mega-50 p-4 rounded-lg border border-mega-200">
-              <h3 className="font-semibold text-mega-800 mb-2">✅ O que coletamos:</h3>
-              <ul className="text-sm text-mega-700 space-y-1">
-                <li>• Seu nome e CPF</li>
-                <li>• Sua foto facial</li>
-                <li>• Dados de consentimento</li>
-              </ul>
-            </div>
-
-            <div className="bg-feira-50 p-4 rounded-lg border border-feira-200">
-              <h3 className="font-semibold text-feira-800 mb-2">🎯 Finalidade:</h3>
-              <p className="text-sm text-feira-700">
-                Controle de acesso à Mega Feira via reconhecimento facial
+        <div className="p-4 safe-area">
+          <div className="max-w-md mx-auto">
+            {/* Header */}
+            <div className="text-center py-6">
+              <div className="mb-4">
+                <MegaFeiraLogo className="text-4xl" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-800 mb-2">
+                Consentimento LGPD
+              </h1>
+              <p className="text-sm text-gray-600">
+                Precisamos da sua autorização para coletar dados biométricos
               </p>
             </div>
 
-            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-              <h3 className="font-semibold text-yellow-800 mb-2">⏰ Retenção:</h3>
-              <p className="text-sm text-yellow-700">
-                Seus dados serão automaticamente excluídos em 90 dias
-              </p>
+            {/* Info Cards */}
+            <div className="bg-white rounded-xl shadow-sm p-5 space-y-4 mb-6">
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <h3 className="font-semibold text-green-800 text-sm mb-2">✅ O que coletamos:</h3>
+                <ul className="text-xs text-green-700 space-y-1">
+                  <li>• Seu nome e CPF</li>
+                  <li>• Sua foto facial</li>
+                  <li>• Dados de consentimento</li>
+                </ul>
+              </div>
+
+              <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                <h3 className="font-semibold text-purple-800 text-sm mb-2">🎯 Finalidade:</h3>
+                <p className="text-xs text-purple-700">
+                  Controle de acesso à Mega Feira via reconhecimento facial
+                </p>
+              </div>
+
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <h3 className="font-semibold text-yellow-800 text-sm mb-2">⏰ Retenção:</h3>
+                <p className="text-xs text-yellow-700">
+                  Seus dados serão automaticamente excluídos em 90 dias
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-6 space-y-4">
-            <label className="flex items-start space-x-3 cursor-pointer bg-white p-4 rounded-lg">
-              <input
-                type="checkbox"
-                className="mt-1 h-5 w-5 text-mega-600 rounded"
-                onChange={() => {}}
-              />
-              <span className="text-sm text-gray-700">
-                Li e compreendi as informações sobre tratamento dos meus dados
-              </span>
-            </label>
+            {/* Consent Checkbox */}
+            <div className="space-y-4">
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <label className="flex items-start space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="consent-checkbox"
+                    checked={consentChecked}
+                    className="mt-0.5 h-5 w-5 accent-green-600"
+                    onChange={(e) => {
+                      setConsentChecked(e.target.checked)
+                    }}
+                  />
+                  <span className="text-sm text-gray-700 select-none">
+                    Li e compreendi as informações sobre tratamento dos meus dados
+                  </span>
+                </label>
+              </div>
 
-            <button
-              onClick={handleConsentAccept}
-              className="btn-mega w-full"
-            >
-              ✅ Aceitar e Continuar
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (consentChecked) {
+                    setRegistrationData(prev => ({ ...prev, consent: true }))
+                    setCurrentStep('personal')
+                  }
+                }}
+                disabled={!consentChecked}
+                className={`w-full py-4 rounded-lg font-semibold transition-colors shadow-md ${
+                  consentChecked 
+                    ? 'bg-green-600 text-white hover:bg-green-700 cursor-pointer' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+              >
+                ✅ Aceitar e Continuar
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -145,143 +262,29 @@ export default function HomePage() {
 
   if (currentStep === 'personal') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-mega-50 to-mega-100 p-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-center py-8">
-            <div className="mb-4 flex justify-center">
-              <img 
-                src="/mega-feira-logo.svg" 
-                alt="Mega Feira" 
-                className="h-16 w-auto"
-              />
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50 p-4 safe-area">
+        <div className="max-w-md mx-auto">
+          <div className="text-center py-6">
+            <div className="mb-4">
+              <MegaFeiraLogo className="text-3xl" />
             </div>
-            <h1 className="text-2xl font-bold text-feira-800 mb-2">
+            <h1 className="text-xl font-bold text-gray-800 mb-2">
               Dados Pessoais
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm text-gray-600">
               Preencha seus dados para o cadastro
             </p>
           </div>
 
-          <form 
-            className="bg-white rounded-lg p-6 shadow-sm space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const formData = new FormData(e.target as HTMLFormElement)
-              handlePersonalDataSubmit({
-                name: formData.get('name') as string,
-                cpf: formData.get('cpf') as string,
-                event: formData.get('event') as string,
-                mesa: formData.get('mesa') as string,
-                email: formData.get('email') as string || undefined,
-                phone: formData.get('phone') as string || undefined,
-              })
+          <DynamicForm
+            onSubmit={handlePersonalDataSubmit}
+            onBack={() => setCurrentStep('consent')}
+            eventCode={registrationData.event}
+            initialData={{
+              name: registrationData.name,
+              cpf: registrationData.cpf
             }}
-          >
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome Completo *
-              </label>
-              <input
-                name="name"
-                type="text"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
-                placeholder="Digite seu nome completo"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                CPF *
-              </label>
-              <input
-                name="cpf"
-                type="text"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
-                placeholder="000.000.000-00"
-                maxLength={14}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Evento *
-              </label>
-              <select
-                name="event"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500 bg-white"
-              >
-                <option value="">Selecione o evento</option>
-                <option value="expointer">Expointer</option>
-                <option value="freio-de-ouro">Freio de Ouro</option>
-                <option value="morfologia">Morfologia</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Número da Mesa *
-              </label>
-              <select
-                name="mesa"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500 bg-white"
-              >
-                <option value="">Selecione a mesa</option>
-                {Array.from({ length: 83 }, (_, i) => {
-                  const num = (i + 1).toString().padStart(2, '0')
-                  return (
-                    <option key={num} value={num}>Mesa {num}</option>
-                  )
-                })}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email (opcional)
-              </label>
-              <input
-                name="email"
-                type="email"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
-                placeholder="seu@email.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Telefone *
-              </label>
-              <input
-                name="phone"
-                type="tel"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
-                placeholder="(11) 99999-9999"
-              />
-            </div>
-
-            <div className="pt-4 space-y-3">
-              <button
-                type="submit"
-                className="w-full py-4 bg-mega-500 text-white rounded-lg font-semibold hover:bg-mega-600 transition-colors"
-              >
-                Continuar para Captura →
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCurrentStep('consent')}
-                className="w-full py-4 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-              >
-                ← Voltar
-              </button>
-            </div>
-          </form>
+          />
         </div>
       </div>
     )
@@ -289,62 +292,25 @@ export default function HomePage() {
 
   if (currentStep === 'capture') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-mega-50 to-mega-100 p-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-center py-8">
-            <div className="mb-4 flex justify-center">
-              <img 
-                src="/mega-feira-logo.svg" 
-                alt="Mega Feira" 
-                className="h-16 w-auto"
-              />
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50 p-4 safe-area">
+        <div className="max-w-md mx-auto">
+          <div className="text-center py-6">
+            <div className="mb-4">
+              <MegaFeiraLogo className="text-3xl" />
             </div>
-            <h1 className="text-2xl font-bold text-feira-800 mb-2">
+            <h1 className="text-xl font-bold text-gray-800 mb-2">
               Captura Facial
             </h1>
-            <p className="text-gray-600">
-              Posicione seu rosto na tela e capture sua foto
+            <p className="text-sm text-gray-600">
+              Tire sua foto para completar o cadastro
             </p>
           </div>
 
-          <div className="bg-white rounded-lg p-6 shadow-sm space-y-6">
-            <div className="aspect-[3/4] bg-gray-900 rounded-lg flex items-center justify-center">
-              <div className="text-white text-center">
-                <div className="text-4xl mb-4">📷</div>
-                <p className="text-sm">
-                  Simulação de Câmera<br/>
-                  (Em produção será câmera real)
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-medium text-blue-800 mb-2">📝 Instruções:</h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Segure o celular na vertical</li>
-                <li>• Tenha boa iluminação</li>
-                <li>• Centralize seu rosto</li>
-                <li>• Remova óculos escuros</li>
-              </ul>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => handleFaceCaptured('mock-image-data')}
-                disabled={isSubmitting}
-                className="w-full py-4 bg-mega-500 text-white rounded-lg font-semibold hover:bg-mega-600 transition-colors disabled:opacity-50"
-              >
-                {isSubmitting ? '⏳ Enviando...' : '📸 Capturar Foto (Demo)'}
-              </button>
-
-              <button
-                onClick={() => setCurrentStep('personal')}
-                disabled={isSubmitting}
-                className="w-full py-4 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-              >
-                ← Voltar
-              </button>
-            </div>
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <EnhancedFaceCapture 
+              onCapture={handleFaceCaptured}
+              onBack={() => setCurrentStep('personal')}
+            />
           </div>
         </div>
       </div>
@@ -353,67 +319,55 @@ export default function HomePage() {
 
   if (currentStep === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-mega-50 to-feira-50 p-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-center py-8">
-            <div className="mb-6 flex justify-center">
-              <img 
-                src="/mega-feira-logo.svg" 
-                alt="Mega Feira" 
-                className="h-20 w-auto"
-              />
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50 p-4 safe-area">
+        <div className="max-w-md mx-auto">
+          <div className="text-center py-6">
+            <div className="mb-4">
+              <MegaFeiraLogo className="text-3xl" />
             </div>
-            <div className="text-6xl mb-4 success-bounce">✅</div>
-            <h1 className="text-2xl font-bold text-mega-600 mb-2">
+            <div className="text-5xl mb-3">✅</div>
+            <h1 className="text-xl font-bold text-green-600 mb-2">
               Cadastro Realizado!
             </h1>
-            <p className="text-gray-700">
+            <p className="text-sm text-gray-700">
               Parabéns, <strong>{registrationData.name}</strong>!<br/>
               Seu cadastro foi concluído com sucesso
             </p>
-            <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
-              <h3 className="font-semibold text-gray-800 mb-2">📋 Detalhes do Cadastro:</h3>
-              <div className="text-sm text-gray-600 space-y-1">
-                <p><strong>Evento:</strong> {registrationData.event === 'expointer' ? 'Expointer' : 
-                  registrationData.event === 'freio-de-ouro' ? 'Freio de Ouro' : 'Morfologia'}</p>
-                <p><strong>Mesa:</strong> {registrationData.mesa}</p>
+            {(registrationData.event || registrationData.mesa) && (
+              <div className="mt-4 bg-white rounded-lg p-3 shadow-sm">
+                <h3 className="font-semibold text-gray-800 text-sm mb-2">📋 Detalhes:</h3>
+                <div className="text-xs text-gray-600 space-y-1">
+                  {registrationData.event && <p><strong>Evento:</strong> {registrationData.event}</p>}
+                  {registrationData.mesa && <p><strong>Mesa:</strong> {registrationData.mesa}</p>}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="space-y-4">
-            <div className="bg-mega-50 rounded-lg p-4 border border-mega-200">
-              <div className="flex items-center justify-center mb-2">
-                <span className="text-2xl mr-2">🏛️</span>
-                <span className="font-semibold text-mega-800">Acesso Liberado</span>
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <div className="text-center text-green-800 text-sm font-medium space-y-1">
+                {textConfig.successText.split('\n').filter(line => line.trim()).map((line, index) => (
+                  <p key={index} className={line.includes('✅') ? 'text-base font-bold' : ''}>
+                    {line}
+                  </p>
+                ))}
               </div>
-              <p className="text-sm text-mega-700 text-center">
-                Você já pode acessar o camarote <strong>ABCCC</strong> usando o reconhecimento facial
-              </p>
             </div>
 
-            <div className="bg-feira-50 rounded-lg p-4 border border-feira-200">
-              <div className="flex items-center justify-center mb-2">
-                <span className="text-2xl mr-2">📱</span>
-                <span className="font-semibold text-feira-800">Como Usar</span>
-              </div>
-              <p className="text-sm text-feira-700 text-center">
-                No evento, aproxime seu rosto do terminal de reconhecimento facial para liberar o acesso
-              </p>
-            </div>
-
-            <div className="space-y-3 pt-4">
+            <div className="space-y-3 pt-2">
               <button
                 onClick={() => {
                   setCurrentStep('consent')
+                  setConsentChecked(false)
                   setRegistrationData({ name: '', cpf: '', phone: '', event: '', mesa: '', consent: false })
                 }}
-                className="w-full py-4 bg-mega-500 text-white rounded-lg font-semibold hover:bg-mega-600 transition-colors"
+                className="w-full py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
               >
                 ➕ Novo Cadastro
               </button>
               
-              <div className="pt-4 text-center">
+              <div className="pt-2 text-center">
                 <a
                   href="/admin"
                   className="text-xs text-gray-400 hover:text-gray-600 transition-colors"

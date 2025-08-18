@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Form Fields API</title>
+</head>
+<body>
+    <h1>Testing Form Fields API</h1>
+    <pre id="result"></pre>
+    <script>
+        fetch('http://localhost:3001/api/form-fields')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                console.log('Fields:', data.fields);
+            })
+            .catch(err => console.error('Error:', err));
+    </script>
+</body>
+</html>

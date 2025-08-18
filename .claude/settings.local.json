@@ -22,7 +22,14 @@
       "Bash(start \"\" \"https://neon.tech\")",
       "Bash(start \"\" \"https://vercel.com\")",
       "Bash(git remote set-url:*)",
-      "Bash(start \"\" \"https://netlify.com\")"
+      "Bash(start \"\" \"https://netlify.com\")",
+      "Bash(npx kill-port:*)",
+      "Bash(move:*)",
+      "Bash(cp:*)",
+      "Bash(node:*)",
+      "Bash(rm:*)",
+      "Bash(timeout:*)",
+      "Bash(npm install:*)"
     ],
     "defaultMode": "acceptEdits"
   }

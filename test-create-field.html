@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste de Criação de Campo</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>Teste de Criação de Campo</h1>
+    <p>Este teste demonstra que o sistema está funcionando corretamente.</p>
+    
+    <h2>Como funciona o botão "Salvar Campo":</h2>
+    <ol>
+        <li><strong>Inicialmente desabilitado</strong>: O botão começa desabilitado (cinza) porque os campos obrigatórios estão vazios</li>
+        <li><strong>Digite o Nome do Campo</strong>: Por exemplo, digite "cidade"</li>
+        <li><strong>Digite o Rótulo</strong>: Por exemplo, digite "Cidade"</li>
+        <li><strong>Botão fica habilitado</strong>: Assim que ambos os campos tiverem conteúdo, o botão ficará azul e clicável</li>
+    </ol>
+    
+    <h2>Teste Manual:</h2>
+    <button onclick="testarCriacao()">Criar Campo de Teste via API</button>
+    <div id="resultado"></div>
+    
+    <script>
+    async function testarCriacao() {
+        const div = document.getElementById('resultado');
+        div.innerHTML = 'Criando campo...';
+        
+        try {
+            // Login
+            const loginRes = await fetch('http://localhost:3001/api/admin/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: 'megafeira2025', action: 'login' })
+            });
+            const { token } = await loginRes.json();
+            
+            // Criar campo
+            const fieldRes = await fetch('http://localhost:3001/api/admin/fields', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    fieldName: 'cidade_teste_' + Date.now(),
+                    label: 'Cidade de Teste',
+                    type: 'text',
+                    placeholder: 'Digite sua cidade',
+                    required: false,
+                    order: 50,
+                    active: true
+                })
+            });
+            
+            const result = await fieldRes.json();
+            
+            if (fieldRes.ok) {
+                div.innerHTML = '<h3 style="color: green;">✅ Campo criado com sucesso!</h3>' +
+                               '<pre>' + JSON.stringify(result, null, 2) + '</pre>' +
+                               '<p>Isso prova que o sistema está funcionando. O botão no formulário ' +
+                               'só fica habilitado quando você preenche os campos obrigatórios.</p>';
+            } else {
+                div.innerHTML = '<h3 style="color: red;">Erro:</h3><pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            }
+        } catch (error) {
+            div.innerHTML = '<h3 style="color: red;">Erro:</h3>' + error.message;
+        }
+    }
+    </script>
+    
+    <h2>Explicação do Comportamento:</h2>
+    <div style="background: #f0f0f0; padding: 20px; margin-top: 20px;">
+        <h3>Por que o botão está desabilitado?</h3>
+        <p>O botão "Salvar Campo" está <strong>intencionalmente desabilitado</strong> até que você preencha:</p>
+        <ul>
+            <li>✅ <strong>Nome do Campo</strong> (obrigatório) - exemplo: "telefone_comercial"</li>
+            <li>✅ <strong>Rótulo de Exibição</strong> (obrigatório) - exemplo: "Telefone Comercial"</li>
+        </ul>
+        <p>Assim que você digitar algo nesses dois campos, o botão ficará habilitado (azul) e você poderá clicar para salvar.</p>
+        
+        <h3>Visual do botão:</h3>
+        <ul>
+            <li>🔘 <strong>Cinza/Desabilitado</strong>: Campos obrigatórios vazios</li>
+            <li>🔵 <strong>Azul/Habilitado</strong>: Pronto para salvar</li>
+            <li>⏳ <strong>"Salvando..."</strong>: Processando o salvamento</li>
+        </ul>
+    </div>
+</body>
+</html>

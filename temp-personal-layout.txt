@@ -1,0 +1,88 @@
+{/* Desktop Layout for Personal Data */}
+<div className="hidden lg:flex lg:items-center lg:justify-center lg:min-h-screen">
+  <div className="max-w-5xl mx-auto">
+    <div className="grid lg:grid-cols-2 lg:gap-12 lg:items-start">
+      {/* Left Side - Progress & Info */}
+      <div className="space-y-8">
+        <div>
+          <div className="mb-6 flex justify-center lg:justify-start">
+            <img 
+              src="/mega-feira-logo.svg" 
+              alt="Mega Feira" 
+              className="h-24 w-auto"
+            />
+          </div>
+          <div className="flex items-center space-x-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-bold">✓</span>
+              </div>
+              <span className="text-sm text-green-600 font-medium">Consentimento</span>
+            </div>
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-mega-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-bold">2</span>
+              </div>
+              <span className="text-sm text-mega-600 font-medium">Dados Pessoais</span>
+            </div>
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                <span className="text-gray-500 text-sm font-bold">3</span>
+              </div>
+              <span className="text-sm text-gray-500">Captura Facial</span>
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-feira-800 mb-4">
+            Seus Dados Pessoais
+          </h1>
+          <p className="text-lg text-gray-600">
+            Preencha as informações para finalizar seu cadastro biométrico
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <span className="text-blue-600 text-sm">📝</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-800">Informações Básicas</h3>
+              <p className="text-sm text-gray-600">Nome completo e CPF são obrigatórios</p>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <span className="text-purple-600 text-sm">🎪</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-800">Evento e Mesa</h3>
+              <p className="text-sm text-gray-600">Selecione o evento e número da sua mesa</p>
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+              <span className="text-green-600 text-sm">📱</span>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-800">Contato</h3>
+              <p className="text-sm text-gray-600">Email opcional, telefone obrigatório</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side - Form */}
+      <div className="lg:max-w-md">
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <form className="space-y-6" onSubmit={formSubmitHandler}>
+            {/* Form content here */}
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

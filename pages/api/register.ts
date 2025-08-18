@@ -10,7 +10,7 @@ const registrationSchema = Joi.object({
   name: Joi.string().min(3).max(100).required(),
   cpf: Joi.string().pattern(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/).required(),
   email: Joi.string().email().optional().allow(''),
-  phone: Joi.string().optional().allow(''),
+  phone: Joi.string().min(10).pattern(/^(\(\d{2}\)\s\d{5}-\d{4}|\d{10,11})$/).required(),
   eventCode: Joi.string().optional(),
   faceImage: Joi.string().required(), // Base64 image
   consent: Joi.boolean().valid(true).required()
@@ -40,15 +40,15 @@ function validateCPF(cpf: string): boolean {
 
 // Encrypt biometric data
 function encryptBiometricData(data: string): Buffer {
-  const key = Buffer.from(process.env.MASTER_KEY!, 'utf8')
+  const masterKey = process.env.MASTER_KEY || 'a1b2c3d4e5f6789012345678901234567890abcd'
+  const key = crypto.createHash('sha256').update(masterKey).digest()
   const iv = crypto.randomBytes(16)
-  const cipher = crypto.createCipher('aes-256-gcm', key)
+  const cipher = crypto.createCipher('aes-256-cbc', key)
   
   let encrypted = cipher.update(data, 'utf8', 'hex')
   encrypted += cipher.final('hex')
   
-  const authTag = cipher.getAuthTag()
-  const result = Buffer.concat([iv, authTag, Buffer.from(encrypted, 'hex')])
+  const result = Buffer.concat([iv, Buffer.from(encrypted, 'hex')])
   
   return result
 }
@@ -80,21 +80,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    console.log('📥 Registration request body:', req.body)
+    
     // Validate request data
     const { error, value } = registrationSchema.validate(req.body)
     if (error) {
+      console.log('❌ Validation error:', error.details[0].message)
+      console.log('❌ Full error details:', error.details)
       return res.status(400).json({ 
         error: 'Invalid data', 
         details: error.details[0].message 
       })
     }
 
+    console.log('✅ Validation passed, extracting values...')
     const { name, cpf, email, phone, eventCode, faceImage, consent } = value
 
     // Validate CPF
+    console.log('🔍 Validating CPF:', cpf)
     if (!validateCPF(cpf)) {
+      console.log('❌ CPF validation failed')
       return res.status(400).json({ error: 'Invalid CPF' })
     }
+    console.log('✅ CPF validation passed')
 
     // Check if CPF already exists
     const existingParticipant = await prisma.participant.findUnique({

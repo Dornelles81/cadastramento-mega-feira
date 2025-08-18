@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import './mega-feira-theme.css'
+// import './mega-feira-theme.css' // Temporarily disabled to avoid style conflicts
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -45,20 +45,18 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body className={`${inter.className} antialiased bg-gray-50 text-gray-900`}>
-        <div className="min-h-screen pb-safe-bottom pt-safe-top">
-          <main className="container mx-auto px-4 py-6 max-w-lg">
-            {children}
-          </main>
+        <div className="min-h-screen">
+          {children}
         </div>
         
         {/* PWA Install Prompt */}
-        <div id="install-prompt" className="hidden fixed bottom-4 left-4 right-4 bg-mega-500 text-white p-4 rounded-lg shadow-lg">
+        <div id="install-prompt" className="hidden fixed bottom-4 left-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg">
           <p className="text-sm mb-2">Instale este app para melhor experiência</p>
           <div className="flex gap-2">
-            <button id="install-btn" className="bg-white text-mega-600 px-3 py-1 rounded text-sm font-medium">
+            <button id="install-btn" className="bg-white text-green-600 px-3 py-1 rounded text-sm font-medium">
               Instalar
             </button>
-            <button id="dismiss-btn" className="bg-mega-600 px-3 py-1 rounded text-sm">
+            <button id="dismiss-btn" className="bg-green-700 px-3 py-1 rounded text-sm">
               Agora não
             </button>
           </div>

@@ -4,9 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Participant {
@@ -31,6 +30,12 @@ model Participant {
   deviceInfo      String?  // User agent + device details
   captureLocation String?  // Optional location data
   
+  // Dynamic custom fields data
+  customData      Json?    // Stores all custom field values as JSON
+  
+  // Document uploads
+  documents       Json?    // Stores document URLs and metadata
+  
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -50,4 +55,60 @@ model Event {
   createdAt   DateTime @default(now())
   
   @@map("events")
+}
+
+// Custom Field Management
+model CustomField {
+  id          String   @id @default(uuid())
+  fieldName   String   @unique // Internal field name (e.g., "company", "role")
+  label       String   // Display label (e.g., "Empresa", "Cargo")
+  type        String   // text, number, select, date, email, tel, checkbox
+  required    Boolean  @default(false)
+  placeholder String?
+  options     Json?    // For select/radio fields: ["Option1", "Option2"]
+  validation  Json?    // Validation rules: { minLength: 3, maxLength: 100, pattern: "regex" }
+  order       Int      @default(0) // Display order
+  active      Boolean  @default(true)
+  eventCode   String?  // Optional: field specific to an event
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("custom_fields")
+}
+
+// Event Configuration
+model EventConfig {
+  id              String   @id @default(uuid())
+  eventName       String
+  eventCode       String   @unique
+  logoUrl         String?
+  primaryColor    String?  // Hex color
+  secondaryColor  String?  // Hex color
+  requireConsent  Boolean  @default(true)
+  requireFace     Boolean  @default(true)
+  customMessage   String?  // Custom welcome message
+  defaultFields   Json?    // Which default fields to show/hide
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("event_configs")
+}
+
+// Document Requirements Configuration
+model DocumentConfig {
+  id            String   @id @default(uuid())
+  documentType  String   @unique // rg, cnh, cpf_doc, foto_3x4, comprovante_residencia, etc
+  label         String   // "RG", "CNH", "Foto 3x4", etc
+  description   String?  // Instructions for the document
+  required      Boolean  @default(false)
+  enableOCR     Boolean  @default(false) // Enable OCR extraction
+  acceptedFormats Json?  // ["jpg", "png", "pdf"]
+  maxSizeMB     Int      @default(5)
+  order         Int      @default(0)
+  active        Boolean  @default(true)
+  eventCode     String?  // Optional: specific to an event
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("document_configs")
 }

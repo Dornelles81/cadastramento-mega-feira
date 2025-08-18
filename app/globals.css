@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Reset for consistency */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 /* Mobile-first optimizations */
 @layer base {
   html {
@@ -32,11 +44,49 @@
 }
 
 @layer components {
+  /* Universal button styles */
+  .btn-mega {
+    @apply py-4 bg-mega-500 text-white rounded-lg font-semibold hover:bg-mega-600 transition-colors;
+  }
+
+  .card-mega {
+    @apply bg-white rounded-lg shadow-sm;
+  }
+
+  .logo-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .success-bounce {
+    animation: bounce 1s infinite;
+  }
+
   /* Mobile-optimized button */
   .btn-mobile {
     @apply px-6 py-4 rounded-lg font-semibold text-base;
     @apply active:scale-95 transition-transform duration-150;
     @apply min-h-[48px] min-w-[48px]; /* Accessibility tap targets */
+  }
+
+  /* Desktop-specific improvements */
+  .desktop-hero {
+    @apply lg:text-left lg:space-y-8;
+  }
+  
+  .desktop-form {
+    @apply lg:max-w-md lg:mx-0 lg:bg-white lg:rounded-2xl lg:shadow-xl lg:p-8;
+  }
+  
+  .desktop-feature-card {
+    @apply lg:flex lg:items-start lg:space-x-4 lg:p-6 lg:bg-white lg:rounded-xl lg:shadow-sm hover:lg:shadow-md lg:transition-shadow;
+  }
+  
+  .desktop-progress-step {
+    @apply lg:flex lg:items-center lg:space-x-3;
+  }
+  
+  .desktop-form-grid {
+    @apply lg:grid lg:grid-cols-2 lg:gap-4;
   }
   
   .btn-primary {
