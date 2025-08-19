@@ -20,6 +20,31 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const streamRef = useRef<MediaStream | null>(null)
   const detectionIntervalRef = useRef<NodeJS.Timeout>()
 
+  // Calculate quality score based on multiple factors - more lenient
+  const calculateQualityScore = (brightness: number, width: number, height: number): number => {
+    let score = 0.6 // Higher base score
+    
+    // Brightness score - more tolerant ranges
+    if (brightness >= 50 && brightness <= 200) {
+      score += 0.25
+    } else if (brightness >= 30 && brightness <= 240) {
+      score += 0.15
+    } else {
+      score += 0.05 // Still give some score even in poor lighting
+    }
+    
+    // Resolution score
+    if (width >= 1280 && height >= 960) {
+      score += 0.15 // High resolution
+    } else if (width >= 640 && height >= 480) {
+      score += 0.1 // Medium resolution
+    } else {
+      score += 0.05 // Low resolution still gets some score
+    }
+    
+    return Math.min(score, 1.0) // Cap at 1.0
+  }
+
   // Simple face detection using canvas analysis
   const detectFace = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return
@@ -80,19 +105,20 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const g = centerData[i + 1]
       const b = centerData[i + 2]
       
-      // Basic skin tone detection
-      if (r > 95 && g > 40 && b > 20 &&
-          r > g && r > b &&
-          Math.abs(r - g) > 15 &&
-          r - g > 15) {
+      // More tolerant skin tone detection
+      // Accept wider range of colors
+      if (r > 60 && g > 30 && b > 15 &&
+          r > b &&
+          Math.abs(r - g) > 5) {
         skinPixels++
       }
     }
     
     const skinPercentage = (skinPixels * 4) / centerData.length
     
-    // Consider face detected if good lighting and skin tone present
-    const hasFace = avgBrightness > 50 && avgBrightness < 200 && skinPercentage > 0.2
+    // More tolerant face detection
+    // Accept wider range of lighting conditions and lower skin percentage
+    const hasFace = avgBrightness > 30 && avgBrightness < 240 && skinPercentage > 0.05
     setFaceDetected(hasFace)
     
     // Draw guide overlay
@@ -115,9 +141,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          aspectRatio: { ideal: 4/3 }
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 960, min: 480 },
+          aspectRatio: { ideal: 4/3 },
+          frameRate: { ideal: 30, min: 15 }
         },
         audio: false
       })
@@ -127,8 +154,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         streamRef.current = stream
         setIsStreaming(true)
         
-        // Start face detection
-        detectionIntervalRef.current = setInterval(detectFace, 500)
+        // Start face detection - check more frequently
+        detectionIntervalRef.current = setInterval(detectFace, 200)
       }
     } catch (err: any) {
       console.error('Camera error:', err)
@@ -157,9 +184,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   // Capture photo
   const handleCapture = async () => {
-    if (!faceDetected) {
-      setError('Por favor, posicione seu rosto no centro da tela')
-      return
+    // Allow capture even without perfect face detection
+    // Just warn if conditions are not ideal
+    if (!faceDetected && brightness < 30) {
+      setError('Iluminação muito baixa. Tente melhorar a luz.')
+      // Don't return - allow capture anyway after warning
     }
 
     setIsCapturing(true)
@@ -189,21 +218,29 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height)
         ctx.restore()
         
-        // Apply slight brightness adjustment if needed
-        if (brightness < 80) {
-          ctx.filter = 'brightness(1.2)'
+        // Apply gentle brightness adjustments only if really needed
+        if (brightness < 50) {
+          ctx.filter = 'brightness(1.2) contrast(1.05)'
+          ctx.drawImage(canvas, 0, 0)
+        } else if (brightness > 220) {
+          ctx.filter = 'brightness(0.95) contrast(1.05)'
           ctx.drawImage(canvas, 0, 0)
         }
+        // For normal lighting (50-220), don't apply any filters
         
-        const imageData = canvas.toDataURL('image/jpeg', 0.95)
+        // Use maximum quality for better recognition
+        const imageData = canvas.toDataURL('image/jpeg', 1.0)
         setCapturedImage(imageData)
         stopCamera()
         
-        // Prepare face data
+        // Prepare face data with improved quality calculation
+        const qualityScore = calculateQualityScore(brightness, canvas.width, canvas.height)
         const faceData = {
           brightness: brightness,
           timestamp: new Date().toISOString(),
-          quality: brightness > 60 && brightness < 180 ? 'good' : 'acceptable'
+          quality: qualityScore,
+          resolution: `${canvas.width}x${canvas.height}`,
+          qualityPercentage: Math.round(qualityScore * 100)
         }
         
         // Send captured data
@@ -264,7 +301,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 
                 <div className="bg-black bg-opacity-50 rounded-lg px-3 py-2">
                   <span className="text-white text-xs">
-                    💡 Luz: {brightness < 50 ? 'Baixa' : brightness > 180 ? 'Alta' : 'Boa'}
+                    💡 Luz: {brightness < 30 ? 'Muito Baixa' : brightness < 60 ? 'Baixa' : brightness > 200 ? 'Alta' : 'Boa'} ({brightness})
                   </span>
                 </div>
               </div>
@@ -313,12 +350,15 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         <div className="bg-blue-50 p-4 rounded-lg">
           <h3 className="font-medium text-blue-800 mb-2">📝 Dicas para melhor foto:</h3>
           <ul className="text-sm text-blue-700 space-y-1">
-            <li>• Centralize seu rosto no oval verde</li>
-            <li>• Procure um local bem iluminado</li>
+            <li>• Centralize seu rosto no oval</li>
+            <li>• Procure um local com boa iluminação</li>
             <li>• Evite contraluz (janela atrás)</li>
             <li>• Mantenha expressão neutra</li>
-            <li>• Remova óculos escuros</li>
+            <li>• Remova óculos escuros se possível</li>
           </ul>
+          <p className="text-xs text-blue-600 mt-2 font-semibold">
+            💡 Você pode capturar a foto mesmo se o oval estiver amarelo!
+          </p>
         </div>
       )}
 

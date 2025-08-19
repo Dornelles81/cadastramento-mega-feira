@@ -7,6 +7,43 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [1.2.3] - 2025-08-18
+
+### 🐛 Corrigido
+- **Armazenamento de Imagem Facial**
+  - Imagem facial agora salva completa no campo `faceImageUrl`
+  - Qualidade total preservada para reconhecimento facial
+  - Removida limitação anterior que salvava apenas 100 caracteres
+  - Suporte para diferentes formatos de dados de qualidade
+  - APIs otimizadas para usar `faceImageUrl` diretamente
+
+### 🔄 Modificado
+- **Sistema de Imagens**
+  - Metadados biométricos separados da imagem principal
+  - Admin agora carrega imagens diretamente do banco
+  - Redução de chamadas API desnecessárias
+  - Melhor performance na exibição de imagens
+
+---
+
+## [1.2.2] - 2025-08-18
+
+### ✨ Adicionado
+- **Visualização de Documentos no Admin**
+  - Modal aprimorado com layout de duas colunas
+  - Coluna esquerda: imagem facial do participante
+  - Coluna direita: lista de documentos enviados
+  - Preview de documentos com miniatura
+  - Botão de download para cada documento
+  - Clique para ampliar documento
+  - Nova API `/api/admin/participants-full` para dados completos
+
+### 🐛 Corrigido
+- Documentos agora são salvos no campo correto (`documents`) ao invés de `customData`
+- Separação adequada entre documentos e campos personalizados
+
+---
+
 ## [1.2.1] - 2025-08-18
 
 ### ✨ Adicionado
@@ -152,7 +189,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## 📊 Estatísticas
 
-### Versão Atual: 1.2.0
+### Versão Atual: 1.2.3
 - **Total de Commits**: 15+
 - **Arquivos**: 45+
 - **Linhas de Código**: ~8,000

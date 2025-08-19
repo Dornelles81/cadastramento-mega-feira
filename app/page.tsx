@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import DynamicForm from '../components/DynamicForm'
 import EnhancedFaceCapture from '../components/EnhancedFaceCapture'
 import MegaFeiraLogo from '../components/MegaFeiraLogo'
+import { formatTextWithMarkdown } from '../utils/formatText'
 
 interface RegistrationData {
   name: string
@@ -32,7 +33,7 @@ export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [textConfig, setTextConfig] = useState({
     successText: '✅ Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
-    instructionsText: '📱 Como Usar\n\nNo evento, aproxime seu rosto do terminal de reconhecimento facial para liberar o acesso'
+    instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação'
   })
 
   // Load text configuration
@@ -206,50 +207,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Steps Guide */}
+            {/* Steps Guide - Configurable */}
             <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-              <h3 className="font-semibold text-gray-800 text-sm mb-3 text-center">
-                📋 Como funciona? É rápido e fácil:
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Aceite os termos</p>
-                    <p className="text-xs text-gray-500">Autorize o uso dos seus dados com segurança</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Preencha seus dados</p>
-                    <p className="text-xs text-gray-500">Informações básicas e documentos (se necessário)</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Tire uma selfie</p>
-                    <p className="text-xs text-gray-500">Foto rápida para reconhecimento no evento</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold">✓</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Pronto!</p>
-                    <p className="text-xs text-gray-500">Acesso liberado para o evento</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 pt-3 border-t border-gray-200">
-                <p className="text-xs text-center text-gray-500">
-                  ⏱️ Tempo estimado: menos de 2 minutos
-                </p>
-              </div>
+              <div 
+                className="prose prose-sm max-w-none text-gray-700"
+                dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.instructionsText) }}
+              />
             </div>
 
             {/* Consent Checkbox */}
@@ -507,26 +470,14 @@ export default function HomePage() {
               Parabéns, <strong>{registrationData.name}</strong>!<br/>
               Seu cadastro foi concluído com sucesso
             </p>
-            {(registrationData.event || registrationData.mesa) && (
-              <div className="mt-4 bg-white rounded-lg p-3 shadow-sm">
-                <h3 className="font-semibold text-gray-800 text-sm mb-2">📋 Detalhes:</h3>
-                <div className="text-xs text-gray-600 space-y-1">
-                  {registrationData.event && <p><strong>Evento:</strong> {registrationData.event}</p>}
-                  {registrationData.mesa && <p><strong>Mesa:</strong> {registrationData.mesa}</p>}
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="space-y-4">
             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-              <div className="text-center text-green-800 text-sm font-medium space-y-1">
-                {textConfig.successText.split('\n').filter(line => line.trim()).map((line, index) => (
-                  <p key={index} className={line.includes('✅') ? 'text-base font-bold' : ''}>
-                    {line}
-                  </p>
-                ))}
-              </div>
+              <div 
+                className="text-center text-green-800 text-sm font-medium prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.successText) }}
+              />
             </div>
 
             <div className="space-y-3 pt-2">

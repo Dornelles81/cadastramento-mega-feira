@@ -112,3 +112,31 @@ model DocumentConfig {
   
   @@map("document_configs")
 }
+
+// Audit Log for tracking changes
+model AuditLog {
+  id            String   @id @default(uuid())
+  action        String   // "CREATE", "UPDATE", "DELETE"
+  entityType    String   // "participant", "event", "custom_field", etc
+  entityId      String   // ID of the affected entity
+  
+  // User who performed the action
+  adminUser     String   @default("admin") // Can be extended for multi-admin
+  adminIp       String?  // IP address of admin
+  
+  // Change details
+  previousData  Json?    // Previous state (for updates/deletes)
+  newData       Json?    // New state (for creates/updates)
+  changes       Json?    // Specific fields that changed
+  
+  // Additional context
+  description   String?  // Human-readable description
+  metadata      Json?    // Any additional metadata
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

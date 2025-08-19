@@ -42,25 +42,7 @@ export default function DocumentsAdminPage() {
     }
   }
 
-  const initializeDefaults = async () => {
-    try {
-      setSaving('init')
-      const response = await fetch('/api/admin/document-config', {
-        method: 'PUT'
-      })
-      const data = await response.json()
-      
-      if (data.success) {
-        setDocuments(data.documents || [])
-        setMessage({ type: 'success', text: 'Documentos padrão inicializados!' })
-      }
-    } catch (error) {
-      console.error('Error initializing documents:', error)
-      setMessage({ type: 'error', text: 'Erro ao inicializar documentos' })
-    } finally {
-      setSaving(null)
-    }
-  }
+  // Função initializeDefaults removida - não há documentos padrão
 
   const toggleDocument = async (doc: DocumentConfig, field: 'active' | 'required' | 'enableOCR') => {
     try {
@@ -159,7 +141,11 @@ export default function DocumentsAdminPage() {
                 📄 Configuração de Documentos
               </h1>
               <p className="text-gray-600 mt-1">
-                Configure quais documentos serão solicitados no cadastro
+                Configure quais documentos serão solicitados no cadastro.
+              </p>
+              <p className="text-yellow-600 text-sm mt-2">
+                ⚠️ <strong>Importante:</strong> Nenhum documento é solicitado por padrão. 
+                Você deve ativar e marcar como obrigatório os documentos que deseja solicitar.
               </p>
             </div>
             <button
@@ -180,18 +166,41 @@ export default function DocumentsAdminPage() {
           </div>
         )}
 
-        {/* Initialize button if no documents */}
+        {/* No documents message */}
         {documents.length === 0 && (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-8 text-center">
+            <div className="text-yellow-600 mb-4">
+              <span className="text-4xl">📋</span>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              Nenhum documento configurado
+            </h3>
             <p className="text-gray-600 mb-4">
-              Nenhum documento configurado ainda
+              O sistema não está solicitando nenhum documento no momento.
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Para solicitar documentos dos usuários, você pode adicionar configurações de documentos 
+              usando o botão abaixo.
             </p>
             <button
-              onClick={initializeDefaults}
-              disabled={saving === 'init'}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              onClick={() => {
+                // Criar documento em branco
+                const newDoc: DocumentConfig = {
+                  documentType: 'novo_documento',
+                  label: 'Novo Documento',
+                  description: 'Configure este documento',
+                  required: false,
+                  enableOCR: false,
+                  acceptedFormats: ['jpg', 'jpeg', 'png'],
+                  maxSizeMB: 5,
+                  order: 0,
+                  active: false
+                }
+                setDocuments([newDoc])
+              }}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              {saving === 'init' ? 'Inicializando...' : '🚀 Inicializar Documentos Padrão'}
+              ➕ Adicionar Configuração de Documento
             </button>
           </div>
         )}
@@ -200,7 +209,47 @@ export default function DocumentsAdminPage() {
         {documents.length > 0 && (
           <div className="bg-white rounded-lg shadow">
             <div className="p-4 border-b bg-gray-50">
-              <h2 className="font-semibold text-gray-700">Tipos de Documento</h2>
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="font-semibold text-gray-700">Tipos de Documento Disponíveis</h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ative e marque como "Obrigatório" os documentos que deseja solicitar
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    // Adicionar novo documento
+                    const newDoc: DocumentConfig = {
+                      documentType: `documento_${Date.now()}`,
+                      label: 'Novo Documento',
+                      description: '',
+                      required: false,
+                      enableOCR: false,
+                      acceptedFormats: ['jpg', 'jpeg', 'png'],
+                      maxSizeMB: 5,
+                      order: documents.length,
+                      active: false
+                    }
+                    
+                    try {
+                      const response = await fetch('/api/admin/document-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newDoc)
+                      })
+                      
+                      if (response.ok) {
+                        await loadDocuments()
+                      }
+                    } catch (error) {
+                      console.error('Error adding document:', error)
+                    }
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                >
+                  ➕ Adicionar Documento
+                </button>
+              </div>
             </div>
             
             <div className="divide-y">

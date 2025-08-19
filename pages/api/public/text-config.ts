@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const configMap: any = {
       successText: '✅ Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
-      instructionsText: '📱 Como Usar\n\nNo evento, aproxime seu rosto do terminal de reconhecimento facial para liberar o acesso'
+      instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação'
     }
 
     configs.forEach(config => {
@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Return default values on error
     return res.status(200).json({
       successText: '✅ Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
-      instructionsText: '📱 Como Usar\n\nNo evento, aproxime seu rosto do terminal de reconhecimento facial para liberar o acesso'
+      instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação'
     })
   }
 }

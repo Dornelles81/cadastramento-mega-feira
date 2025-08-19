@@ -1,87 +1,25 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { PrismaClient } from '@prisma/client'
+import * as XLSX from 'xlsx'
 
-// Import mock data (in real app this would come from NEON database)
-// For now, we'll simulate the same data structure
-const getMockParticipants = () => [
-  {
-    id: '1',
-    name: 'João Silva',
-    cpf: '123.456.789-00',
-    email: 'joao@email.com',
-    phone: '(11) 99999-1234',
-    event: 'expointer',
-    mesa: '01',
-    registeredAt: '2025-08-14T10:30:00Z',
-    faceImage: {
-      data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAoACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q==',
-      metadata: {
-        width: 640,
-        height: 480,
-        format: 'jpeg',
-        quality: 0.9,
-        fileSize: 45672,
-        capturedAt: '2025-08-14T10:30:00Z'
-      }
-    }
-  },
-  {
-    id: '2', 
-    name: 'Maria Santos',
-    cpf: '987.654.321-00',
-    phone: '(11) 98888-5678',
-    event: 'freio-de-ouro',
-    mesa: '15',
-    registeredAt: '2025-08-14T11:15:00Z',
-    faceImage: {
-      data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAoACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q==',
-      metadata: {
-        width: 640,
-        height: 480,
-        format: 'jpeg',
-        quality: 0.85,
-        fileSize: 42315,
-        capturedAt: '2025-08-14T11:15:00Z'
-      }
-    }
-  },
-  {
-    id: '3',
-    name: 'Carlos Oliveira', 
-    cpf: '456.789.123-00',
-    email: 'carlos@email.com',
-    phone: '(11) 97777-9012',
-    event: 'morfologia',
-    mesa: '33',
-    registeredAt: '2025-08-14T09:45:00Z',
-    faceImage: {
-      data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAoACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q==',
-      metadata: {
-        width: 640,
-        height: 480,
-        format: 'jpeg',
-        quality: 0.9,
-        fileSize: 48923,
-        capturedAt: '2025-08-14T09:45:00Z'
-      }
-    }
-  }
-]
+const prisma = new PrismaClient()
 
 /**
  * Export API for external systems integration
  * 
  * Endpoints:
  * GET /api/export/participants - List all participants with images
+ * GET /api/export/participants?format=excel - Export as Excel file
+ * GET /api/export/participants?format=pdf - Export as PDF file
  * GET /api/export/participants?format=ultrathink - Format for Ultrathink system
- * GET /api/export/participants/[id] - Get single participant
- * GET /api/export/participants/[id]/image - Get participant image only
+ * GET /api/export/participants?format=hikcenter - Format for HikCenter system
  * 
  * Query Parameters:
- * - format: 'standard' | 'ultrathink' | 'hikcenter' (default: 'standard')
+ * - format: 'standard' | 'excel' | 'pdf' | 'ultrathink' | 'hikcenter' (default: 'standard')
  * - include_images: 'true' | 'false' (default: 'true')
  * - event: filter by event
  * - date_from, date_to: filter by registration date
- * - page, limit: pagination
+ * - page, limit: pagination (not used for Excel/PDF)
  */
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -114,64 +52,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       limit = '50'
     } = req.query
 
-    let participants = getMockParticipants()
-
-    // Apply filters
+    // Get participants from database
+    let where: any = {}
+    
     if (event && typeof event === 'string') {
-      participants = participants.filter(p => p.event === event)
+      where.eventCode = event
     }
-
+    
     if (date_from && typeof date_from === 'string') {
-      participants = participants.filter(p => p.registeredAt >= date_from)
+      where.createdAt = { ...where.createdAt, gte: new Date(date_from) }
     }
-
+    
     if (date_to && typeof date_to === 'string') {
-      participants = participants.filter(p => p.registeredAt <= date_to)
+      where.createdAt = { ...where.createdAt, lte: new Date(date_to) }
     }
 
-    // Apply pagination
-    const pageNum = parseInt(page as string) || 1
-    const limitNum = parseInt(limit as string) || 50
-    const startIndex = (pageNum - 1) * limitNum
-    const endIndex = startIndex + limitNum
-    const paginatedParticipants = participants.slice(startIndex, endIndex)
+    // For Excel and PDF, get all records (no pagination)
+    const isPaginatedFormat = !['excel', 'pdf'].includes(format as string)
+    
+    const participants = await prisma.participant.findMany({
+      where,
+      skip: isPaginatedFormat ? (parseInt(page as string) - 1) * parseInt(limit as string) : undefined,
+      take: isPaginatedFormat ? parseInt(limit as string) : undefined,
+      orderBy: { createdAt: 'desc' }
+    })
+
+    const totalCount = await prisma.participant.count({ where })
 
     // Format response based on requested format
-    let responseData: any
-
     switch (format) {
+      case 'excel':
+        return exportAsExcel(participants, res)
+      
+      case 'pdf':
+        return exportAsPDF(participants, res)
+      
       case 'ultrathink':
-        responseData = formatForUltrathink(paginatedParticipants, include_images === 'true')
-        break
+        return exportAsUltrathink(participants, include_images === 'true', res, totalCount)
       
       case 'hikcenter':
-        responseData = formatForHikCenter(paginatedParticipants, include_images === 'true')
-        break
+        return exportAsHikCenter(participants, include_images === 'true', res, totalCount)
       
       case 'standard':
       default:
-        responseData = formatStandard(paginatedParticipants, include_images === 'true')
-        break
+        return exportAsStandard(participants, include_images === 'true', res, {
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          total: totalCount
+        })
     }
-
-    // Add pagination metadata
-    const response = {
-      ...responseData,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: participants.length,
-        pages: Math.ceil(participants.length / limitNum),
-        hasNext: endIndex < participants.length,
-        hasPrev: pageNum > 1
-      },
-      generated_at: new Date().toISOString(),
-      format: format
-    }
-
-    console.log(`📊 Export request: format=${format}, participants=${paginatedParticipants.length}, page=${pageNum}`)
-
-    res.status(200).json(response)
 
   } catch (error) {
     console.error('Export API error:', error)
@@ -183,9 +112,124 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
+// Export as Excel file
+function exportAsExcel(participants: any[], res: NextApiResponse) {
+  // Prepare data for Excel
+  const excelData = participants.map((p, index) => ({
+    'ID': p.id,
+    'Nome': p.name,
+    'CPF': p.cpf,
+    'Email': p.email || '-',
+    'Telefone': p.phone || '-',
+    'Evento': formatEventName(p.eventCode),
+    'Qualidade da Captura': p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-',
+    'Data de Cadastro': new Date(p.createdAt).toLocaleString('pt-BR'),
+    'Consentimento': p.consentAccepted ? 'Sim' : 'Não',
+    'Dispositivo': p.deviceInfo || '-',
+    'IP': p.consentIp || '-'
+  }))
+
+  // Create workbook and worksheet
+  const ws = XLSX.utils.json_to_sheet(excelData)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Participantes')
+
+  // Auto-size columns
+  const maxWidths = excelData.reduce((widths, row) => {
+    Object.keys(row).forEach((key, i) => {
+      const value = row[key as keyof typeof row]?.toString() || ''
+      widths[i] = Math.max(widths[i] || 10, value.length + 2, key.length + 2)
+    })
+    return widths
+  }, {} as Record<number, number>)
+
+  ws['!cols'] = Object.values(maxWidths).map(w => ({ wch: Math.min(w, 50) }))
+
+  // Generate Excel file
+  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' })
+
+  // Send file as download
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="participantes_megafeira_${new Date().toISOString().slice(0, 10)}.xlsx"`)
+  res.send(Buffer.from(excelBuffer))
+}
+
+// Export as PDF file - Simplified HTML version
+function exportAsPDF(participants: any[], res: NextApiResponse) {
+  // Generate HTML table
+  const tableRows = participants.map((p, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${p.name}</td>
+      <td>${p.cpf}</td>
+      <td>${p.email || '-'}</td>
+      <td>${p.phone || '-'}</td>
+      <td>${formatEventName(p.eventCode)}</td>
+      <td>${p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-'}</td>
+      <td>${new Date(p.createdAt).toLocaleDateString('pt-BR')}</td>
+    </tr>
+  `).join('')
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Relatório de Participantes - Mega Feira</title>
+      <style>
+        @page { size: A4 landscape; margin: 20mm; }
+        body { font-family: Arial, sans-serif; font-size: 10pt; }
+        h1 { color: #333; font-size: 18pt; margin-bottom: 10px; }
+        p { margin: 5px 0; color: #666; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { background-color: #34495e; color: white; padding: 8px; text-align: left; font-size: 9pt; }
+        td { border: 1px solid #ddd; padding: 6px; font-size: 9pt; }
+        tr:nth-child(even) { background-color: #f5f5f5; }
+        .header { margin-bottom: 20px; }
+        .footer { margin-top: 20px; text-align: center; color: #999; font-size: 8pt; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>Relatório de Participantes - Mega Feira</h1>
+        <p>Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+        <p>Total de registros: ${participants.length}</p>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Nome</th>
+            <th>CPF</th>
+            <th>Email</th>
+            <th>Telefone</th>
+            <th>Evento</th>
+            <th>Qualidade</th>
+            <th>Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+      
+      <div class="footer">
+        <p>Mega Feira - Sistema de Cadastramento Facial</p>
+      </div>
+    </body>
+    </html>
+  `
+
+  // Send HTML as response with PDF content type for browser to handle
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Content-Disposition', `inline; filename="participantes_megafeira_${new Date().toISOString().slice(0, 10)}.html"`)
+  res.send(htmlContent)
+}
+
 // Format for Ultrathink system integration
-function formatForUltrathink(participants: any[], includeImages: boolean) {
-  return {
+function exportAsUltrathink(participants: any[], includeImages: boolean, res: NextApiResponse, total: number) {
+  const responseData = {
     system: 'mega-feira',
     version: '1.0.0',
     export_type: 'ultrathink',
@@ -195,27 +239,24 @@ function formatForUltrathink(participants: any[], includeImages: boolean) {
       document: p.cpf,
       email: p.email || null,
       phone: p.phone || null,
-      event_code: p.event,
-      table_number: p.mesa,
-      registration_timestamp: p.registeredAt,
-      biometric_data: includeImages && p.faceImage ? {
-        image_base64: p.faceImage.data,
-        image_format: p.faceImage.metadata.format,
-        image_quality: p.faceImage.metadata.quality,
-        dimensions: {
-          width: p.faceImage.metadata.width,
-          height: p.faceImage.metadata.height
-        },
-        captured_at: p.faceImage.metadata.capturedAt,
-        file_size_bytes: p.faceImage.metadata.fileSize
+      event_code: p.eventCode,
+      registration_timestamp: p.createdAt,
+      biometric_data: includeImages && p.faceImageUrl ? {
+        image_base64: p.faceImageUrl,
+        image_quality: p.captureQuality,
+        captured_at: p.createdAt
       } : null
-    }))
+    })),
+    total_records: total,
+    generated_at: new Date().toISOString()
   }
+  
+  res.status(200).json(responseData)
 }
 
 // Format for HikCenter system integration
-function formatForHikCenter(participants: any[], includeImages: boolean) {
-  return {
+function exportAsHikCenter(participants: any[], includeImages: boolean, res: NextApiResponse, total: number) {
+  const responseData = {
     system_name: 'MegaFeira',
     batch_id: `BATCH_${Date.now()}`,
     personnel: participants.map((p, index) => ({
@@ -224,12 +265,12 @@ function formatForHikCenter(participants: any[], includeImages: boolean) {
       userType: 'normal',
       Valid: {
         enable: true,
-        beginTime: p.registeredAt,
+        beginTime: p.createdAt,
         endTime: '2025-12-31T23:59:59Z'
       },
       doorRight: '1',
       RightPlan: [{ doorNo: 1, planTemplateNo: '1' }],
-      faceData: includeImages && p.faceImage ? {
+      faceData: includeImages && p.faceImageUrl ? {
         faceLibType: 'blackFD',
         libMatching: {
           libID: '1',
@@ -237,22 +278,30 @@ function formatForHikCenter(participants: any[], includeImages: boolean) {
           FPID: p.id
         },
         face: {
-          binaryData: p.faceImage.data.split(',')[1] // Remove data:image/jpeg;base64, prefix
+          binaryData: p.faceImageUrl.split(',')[1] // Remove data URL prefix
         }
       } : null,
       customInfo: {
-        event: p.event,
-        mesa: p.mesa,
+        event: p.eventCode,
         phone: p.phone,
         email: p.email
       }
-    }))
+    })),
+    total_records: total,
+    generated_at: new Date().toISOString()
   }
+  
+  res.status(200).json(responseData)
 }
 
 // Standard format for general integrations
-function formatStandard(participants: any[], includeImages: boolean) {
-  return {
+function exportAsStandard(
+  participants: any[], 
+  includeImages: boolean, 
+  res: NextApiResponse,
+  pagination: { page: number, limit: number, total: number }
+) {
+  const responseData = {
     success: true,
     data: participants.map(p => ({
       id: p.id,
@@ -260,14 +309,33 @@ function formatStandard(participants: any[], includeImages: boolean) {
       cpf: p.cpf,
       email: p.email,
       phone: p.phone,
-      event: p.event,
-      mesa: p.mesa,
-      registered_at: p.registeredAt,
-      has_face_image: !!p.faceImage,
-      face_image: includeImages && p.faceImage ? {
-        data: p.faceImage.data,
-        metadata: p.faceImage.metadata
-      } : undefined
-    }))
+      event: p.eventCode,
+      registered_at: p.createdAt,
+      has_face_image: !!p.faceImageUrl,
+      capture_quality: p.captureQuality,
+      face_image: includeImages && p.faceImageUrl ? p.faceImageUrl : undefined
+    })),
+    pagination: {
+      page: pagination.page,
+      limit: pagination.limit,
+      total: pagination.total,
+      pages: Math.ceil(pagination.total / pagination.limit),
+      hasNext: pagination.page * pagination.limit < pagination.total,
+      hasPrev: pagination.page > 1
+    },
+    generated_at: new Date().toISOString()
   }
+  
+  res.status(200).json(responseData)
+}
+
+// Helper function to format event names
+function formatEventName(eventCode: string): string {
+  const eventNames: Record<string, string> = {
+    'expointer': 'Expointer',
+    'freio-de-ouro': 'Freio de Ouro',
+    'morfologia': 'Morfologia',
+    'MEGA-FEIRA-2025': 'Mega Feira 2025'
+  }
+  return eventNames[eventCode] || eventCode
 }

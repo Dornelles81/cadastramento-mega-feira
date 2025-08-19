@@ -16,6 +16,7 @@ interface Participant {
   faceImageUrl?: string
   faceImage?: string
   customData?: any
+  documents?: any
 }
 
 const MOCK_PARTICIPANTS: Participant[] = [
@@ -86,7 +87,7 @@ const MOCK_PARTICIPANTS: Participant[] = [
 export default function AdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedEvent, setSelectedEvent] = useState<string>('')
+  // Event filter removed - showing all participants
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
   const [viewingImage, setViewingImage] = useState<Participant | null>(null)
   const [isPasswordValid, setIsPasswordValid] = useState(false)
@@ -95,31 +96,43 @@ export default function AdminPage() {
   const [participantImages, setParticipantImages] = useState<Record<string, string>>({})
 
   // Load participants from database with filters
-  const loadParticipants = async (search?: string, event?: string) => {
+  const loadParticipants = async (search?: string) => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (search) params.append('search', search)
-      if (event) params.append('eventCode', event)
-      
-      const response = await fetch(`/api/participants?${params.toString()}`)
+      // Use admin API that includes documents
+      const response = await fetch('/api/admin/participants-full')
       if (response.ok) {
         const data = await response.json()
-        setParticipants(data.participants || [])
+        let participants = data.participants || []
         
-        // Load images for each participant
+        // Apply filters locally
+        if (search) {
+          participants = participants.filter((p: Participant) => 
+            p.name.toLowerCase().includes(search.toLowerCase()) ||
+            p.cpf.includes(search)
+          )
+        }
+        
+        setParticipants(participants)
+        
+        // Load images for each participant (only if not already in data)
         const images: Record<string, string> = {}
         for (const participant of data.participants || []) {
-          try {
-            const imgResponse = await fetch(`/api/participant-image?id=${participant.id}`)
-            if (imgResponse.ok) {
-              const imgData = await imgResponse.json()
-              if (imgData.imageUrl) {
-                images[participant.id] = imgData.imageUrl
+          // Use faceImageUrl if available, otherwise try to fetch
+          if (participant.faceImageUrl) {
+            images[participant.id] = participant.faceImageUrl
+          } else {
+            try {
+              const imgResponse = await fetch(`/api/participant-image?id=${participant.id}`)
+              if (imgResponse.ok) {
+                const imgData = await imgResponse.json()
+                if (imgData.imageUrl) {
+                  images[participant.id] = imgData.imageUrl
+                }
               }
+            } catch (error) {
+              console.error(`Failed to load image for ${participant.id}`)
             }
-          } catch (error) {
-            console.error(`Failed to load image for ${participant.id}`)
           }
         }
         setParticipantImages(images)
@@ -142,11 +155,11 @@ export default function AdminPage() {
     if (!isPasswordValid) return
 
     const timeoutId = setTimeout(() => {
-      loadParticipants(searchTerm, selectedEvent)
+      loadParticipants(searchTerm)
     }, 500) // 500ms debounce
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, selectedEvent, isPasswordValid])
+  }, [searchTerm, isPasswordValid])
 
   // Simple password protection
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -228,18 +241,50 @@ export default function AdminPage() {
     setEditingParticipant({...participant})
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (editingParticipant) {
-      setParticipants(prev => 
-        prev.map(p => p.id === editingParticipant.id ? editingParticipant : p)
-      )
-      setEditingParticipant(null)
+      try {
+        const response = await fetch(`/api/admin/participants/${editingParticipant.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editingParticipant)
+        })
+        
+        if (response.ok) {
+          // Update local state
+          setParticipants(prev => 
+            prev.map(p => p.id === editingParticipant.id ? editingParticipant : p)
+          )
+          setEditingParticipant(null)
+          alert('Participante atualizado com sucesso! Log de audição registrado.')
+        } else {
+          alert('Erro ao atualizar participante')
+        }
+      } catch (error) {
+        console.error('Error saving participant:', error)
+        alert('Erro ao salvar alterações')
+      }
     }
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este registro?')) {
-      setParticipants(prev => prev.filter(p => p.id !== id))
+  const handleDelete = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este registro? Esta ação será registrada nos logs.')) {
+      try {
+        const response = await fetch(`/api/admin/participants/${id}`, {
+          method: 'DELETE'
+        })
+        
+        if (response.ok) {
+          // Update local state
+          setParticipants(prev => prev.filter(p => p.id !== id))
+          alert('Participante excluído com sucesso! Log de exclusão registrado.')
+        } else {
+          alert('Erro ao excluir participante')
+        }
+      } catch (error) {
+        console.error('Error deleting participant:', error)
+        alert('Erro ao excluir participante')
+      }
     }
   }
 
@@ -264,17 +309,42 @@ export default function AdminPage() {
                 </p>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-500">Total de registros</div>
-              <div className="text-2xl font-bold text-mega-600">{participants.length}</div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-sm text-gray-500">Total de registros</div>
+                <div className="text-2xl font-bold text-mega-600">{participants.length}</div>
+              </div>
+              <div className="flex gap-2">
+                <a
+                  href={`/api/export/participants?format=excel`}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                  title="Exportar para Excel"
+                >
+                  📊 Excel
+                </a>
+                <a
+                  href={`/api/export/participants?format=pdf`}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                  title="Exportar para PDF"
+                >
+                  📄 PDF
+                </a>
+                <a
+                  href="/admin/logs"
+                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                  title="Ver logs de auditoria"
+                >
+                  📋 Logs
+                </a>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Search Filter */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="flex items-end gap-4">
+            <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🔍 Buscar por nome ou CPF
               </label>
@@ -286,20 +356,14 @@ export default function AdminPage() {
                 placeholder="Digite o nome ou CPF (ex: João, 123.456.789-01, 12345678901)..."
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                🎪 Filtrar por evento
-              </label>
-              <select
-                value={selectedEvent}
-                onChange={(e) => setSelectedEvent(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 focus:border-mega-500 bg-white"
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSearchTerm('')}
+                className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                title="Limpar busca"
               >
-                <option value="">Todos os eventos</option>
-                <option value="expointer">Expointer</option>
-                <option value="freio-de-ouro">Freio de Ouro</option>
-                <option value="morfologia">Morfologia</option>
-              </select>
+                🧹 Limpar
+              </button>
             </div>
           </div>
         </div>
@@ -312,7 +376,7 @@ export default function AdminPage() {
               {loading && <span className="ml-2 text-blue-500">🔄 Carregando...</span>}
             </p>
             <button
-              onClick={() => loadParticipants(searchTerm, selectedEvent)}
+              onClick={() => loadParticipants(searchTerm)}
               className="text-sm bg-mega-500 text-white px-3 py-1 rounded hover:bg-mega-600"
               disabled={loading}
             >
@@ -421,10 +485,10 @@ export default function AdminPage() {
               </h3>
 
               {/* Display participant image if available */}
-              {participantImages[editingParticipant.id] && (
+              {(editingParticipant.faceImageUrl || participantImages[editingParticipant.id]) && (
                 <div className="mb-4 text-center">
                   <img 
-                    src={participantImages[editingParticipant.id]}
+                    src={editingParticipant.faceImageUrl || participantImages[editingParticipant.id]}
                     alt={`Foto de ${editingParticipant.name}`}
                     className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-200 shadow-lg"
                   />
@@ -576,7 +640,7 @@ export default function AdminPage() {
         {/* Image View Modal */}
         {viewingImage && (
           <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -596,17 +660,100 @@ export default function AdminPage() {
                   </button>
                 </div>
 
-                {participantImages[viewingImage.id] && (
+                {/* Two Column Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column - Facial Image */}
                   <div className="space-y-4">
-                    {/* Image Display */}
-                    <div className="text-center">
-                      <img 
-                        src={participantImages[viewingImage.id]}
-                        alt={`Foto facial de ${viewingImage.name}`}
-                        className="max-w-full h-auto rounded-lg border border-gray-200 shadow-lg mx-auto"
-                        style={{ maxHeight: '400px' }}
-                      />
-                    </div>
+                    <h4 className="font-semibold text-gray-800">📸 Foto Facial</h4>
+                    {viewingImage.faceImageUrl || participantImages[viewingImage.id] ? (
+                      <div className="text-center">
+                        <img 
+                          src={viewingImage.faceImageUrl || participantImages[viewingImage.id]}
+                          alt={`Foto facial de ${viewingImage.name}`}
+                          className="w-full h-auto rounded-lg border border-gray-200 shadow-lg"
+                          style={{ maxHeight: '400px', objectFit: 'contain' }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="bg-purple-100 rounded-lg p-12 text-center">
+                        <div className="text-6xl font-bold text-purple-600 mb-2">
+                          {viewingImage.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <p className="text-sm text-gray-500">Imagem não disponível</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column - Documents */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-gray-800">📄 Documentos Enviados</h4>
+                    {viewingImage.documents && Object.keys(viewingImage.documents).length > 0 ? (
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                        {Object.entries(viewingImage.documents).map(([docType, docData]: [string, any]) => (
+                          docData && (
+                            <div key={docType} className="border rounded-lg p-3 hover:bg-gray-50">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-700">
+                                    {docType === 'rg' ? '🆔 RG (Carteira de Identidade)' : 
+                                     docType === 'cnh' ? '🚗 CNH (Carteira de Motorista)' : 
+                                     docType === 'cpf_doc' ? '📋 Documento com CPF' :
+                                     docType === 'foto_3x4' ? '📷 Foto 3x4' :
+                                     docType === 'comprovante_residencia' ? '🏠 Comprovante de Residência' :
+                                     docType.toUpperCase()}
+                                  </p>
+                                  {docData.timestamp && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Enviado: {new Date(docData.timestamp).toLocaleString('pt-BR')}
+                                    </p>
+                                  )}
+                                </div>
+                                {docData.imageData && (
+                                  <button
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = docData.imageData;
+                                      link.download = `${viewingImage.name.replace(/\s/g, '_')}_${docType}.jpg`;
+                                      link.click();
+                                    }}
+                                    className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                  >
+                                    💾 Baixar
+                                  </button>
+                                )}
+                              </div>
+                              {docData.imageData && (
+                                <div className="mt-2">
+                                  <img 
+                                    src={docData.imageData}
+                                    alt={`${docType} de ${viewingImage.name}`}
+                                    className="w-full h-40 object-cover rounded border cursor-pointer hover:opacity-90"
+                                    onClick={() => {
+                                      const win = window.open();
+                                      if (win) {
+                                        win.document.write(`<img src="${docData.imageData}" style="width:100%;" />`);
+                                      }
+                                    }}
+                                    title="Clique para ampliar"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-100 rounded-lg p-8 text-center text-gray-500">
+                        <div className="text-3xl mb-2">📭</div>
+                        <p>Nenhum documento enviado</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Image Info - Below the columns */}
+                {participantImages[viewingImage.id] && (
+                  <div className="space-y-4 mt-6">
 
                     {/* Image Info */}
                     <div className="bg-gray-50 rounded-lg p-4">
@@ -698,6 +845,12 @@ export default function AdminPage() {
             className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             📄 Gerenciar Documentos
+          </a>
+          <a
+            href="/admin/logs"
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            📋 Ver Logs de Auditoria
           </a>
         </div>
       </div>

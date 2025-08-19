@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+
+// Import RichTextEditor dynamically to avoid SSR issues
+const RichTextEditor = dynamic(() => import('../../../components/RichTextEditor'), { 
+  ssr: false,
+  loading: () => <div className="h-40 bg-gray-100 rounded animate-pulse" />
+})
 
 interface CustomField {
   id?: string
@@ -834,38 +841,26 @@ export default function FieldsManagerPage() {
               <div className="space-y-6">
                 {/* Success Text Configuration */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ✅ Texto de "Acesso Liberado" (Tela de Sucesso)
-                  </label>
-                  <textarea
+                  <RichTextEditor
+                    label="✅ Texto de 'Acesso Liberado' (Tela de Sucesso)"
                     value={textConfig.successText}
-                    onChange={(e) => setTextConfig({ ...textConfig, successText: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                    onChange={(value) => setTextConfig({ ...textConfig, successText: value })}
                     rows={6}
                     placeholder="Digite o texto que aparecerá na tela de sucesso após o cadastro..."
+                    helpText="Este texto será exibido quando o cadastro for concluído com sucesso. Você pode usar quebras de linha para melhor formatação."
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Este texto será exibido quando o cadastro for concluído com sucesso.
-                    Você pode usar quebras de linha para melhor formatação.
-                  </p>
                 </div>
 
                 {/* Instructions Text Configuration */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    📱 Texto de "Como Usar" (Tela de Instruções)
-                  </label>
-                  <textarea
+                  <RichTextEditor
+                    label="📱 Texto de 'Como Usar' (Tela de Instruções)"
                     value={textConfig.instructionsText}
-                    onChange={(e) => setTextConfig({ ...textConfig, instructionsText: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                    onChange={(value) => setTextConfig({ ...textConfig, instructionsText: value })}
                     rows={8}
                     placeholder="Digite as instruções que aparecerão na tela inicial..."
+                    helpText="Este texto será exibido na tela inicial para orientar os usuários sobre como usar o sistema. Use formatação clara e numeração para os passos."
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Este texto será exibido na tela inicial para orientar os usuários sobre como usar o sistema.
-                    Use formatação clara e numeração para os passos.
-                  </p>
                 </div>
 
                 {/* Preview Section */}
@@ -875,17 +870,33 @@ export default function FieldsManagerPage() {
                     <div className="bg-gray-50 rounded-lg p-4">
                       <h5 className="font-medium text-gray-700 mb-2">Tela de Sucesso:</h5>
                       <div className="bg-white rounded p-3 border border-gray-200">
-                        <pre className="whitespace-pre-wrap text-sm text-gray-600">
-                          {textConfig.successText || 'Texto vazio...'}
-                        </pre>
+                        <div 
+                          className="text-sm text-gray-600 prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{
+                            __html: (textConfig.successText || 'Texto vazio...')
+                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/__(.*?)__/g, '<u>$1</u>')
+                              .replace(/_(.*?)_/g, '<em>$1</em>')
+                              .replace(/\n/g, '<br/>')
+                              .replace(/---/g, '<hr class="my-2 border-gray-300"/>')
+                          }}
+                        />
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4">
                       <h5 className="font-medium text-gray-700 mb-2">Tela de Instruções:</h5>
                       <div className="bg-white rounded p-3 border border-gray-200">
-                        <pre className="whitespace-pre-wrap text-sm text-gray-600">
-                          {textConfig.instructionsText || 'Texto vazio...'}
-                        </pre>
+                        <div 
+                          className="text-sm text-gray-600 prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{
+                            __html: (textConfig.instructionsText || 'Texto vazio...')
+                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/__(.*?)__/g, '<u>$1</u>')
+                              .replace(/_(.*?)_/g, '<em>$1</em>')
+                              .replace(/\n/g, '<br/>')
+                              .replace(/---/g, '<hr class="my-2 border-gray-300"/>')
+                          }}
+                        />
                       </div>
                     </div>
                   </div>

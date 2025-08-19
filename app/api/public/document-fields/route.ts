@@ -9,17 +9,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const eventCode = searchParams.get('eventCode')
     
-    // Get active document configurations
+    // Get ONLY active document configurations that were explicitly configured by admin
     const where: any = {
-      active: true
+      active: true,
+      required: true // Only show documents that admin marked as required
     }
     
     // If eventCode is provided, get event-specific documents
     if (eventCode) {
       where.OR = [
-        { eventCode: null },
-        { eventCode: eventCode }
+        { eventCode: null, active: true, required: true },
+        { eventCode: eventCode, active: true, required: true }
       ]
+      delete where.required // Remove from top level when using OR
+      delete where.active
     } else {
       where.eventCode = null
     }

@@ -30,7 +30,8 @@
       "Bash(rm:*)",
       "Bash(timeout:*)",
       "Bash(npm install:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(start test.html)"
     ],
     "defaultMode": "acceptEdits"
   }

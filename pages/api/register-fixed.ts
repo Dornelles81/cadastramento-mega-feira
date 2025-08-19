@@ -107,32 +107,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Process face image and Azure data
     let encryptedFaceData = null
+    let faceImageUrl = null
     let captureQuality = 0.5 // Default quality
     
-    // Extract quality score from Azure Face data if available
-    if (faceData && faceData.faceQuality) {
-      captureQuality = faceData.faceQuality.score || 0.5
-      console.log('📊 Face quality score:', captureQuality)
+    // Extract quality score from face data
+    if (faceData) {
+      if (faceData.quality && typeof faceData.quality === 'number') {
+        // Direct quality score from frontend
+        captureQuality = faceData.quality
+        console.log('📊 Face quality score from frontend:', captureQuality)
+      } else if (faceData.qualityPercentage) {
+        // Quality percentage from frontend
+        captureQuality = faceData.qualityPercentage / 100
+        console.log('📊 Face quality percentage:', faceData.qualityPercentage + '%')
+      } else if (faceData.faceQuality && faceData.faceQuality.score) {
+        // Azure Face API score
+        captureQuality = faceData.faceQuality.score
+        console.log('📊 Azure Face quality score:', captureQuality)
+      } else if (faceData.brightness) {
+        // Calculate quality based on brightness
+        const brightness = faceData.brightness
+        if (brightness >= 80 && brightness <= 160) {
+          captureQuality = 0.8
+        } else if (brightness >= 60 && brightness <= 180) {
+          captureQuality = 0.7
+        } else {
+          captureQuality = 0.6
+        }
+        console.log('📊 Quality based on brightness:', brightness, '→', captureQuality)
+      }
     }
     
-    // Encrypt face data
+    console.log('✅ Final capture quality:', captureQuality)
+    
+    // Store full face image for recognition
     if (faceImage && faceImage.includes(',')) {
       try {
-        const base64Data = faceImage.split(',')[1]
-        // Store both image and Azure metadata encrypted
+        // Store the complete face image as data URL
+        faceImageUrl = faceImage
+        
+        // Encrypt only the biometric metadata
         const dataToEncrypt = JSON.stringify({
-          image: base64Data.substring(0, 100), // Store partial for demo
-          azureData: faceData
+          azureData: faceData,
+          captureTimestamp: new Date().toISOString()
         })
         encryptedFaceData = Buffer.from(simpleEncrypt(dataToEncrypt))
       } catch (err) {
         console.log('⚠️ Face image processing failed, continuing without it')
         encryptedFaceData = Buffer.from(simpleEncrypt('placeholder'))
       }
+    } else if (faceImage) {
+      // If faceImage doesn't have data URL prefix, add it
+      faceImageUrl = `data:image/jpeg;base64,${faceImage}`
+      encryptedFaceData = Buffer.from(simpleEncrypt(JSON.stringify(faceData || {})))
     } else {
       encryptedFaceData = Buffer.from(simpleEncrypt('mock-data'))
     }
 
+    // Separate documents from other custom data
+    const { documents, ...otherCustomData } = customData || {}
+    
     // Create participant
     const participant = await prisma.participant.create({
       data: {
@@ -141,13 +175,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         email: email || null,
         phone: phone ? phone.replace(/\D/g, '') : '',
         eventCode: eventCode,
+        faceImageUrl: faceImageUrl, // Store complete face image
         faceData: encryptedFaceData,
         captureQuality: captureQuality,
         consentAccepted: consent,
         consentIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown',
         consentDate: new Date(),
         deviceInfo: req.headers['user-agent'] || 'unknown',
-        customData: customData || {} // Store custom fields as JSON
+        documents: documents || {}, // Store documents separately
+        customData: otherCustomData || {} // Store other custom fields
       }
     })
 
