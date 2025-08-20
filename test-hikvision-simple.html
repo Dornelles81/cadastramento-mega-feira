@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Rápido Hikvision</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Teste Rápido - Terminal Hikvision</h1>
+        
+        <div class="form-group">
+            <label>IP do Terminal:</label>
+            <input type="text" id="ip" value="192.168.1.20" readonly>
+        </div>
+        
+        <div class="form-group">
+            <label>Usuário:</label>
+            <input type="text" id="user" value="admin" readonly>
+        </div>
+        
+        <div class="form-group">
+            <label>Senha:</label>
+            <input type="password" id="password" placeholder="Digite a senha correta">
+        </div>
+        
+        <button onclick="testAuth()">🔐 Testar Autenticação</button>
+        
+        <div id="result" class="result"></div>
+    </div>
+    
+    <script>
+        async function testAuth() {
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            const button = document.querySelector('button');
+            
+            if (!password) {
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '❌ Por favor, digite a senha';
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = '⏳ Testando...';
+            
+            resultDiv.className = 'result info';
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '🔄 Tentando conectar ao terminal...';
+            
+            try {
+                // Codificar credenciais em Base64
+                const credentials = btoa(`admin:${password}`);
+                
+                // Fazer requisição direta ao terminal
+                const response = await fetch('http://192.168.1.20/ISAPI/System/deviceInfo', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Basic ${credentials}`,
+                        'Accept': 'application/xml'
+                    },
+                    mode: 'no-cors' // Ignorar CORS para teste
+                });
+                
+                // Como estamos em no-cors, não podemos ler a resposta
+                // Mas se não houver erro, assumimos que funcionou
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    ✅ <strong>Senha pode estar correta!</strong><br><br>
+                    <strong>Próximos passos:</strong><br>
+                    1. Atualize o arquivo <code>.env.local</code>:<br>
+                    <pre>HIKVISION_PASSWORD="${password}"</pre>
+                    2. Reinicie o servidor (Ctrl+C e npm run dev)<br>
+                    3. Teste novamente a conexão
+                `;
+                
+            } catch (error) {
+                resultDiv.className = 'result info';
+                resultDiv.innerHTML = `
+                    ⚠️ <strong>Teste inconclusivo (CORS)</strong><br><br>
+                    Devido a restrições de segurança do navegador, não é possível testar diretamente.<br><br>
+                    <strong>Se você confirmou que a senha "${password}" funciona na interface web:</strong><br>
+                    1. Atualize o arquivo <code>.env.local</code>:<br>
+                    <pre>HIKVISION_PASSWORD="${password}"</pre>
+                    2. Reinicie o servidor<br>
+                    3. Use a página de teste principal
+                `;
+            } finally {
+                button.disabled = false;
+                button.textContent = '🔐 Testar Autenticação';
+            }
+        }
+        
+        // Permitir Enter para testar
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                testAuth();
+            }
+        });
+    </script>
+</body>
+</html>

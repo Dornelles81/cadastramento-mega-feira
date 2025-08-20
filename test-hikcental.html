@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HikCentral Admin - Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-purple-50 to-blue-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                        <span class="text-xl">←</span>
+                    </button>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">Integração HikCentral</h1>
+                        <p class="text-gray-600">Gerencie a sincronização com o sistema HikCentral</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="px-3 py-1 rounded-full flex items-center gap-2 bg-red-100 text-red-700">
+                        <span class="text-sm font-medium">⚡ Desconectado</span>
+                    </div>
+                    <button class="p-2 hover:bg-gray-100 rounded-lg">
+                        <span class="text-xl">⚙️</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">👥</span>
+                    <span class="text-2xl font-bold">127</span>
+                </div>
+                <p class="text-gray-600 text-sm">Total de Participantes</p>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">✅</span>
+                    <span class="text-2xl font-bold">85</span>
+                </div>
+                <p class="text-gray-600 text-sm">Sincronizados</p>
+                <div class="mt-2 bg-gray-200 rounded-full h-2">
+                    <div class="bg-green-500 h-2 rounded-full" style="width: 67%"></div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">⏰</span>
+                    <span class="text-2xl font-bold">35</span>
+                </div>
+                <p class="text-gray-600 text-sm">Pendentes</p>
+                <div class="mt-2 bg-gray-200 rounded-full h-2">
+                    <div class="bg-yellow-500 h-2 rounded-full" style="width: 28%"></div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">⚠️</span>
+                    <span class="text-2xl font-bold">7</span>
+                </div>
+                <p class="text-gray-600 text-sm">Falhas</p>
+                <div class="mt-2 bg-gray-200 rounded-full h-2">
+                    <div class="bg-red-500 h-2 rounded-full" style="width: 5%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions Panel -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold mb-4">Ações de Sincronização</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button class="p-4 rounded-lg border-2 bg-purple-50 border-purple-300 hover:bg-purple-100 text-purple-700">
+                    <div class="text-2xl mb-2 text-center">📤</div>
+                    <p class="font-medium">Sincronizar Todos</p>
+                    <p class="text-sm mt-1">35 participantes pendentes</p>
+                </button>
+
+                <button class="p-4 rounded-lg border-2 bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed">
+                    <div class="text-2xl mb-2 text-center">👥</div>
+                    <p class="font-medium">Sincronizar Selecionados</p>
+                    <p class="text-sm mt-1">0 selecionados</p>
+                </button>
+
+                <button class="p-4 rounded-lg border-2 bg-green-50 border-green-300 hover:bg-green-100 text-green-700">
+                    <div class="text-2xl mb-2 text-center">🔄</div>
+                    <p class="font-medium">Atualizar Status</p>
+                    <p class="text-sm mt-1">Última: 19/08/2025 10:55</p>
+                </button>
+            </div>
+        </div>
+
+        <!-- Recent Sync Logs -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-lg font-semibold mb-4">Logs de Sincronização Recentes</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b">
+                            <th class="text-left py-2 px-3">Data/Hora</th>
+                            <th class="text-left py-2 px-3">Tipo</th>
+                            <th class="text-left py-2 px-3">Participante</th>
+                            <th class="text-left py-2 px-3">Status</th>
+                            <th class="text-left py-2 px-3">Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-2 px-3">19/08/2025 10:45</td>
+                            <td class="py-2 px-3">Individual</td>
+                            <td class="py-2 px-3">João Silva</td>
+                            <td class="py-2 px-3"><span class="text-green-600">✓ Sucesso</span></td>
+                            <td class="py-2 px-3">ID: HC-2025-0001</td>
+                        </tr>
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-2 px-3">19/08/2025 10:30</td>
+                            <td class="py-2 px-3">Lote</td>
+                            <td class="py-2 px-3">50 participantes</td>
+                            <td class="py-2 px-3"><span class="text-yellow-600">⚠ Parcial</span></td>
+                            <td class="py-2 px-3">48 sucesso, 2 falhas</td>
+                        </tr>
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-2 px-3">19/08/2025 10:15</td>
+                            <td class="py-2 px-3">Individual</td>
+                            <td class="py-2 px-3">Maria Santos</td>
+                            <td class="py-2 px-3"><span class="text-red-600">✗ Falha</span></td>
+                            <td class="py-2 px-3">Erro: Timeout</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simulação de interatividade
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animação de loading
+            const syncButtons = document.querySelectorAll('button');
+            syncButtons.forEach(btn => {
+                if (btn.textContent.includes('Sincronizar')) {
+                    btn.addEventListener('click', function() {
+                        const originalText = this.innerHTML;
+                        this.innerHTML = '<span class="animate-spin inline-block">🔄</span> Sincronizando...';
+                        this.disabled = true;
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.disabled = false;
+                            alert('Simulação: Sincronização concluída!');
+                        }, 2000);
+                    });
+                }
+            });
+
+            // Toggle configuração
+            const configBtn = document.querySelector('button span.text-xl:last-child').parentElement;
+            configBtn.addEventListener('click', function() {
+                alert('Painel de configuração seria aberto aqui');
+            });
+        });
+    </script>
+</body>
+</html>

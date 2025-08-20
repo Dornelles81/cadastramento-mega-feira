@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Conexão Hikvision DS-K1T671M-L</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #1a202c;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .config-section {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .config-item:last-child {
+            border-bottom: none;
+        }
+        
+        .config-label {
+            color: #4a5568;
+            font-size: 14px;
+        }
+        
+        .config-value {
+            color: #1a202c;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-test {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-test:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-ping {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+        }
+        
+        .btn-web {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status-box {
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .status-success {
+            background: linear-gradient(135deg, #00b09b15 0%, #96c93d15 100%);
+            border: 2px solid #00b09b30;
+        }
+        
+        .status-error {
+            background: linear-gradient(135deg, #fc5c7d15 0%, #eb334915 100%);
+            border: 2px solid #fc5c7d30;
+        }
+        
+        .status-info {
+            background: linear-gradient(135deg, #4facfe15 0%, #00f2fe15 100%);
+            border: 2px solid #4facfe30;
+        }
+        
+        .status-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-message {
+            color: #4a5568;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        .result-section {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .result-card {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .result-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .result-label {
+            color: #718096;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .result-value {
+            color: #1a202c;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .troubleshooting {
+            background: #fff5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .troubleshooting h3 {
+            color: #fc5c7d;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+        
+        .troubleshooting ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .troubleshooting li {
+            padding: 8px 0;
+            color: #4a5568;
+            font-size: 14px;
+            padding-left: 24px;
+            position: relative;
+        }
+        
+        .troubleshooting li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #fc5c7d;
+        }
+        
+        pre {
+            background: #1a202c;
+            color: #00ff00;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <span>🎥</span>
+            Teste de Conexão Hikvision
+        </h1>
+        <p class="subtitle">Terminal DS-K1T671M-L - Reconhecimento Facial</p>
+        
+        <div class="config-section">
+            <div class="config-item">
+                <span class="config-label">IP do Terminal:</span>
+                <span class="config-value">192.168.1.20</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">Usuário:</span>
+                <span class="config-value">admin</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">Senha:</span>
+                <span class="config-value">••••••••• (configurada)</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">Modelo:</span>
+                <span class="config-value">DS-K1T671M-L</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">Protocolo:</span>
+                <span class="config-value">ISAPI (HTTP)</span>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn-test" onclick="testConnection()">
+                <span>🔌</span>
+                Testar Conexão API
+            </button>
+            <button class="btn-ping" onclick="testPing()">
+                <span>📡</span>
+                Testar Ping
+            </button>
+            <button class="btn-web" onclick="openWebInterface()">
+                <span>🌐</span>
+                Abrir Interface Web
+            </button>
+        </div>
+        
+        <div id="statusBox" class="status-box">
+            <div class="status-title" id="statusTitle"></div>
+            <div class="status-message" id="statusMessage"></div>
+        </div>
+        
+        <div id="resultSection" class="result-section">
+            <h3 style="color: #1a202c; margin-bottom: 16px;">📊 Informações do Terminal</h3>
+            <div class="result-grid" id="resultGrid"></div>
+        </div>
+        
+        <div id="troubleshooting" class="troubleshooting" style="display: none;">
+            <h3>🔧 Solução de Problemas</h3>
+            <ul id="troubleshootingList"></ul>
+        </div>
+        
+        <div id="rawResponse" style="display: none;">
+            <h3 style="color: #1a202c; margin: 20px 0 12px 0; font-size: 16px;">📝 Resposta Completa:</h3>
+            <pre id="responseCode"></pre>
+        </div>
+    </div>
+    
+    <script>
+        async function testConnection() {
+            const statusBox = document.getElementById('statusBox');
+            const statusTitle = document.getElementById('statusTitle');
+            const statusMessage = document.getElementById('statusMessage');
+            const resultSection = document.getElementById('resultSection');
+            const troubleshooting = document.getElementById('troubleshooting');
+            const rawResponse = document.getElementById('rawResponse');
+            const buttons = document.querySelectorAll('button');
+            
+            // Disable buttons
+            buttons.forEach(btn => btn.disabled = true);
+            
+            // Show loading
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-info';
+            statusTitle.innerHTML = '<div class="loading"></div> Testando conexão...';
+            statusMessage.textContent = 'Conectando ao terminal Hikvision em 192.168.1.20...';
+            resultSection.style.display = 'none';
+            troubleshooting.style.display = 'none';
+            rawResponse.style.display = 'none';
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/hikvision/test-connection');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Success
+                    statusBox.className = 'status-box status-success';
+                    statusTitle.innerHTML = '✅ Conexão Estabelecida com Sucesso!';
+                    statusMessage.textContent = 'O terminal Hikvision está online e respondendo corretamente.';
+                    
+                    // Show device info
+                    resultSection.style.display = 'block';
+                    const resultGrid = document.getElementById('resultGrid');
+                    resultGrid.innerHTML = `
+                        <div class="result-card">
+                            <div class="result-icon">🖥️</div>
+                            <div class="result-label">Status</div>
+                            <div class="result-value" style="color: #00b09b;">Online</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-icon">📍</div>
+                            <div class="result-label">IP</div>
+                            <div class="result-value">${data.device?.ip || '192.168.1.20'}</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-icon">📱</div>
+                            <div class="result-label">Modelo</div>
+                            <div class="result-value">${data.device?.type || 'DS-K1T671M-L'}</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-icon">👥</div>
+                            <div class="result-label">Usuários</div>
+                            <div class="result-value">${data.statistics?.userCount || '0'}</div>
+                        </div>
+                    `;
+                    
+                } else {
+                    // Error
+                    statusBox.className = 'status-box status-error';
+                    statusTitle.innerHTML = '❌ Falha na Conexão';
+                    statusMessage.textContent = data.error || 'Não foi possível conectar ao terminal.';
+                    
+                    // Show troubleshooting
+                    if (data.troubleshooting) {
+                        troubleshooting.style.display = 'block';
+                        const list = document.getElementById('troubleshootingList');
+                        list.innerHTML = data.troubleshooting.map(item => `<li>${item}</li>`).join('');
+                    }
+                }
+                
+                // Show raw response
+                rawResponse.style.display = 'block';
+                document.getElementById('responseCode').textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                statusBox.className = 'status-box status-error';
+                statusTitle.innerHTML = '❌ Erro de Conexão';
+                statusMessage.textContent = 'Erro ao conectar com o servidor. Verifique se o servidor está rodando em http://localhost:3001';
+                
+                rawResponse.style.display = 'block';
+                document.getElementById('responseCode').textContent = error.toString();
+            } finally {
+                // Re-enable buttons
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+        
+        async function testPing() {
+            const statusBox = document.getElementById('statusBox');
+            const statusTitle = document.getElementById('statusTitle');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-info';
+            statusTitle.innerHTML = '📡 Teste de Ping';
+            statusMessage.innerHTML = `
+                Para testar o ping, abra o terminal/prompt de comando e execute:<br>
+                <code style="background: #1a202c; color: #00ff00; padding: 4px 8px; border-radius: 4px;">ping 192.168.1.20</code><br><br>
+                Se o terminal estiver online, você verá respostas com tempos de resposta.
+            `;
+        }
+        
+        function openWebInterface() {
+            window.open('http://192.168.1.20', '_blank');
+            
+            const statusBox = document.getElementById('statusBox');
+            const statusTitle = document.getElementById('statusTitle');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-info';
+            statusTitle.innerHTML = '🌐 Interface Web';
+            statusMessage.innerHTML = `
+                Abrindo interface web em nova aba...<br><br>
+                <strong>Credenciais padrão:</strong><br>
+                Usuário: admin<br>
+                Senha: Index2016<br><br>
+                Se não abrir, verifique se o terminal está acessível na rede.
+            `;
+        }
+        
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(testConnection, 1000);
+        });
+    </script>
+</body>
+</html>

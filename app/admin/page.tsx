@@ -95,6 +95,17 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [participantImages, setParticipantImages] = useState<Record<string, string>>({})
 
+  // Check for saved password on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPassword = sessionStorage.getItem('adminPassword')
+      if (savedPassword === 'admin123') {
+        setIsPasswordValid(true)
+        setPassword(savedPassword)
+      }
+    }
+  }, [])
+
   // Load participants from database with filters
   const loadParticipants = async (search?: string) => {
     setLoading(true)
@@ -166,6 +177,10 @@ export default function AdminPage() {
     e.preventDefault()
     if (password === 'admin123') {
       setIsPasswordValid(true)
+      // Save password to sessionStorage for other admin pages
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('adminPassword', password)
+      }
     } else {
       alert('Senha incorreta!')
     }
@@ -335,6 +350,20 @@ export default function AdminPage() {
                   title="Ver logs de auditoria"
                 >
                   📋 Logs
+                </a>
+                <a
+                  href="/admin/hikvision"
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  title="Integração Hikvision"
+                >
+                  🎥 Hikvision
+                </a>
+                <a
+                  href="/admin/approvals"
+                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                  title="Central de Aprovações"
+                >
+                  ✅ Aprovações
                 </a>
               </div>
             </div>

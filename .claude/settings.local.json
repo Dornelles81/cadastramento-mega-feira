@@ -31,7 +31,16 @@
       "Bash(timeout:*)",
       "Bash(npm install:*)",
       "Bash(taskkill:*)",
-      "Bash(start test.html)"
+      "Bash(start test.html)",
+      "Bash(start http://localhost:3000/admin/hikcental)",
+      "Bash(start test-hikcental.html)",
+      "Bash(start http://localhost:3001/admin/hikcental)",
+      "Bash(start http://localhost:3002/admin/hikcental)",
+      "Bash(start:*)",
+      "Bash(ping:*)",
+      "Bash(nslookup:*)",
+      "Bash(telnet:*)",
+      "Bash(git checkout:*)"
     ],
     "defaultMode": "acceptEdits"
   }

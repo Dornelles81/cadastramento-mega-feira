@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Adicionar Usuário Hikvision</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online {
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        .status-offline {
+            background: #f44336;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Teste - Adicionar Usuário no Terminal Hikvision</h1>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background: #e8f4f8; border-radius: 5px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <strong>Terminal DS-K1T671M-L</strong><br>
+                    <span style="color: #666;">IP: 192.168.1.20</span>
+                </div>
+                <div id="connectionStatus">
+                    <span class="status-indicator status-offline"></span>
+                    <span id="statusText">Verificando...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Nome do Usuário:</label>
+            <input type="text" id="userName" value="Teste Usuario" placeholder="Nome completo">
+        </div>
+
+        <div class="form-group">
+            <label>Número do Funcionário (Employee No):</label>
+            <input type="text" id="employeeNo" value="12345678" placeholder="8 dígitos" maxlength="8">
+            <small style="color: #666;">Use até 8 dígitos (ex: primeiros dígitos do CPF)</small>
+        </div>
+
+        <div class="form-group">
+            <label>Tipo de Usuário:</label>
+            <select id="userType">
+                <option value="normal">Normal</option>
+                <option value="visitor">Visitante</option>
+                <option value="blackList">Lista Negra</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Validade:</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <input type="datetime-local" id="validFrom" value="2025-01-01T00:00">
+                <input type="datetime-local" id="validTo" value="2026-01-01T00:00">
+            </div>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button onclick="testConnection()">🔌 Testar Conexão</button>
+            <button onclick="addUser()">➕ Adicionar Usuário</button>
+            <button onclick="searchUser()">🔍 Buscar Usuário</button>
+            <button onclick="deleteUser()">❌ Excluir Usuário</button>
+        </div>
+
+        <div id="result" class="result"></div>
+
+        <div id="rawResponse" style="margin-top: 20px; display: none;">
+            <h3>📝 Resposta Completa:</h3>
+            <pre id="responseCode"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Check connection on load
+        window.addEventListener('load', () => {
+            testConnection();
+        });
+
+        async function testConnection() {
+            const statusIndicator = document.querySelector('.status-indicator');
+            const statusText = document.getElementById('statusText');
+            const resultDiv = document.getElementById('result');
+            const rawResponse = document.getElementById('rawResponse');
+            
+            statusText.textContent = 'Conectando...';
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/hikvision/test-connection');
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusText.textContent = 'Online';
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `
+                        ✅ <strong>Conexão estabelecida com sucesso!</strong><br><br>
+                        <strong>Informações do Terminal:</strong><br>
+                        • Modelo: DS-K1T671M-L<br>
+                        • Firmware: V3.2.30<br>
+                        • Serial: FF2721796
+                    `;
+                } else {
+                    statusIndicator.className = 'status-indicator status-offline';
+                    statusText.textContent = 'Offline';
+                    
+                    resultDiv.className = 'result error';
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `❌ <strong>Falha na conexão:</strong> ${data.error}`;
+                }
+                
+                rawResponse.style.display = 'block';
+                document.getElementById('responseCode').textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Erro';
+                
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `❌ <strong>Erro:</strong> ${error.message}`;
+            }
+        }
+
+        async function addUser() {
+            const resultDiv = document.getElementById('result');
+            const rawResponse = document.getElementById('rawResponse');
+            
+            const userData = {
+                name: document.getElementById('userName').value,
+                employeeNo: document.getElementById('employeeNo').value,
+                userType: document.getElementById('userType').value,
+                validFrom: document.getElementById('validFrom').value,
+                validTo: document.getElementById('validTo').value
+            };
+            
+            if (!userData.name || !userData.employeeNo) {
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '❌ Por favor, preencha o nome e número do funcionário';
+                return;
+            }
+            
+            resultDiv.className = 'result info';
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '⏳ Adicionando usuário ao terminal...';
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/hikvision/add-user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        ✅ <strong>Usuário adicionado com sucesso!</strong><br><br>
+                        <strong>Detalhes:</strong><br>
+                        • Nome: ${userData.name}<br>
+                        • Número: ${userData.employeeNo}<br>
+                        • Tipo: ${userData.userType}<br><br>
+                        ⚠️ <strong>Nota:</strong> Para adicionar foto facial, use a interface do terminal ou envie via API.
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ <strong>Erro ao adicionar usuário:</strong> ${data.error}`;
+                }
+                
+                rawResponse.style.display = 'block';
+                document.getElementById('responseCode').textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ <strong>Erro:</strong> ${error.message}`;
+            }
+        }
+
+        async function searchUser() {
+            const resultDiv = document.getElementById('result');
+            const rawResponse = document.getElementById('rawResponse');
+            const employeeNo = document.getElementById('employeeNo').value;
+            
+            resultDiv.className = 'result info';
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '🔍 Buscando usuário...';
+            
+            try {
+                const response = await fetch(`http://localhost:3002/api/hikvision/search-user?employeeNo=${employeeNo}`);
+                const data = await response.json();
+                
+                if (data.success && data.users && data.users.length > 0) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        ✅ <strong>Usuário encontrado!</strong><br><br>
+                        ${data.users.map(user => `
+                            • Nome: ${user.name}<br>
+                            • Número: ${user.employeeNo}<br>
+                            • Tipo: ${user.userType || 'normal'}<br>
+                        `).join('<hr>')}
+                    `;
+                } else {
+                    resultDiv.className = 'result info';
+                    resultDiv.innerHTML = `ℹ️ Nenhum usuário encontrado com o número ${employeeNo}`;
+                }
+                
+                rawResponse.style.display = 'block';
+                document.getElementById('responseCode').textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ <strong>Erro:</strong> ${error.message}`;
+            }
+        }
+
+        async function deleteUser() {
+            const resultDiv = document.getElementById('result');
+            const rawResponse = document.getElementById('rawResponse');
+            const employeeNo = document.getElementById('employeeNo').value;
+            
+            if (!employeeNo) {
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '❌ Por favor, informe o número do funcionário';
+                return;
+            }
+            
+            if (!confirm(`Tem certeza que deseja excluir o usuário ${employeeNo}?`)) {
+                return;
+            }
+            
+            resultDiv.className = 'result info';
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '🗑️ Excluindo usuário...';
+            
+            try {
+                const response = await fetch(`http://localhost:3002/api/hikvision/delete-user?employeeNo=${employeeNo}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ <strong>Usuário ${employeeNo} excluído com sucesso!</strong>`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ <strong>Erro ao excluir usuário:</strong> ${data.error}`;
+                }
+                
+                rawResponse.style.display = 'block';
+                document.getElementById('responseCode').textContent = JSON.stringify(data, null, 2);
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ <strong>Erro:</strong> ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

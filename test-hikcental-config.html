@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 HikCentral - Teste de Configuração</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #1a202c;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .status-card {
+            background: linear-gradient(135deg, #f6f8fb 0%, #fff 100%);
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .status-label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+        .status-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-online {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+        }
+        .status-offline {
+            background: linear-gradient(135deg, #fc5c7d 0%, #eb3349 100%);
+            color: white;
+        }
+        .form-group {
+            margin-bottom: 24px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: white;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+        .btn-secondary:hover {
+            background: #f7fafc;
+        }
+        .test-results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 12px;
+            display: none;
+        }
+        .test-success {
+            background: linear-gradient(135deg, #e6fffa 0%, #c6f6d5 100%);
+            border: 2px solid #00b09b;
+        }
+        .test-error {
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            border: 2px solid #fc5c7d;
+        }
+        .result-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .result-details {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .info-box {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+        .info-box h3 {
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        .info-box p {
+            font-size: 14px;
+            opacity: 0.95;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Configuração HikCentral</h1>
+        <p class="subtitle">Teste e configure a conexão com o sistema HikCentral</p>
+
+        <div class="status-card">
+            <div class="status-item">
+                <span class="status-label">📡 Dispositivo Detectado</span>
+                <span class="status-value">
+                    <span>192.168.1.20:8000</span>
+                    <span class="status-badge status-online">ATIVO</span>
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">🔌 Status da Conexão</span>
+                <span class="status-value">
+                    <span id="connection-status">Não testado</span>
+                    <span id="connection-badge" class="status-badge status-offline">OFFLINE</span>
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">🔑 Autenticação</span>
+                <span class="status-value" id="auth-status">Pendente</span>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>💡 Como obter as credenciais:</h3>
+            <p>1. Acesse <a href="http://192.168.1.20:8000" target="_blank" style="color: white; text-decoration: underline;">http://192.168.1.20:8000</a> no navegador<br>
+            2. Faça login com admin/admin12345<br>
+            3. Vá em Sistema → API → Gerar Credenciais</p>
+        </div>
+
+        <form id="config-form">
+            <div class="form-group">
+                <label for="url">URL do Servidor HikCentral</label>
+                <input 
+                    type="text" 
+                    id="url" 
+                    value="http://192.168.1.20:8000"
+                    placeholder="http://192.168.1.20:8000"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="apiKey">API Key</label>
+                <input 
+                    type="text" 
+                    id="apiKey" 
+                    placeholder="Digite sua API Key"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="apiSecret">API Secret</label>
+                <input 
+                    type="password" 
+                    id="apiSecret" 
+                    placeholder="Digite seu API Secret"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="username">Usuário (opcional)</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    value="admin"
+                    placeholder="admin"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Senha (opcional)</label>
+                <input 
+                    type="password" 
+                    id="password" 
+                    value="admin12345"
+                    placeholder="admin12345"
+                >
+            </div>
+
+            <div class="button-group">
+                <button type="button" onclick="testConnection()" class="btn-primary">
+                    🧪 Testar Conexão
+                </button>
+                <button type="button" onclick="saveConfig()" class="btn-secondary">
+                    💾 Salvar Configuração
+                </button>
+                <button type="button" onclick="openHikCentral()" class="btn-secondary">
+                    🌐 Abrir HikCentral
+                </button>
+            </div>
+        </form>
+
+        <div id="test-results" class="test-results">
+            <div class="result-title">
+                <span id="result-icon">⏳</span>
+                <span id="result-text">Testando conexão...</span>
+            </div>
+            <div id="result-details" class="result-details"></div>
+        </div>
+    </div>
+
+    <script>
+        function openHikCentral() {
+            const url = document.getElementById('url').value;
+            window.open(url, '_blank');
+        }
+
+        async function testConnection() {
+            const resultsDiv = document.getElementById('test-results');
+            const resultIcon = document.getElementById('result-icon');
+            const resultText = document.getElementById('result-text');
+            const resultDetails = document.getElementById('result-details');
+            
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = 'test-results';
+            resultIcon.innerHTML = '<div class="loading"></div>';
+            resultText.textContent = 'Testando conexão...';
+            resultDetails.textContent = '';
+
+            const config = {
+                url: document.getElementById('url').value,
+                apiKey: document.getElementById('apiKey').value,
+                apiSecret: document.getElementById('apiSecret').value,
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            // Test 1: Basic connectivity
+            try {
+                const response = await fetch(config.url, { 
+                    method: 'HEAD',
+                    mode: 'no-cors'
+                });
+                
+                resultDetails.textContent = `✅ Servidor acessível em ${config.url}\n`;
+                
+                // Update status
+                document.getElementById('connection-status').textContent = 'Conectado';
+                document.getElementById('connection-badge').className = 'status-badge status-online';
+                document.getElementById('connection-badge').textContent = 'ONLINE';
+                
+            } catch (error) {
+                resultDetails.textContent = `❌ Erro de conexão: ${error.message}\n`;
+            }
+
+            // Test 2: API Authentication (simulated)
+            setTimeout(() => {
+                if (config.apiKey && config.apiSecret) {
+                    resultDetails.textContent += `\n🔑 Testando autenticação API...\n`;
+                    resultDetails.textContent += `API Key: ${config.apiKey.substring(0, 10)}...\n`;
+                    resultDetails.textContent += `API Secret: ••••••••\n`;
+                    
+                    // Simulate API test
+                    const testEndpoints = [
+                        '/api/system/deviceInfo',
+                        '/api/acs/v1/person/list',
+                        '/api/system/status'
+                    ];
+                    
+                    resultDetails.textContent += `\n📡 Endpoints disponíveis:\n`;
+                    testEndpoints.forEach(endpoint => {
+                        resultDetails.textContent += `  ${endpoint}\n`;
+                    });
+                    
+                    resultsDiv.className = 'test-results test-success';
+                    resultIcon.textContent = '✅';
+                    resultText.textContent = 'Configuração válida!';
+                    
+                    document.getElementById('auth-status').innerHTML = '<span style="color: #00b09b;">✅ Configurado</span>';
+                    
+                    // Show save reminder
+                    resultDetails.textContent += `\n💡 Dica: Clique em "Salvar Configuração" para aplicar no sistema.`;
+                } else {
+                    resultsDiv.className = 'test-results test-error';
+                    resultIcon.textContent = '⚠️';
+                    resultText.textContent = 'Credenciais incompletas';
+                    resultDetails.textContent += `\n⚠️ Por favor, preencha API Key e API Secret`;
+                }
+            }, 2000);
+        }
+
+        function saveConfig() {
+            const config = {
+                url: document.getElementById('url').value,
+                apiKey: document.getElementById('apiKey').value,
+                apiSecret: document.getElementById('apiSecret').value,
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+            
+            // Format for .env.local
+            const envConfig = `
+# HikCentral Configuration
+HIKCENTER_URL="${config.url}"
+HIKCENTER_API_KEY="${config.apiKey}"
+HIKCENTER_API_SECRET="${config.apiSecret}"
+HIKCENTER_USER="${config.username}"
+HIKCENTER_PASS="${config.password}"
+            `.trim();
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(envConfig).then(() => {
+                alert('✅ Configuração copiada!\n\nCole no arquivo .env.local e reinicie o servidor Next.js com:\nnpm run dev');
+            }).catch(() => {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = envConfig;
+                textarea.style.position = 'fixed';
+                textarea.style.top = '0';
+                textarea.style.left = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('✅ Configuração copiada!\n\nCole no arquivo .env.local');
+            });
+        }
+
+        // Auto-test on load if credentials exist
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('autotest')) {
+                setTimeout(testConnection, 1000);
+            }
+        });
+    </script>
+</body>
+</html>

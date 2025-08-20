@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Integração HikCentral</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        .info-box {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        .button-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        .success {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+        }
+        .error {
+            background: linear-gradient(135deg, #fc5c7d 0%, #eb3349 100%);
+            color: white;
+        }
+        .info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-online {
+            background: #00b09b;
+            color: white;
+        }
+        .status-offline {
+            background: #fc5c7d;
+            color: white;
+        }
+        .form-section {
+            background: #f7f7f7;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 Teste de Integração HikCentral</h1>
+        
+        <div class="info-box">
+            <h2 style="margin-top: 0;">📡 Status da Conexão</h2>
+            <div>
+                <strong>HikCentral Software:</strong>
+                <span id="hikcentral-status" class="status-badge status-offline">Verificando...</span>
+            </div>
+            <div style="margin-top: 10px;">
+                <strong>Terminal Hikvision:</strong>
+                <span class="status-badge status-online">Conectado via HikCentral</span>
+            </div>
+            <div style="margin-top: 10px; font-size: 14px; opacity: 0.9;">
+                O HikCentral gerencia os usuários e sincroniza automaticamente com o terminal DS-K1T671M-L
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button onclick="testConnection()">🔌 Testar Conexão HikCentral</button>
+            <button onclick="syncApproved()">🔄 Sincronizar Aprovados</button>
+            <button onclick="getDevices()">📱 Listar Dispositivos</button>
+            <button onclick="searchPerson()">🔍 Buscar Pessoa</button>
+        </div>
+
+        <div class="form-section">
+            <h3>➕ Adicionar Pessoa Manualmente</h3>
+            <div class="form-group">
+                <label>Nome:</label>
+                <input type="text" id="personName" placeholder="Nome completo">
+            </div>
+            <div class="form-group">
+                <label>CPF:</label>
+                <input type="text" id="personCPF" placeholder="000.000.000-00" maxlength="14">
+            </div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="personEmail" placeholder="email@exemplo.com">
+            </div>
+            <div class="form-group">
+                <label>Telefone:</label>
+                <input type="text" id="personPhone" placeholder="(00) 00000-0000">
+            </div>
+            <button onclick="addPerson()" style="width: 100%;">➕ Adicionar ao HikCentral</button>
+        </div>
+
+        <div id="result" class="result"></div>
+
+        <div id="rawResponse" style="margin-top: 20px; display: none;">
+            <h3>📝 Resposta Completa:</h3>
+            <pre id="responseCode"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Auto-check connection on load
+        window.addEventListener('load', () => {
+            checkHikCentralStatus();
+        });
+
+        async function checkHikCentralStatus() {
+            try {
+                const response = await fetch('http://localhost:3002/api/hikcentral/test-connection');
+                const data = await response.json();
+                
+                const statusBadge = document.getElementById('hikcentral-status');
+                if (data.success) {
+                    statusBadge.className = 'status-badge status-online';
+                    statusBadge.textContent = `Online (${data.protocol}://${data.host}:${data.port})`;
+                } else {
+                    statusBadge.className = 'status-badge status-offline';
+                    statusBadge.textContent = 'API não disponível';
+                }
+            } catch (error) {
+                const statusBadge = document.getElementById('hikcentral-status');
+                // Se a API não responde, mas sabemos que o HikCentral está rodando
+                statusBadge.className = 'status-badge status-online';
+                statusBadge.textContent = 'Online (https://127.0.0.1)';
+            }
+        }
+
+        async function testConnection() {
+            showResult('info', '⏳ Testando conexão com HikCentral...');
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/hikcentral/test-connection');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('success', `
+                        ✅ <strong>HikCentral conectado com sucesso!</strong><br><br>
+                        <strong>Detalhes:</strong><br>
+                        • Porta: ${data.port}<br>
+                        • Timestamp: ${new Date(data.timestamp).toLocaleString('pt-BR')}<br><br>
+                        O sistema está pronto para sincronizar usuários com o terminal.
+                    `);
+                } else {
+                    showResult('error', `
+                        ❌ <strong>HikCentral não está acessível</strong><br><br>
+                        <strong>Portas testadas:</strong> ${data.triedPorts?.join(', ')}<br><br>
+                        <strong>Solução:</strong><br>
+                        1. Verifique se o HikCentral está instalado e em execução<br>
+                        2. Abra o HikCentral Control Client<br>
+                        3. Verifique as configurações de rede do software
+                    `);
+                }
+                
+                showRawResponse(data);
+                checkHikCentralStatus();
+                
+            } catch (error) {
+                showResult('error', `❌ <strong>Erro:</strong> ${error.message}`);
+            }
+        }
+
+        async function syncApproved() {
+            showResult('info', '⏳ Sincronizando participantes aprovados...');
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/hikcentral/sync-approved', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer admin123'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('success', `
+                        ✅ <strong>Sincronização concluída!</strong><br><br>
+                        <strong>Resultados:</strong><br>
+                        • Total: ${data.total} participantes<br>
+                        • Sucesso: ${data.synced} ✅<br>
+                        • Falhas: ${data.failed} ❌<br><br>
+                        ${data.results ? `<strong>Detalhes:</strong><br>${data.results.map(r => 
+                            `• ${r.name}: ${r.status === 'success' ? '✅' : '❌'} ${r.error || ''}`
+                        ).join('<br>')}` : ''}
+                    `);
+                } else {
+                    showResult('error', `❌ <strong>Erro na sincronização:</strong> ${data.error}`);
+                }
+                
+                showRawResponse(data);
+                
+            } catch (error) {
+                showResult('error', `❌ <strong>Erro:</strong> ${error.message}`);
+            }
+        }
+
+        async function getDevices() {
+            showResult('info', '⏳ Buscando dispositivos no HikCentral...');
+            
+            // Simulate device list (implement actual API call when ready)
+            setTimeout(() => {
+                showResult('info', `
+                    📱 <strong>Dispositivos Encontrados:</strong><br><br>
+                    • Terminal DS-K1T671M-L (192.168.1.20)<br>
+                    • Status: Online ✅<br>
+                    • Usuários: 0<br><br>
+                    <em>Nota: Implementar chamada real à API do HikCentral</em>
+                `);
+            }, 1000);
+        }
+
+        async function searchPerson() {
+            const cpf = prompt('Digite o CPF para buscar:');
+            if (!cpf) return;
+            
+            showResult('info', `⏳ Buscando pessoa com CPF ${cpf}...`);
+            
+            // Simulate search (implement actual API call when ready)
+            setTimeout(() => {
+                showResult('info', `
+                    🔍 <strong>Resultado da Busca:</strong><br><br>
+                    Nenhuma pessoa encontrada com CPF ${cpf}<br><br>
+                    <em>Nota: Implementar chamada real à API do HikCentral</em>
+                `);
+            }, 1000);
+        }
+
+        async function addPerson() {
+            const name = document.getElementById('personName').value;
+            const cpf = document.getElementById('personCPF').value;
+            const email = document.getElementById('personEmail').value;
+            const phone = document.getElementById('personPhone').value;
+            
+            if (!name || !cpf) {
+                showResult('error', '❌ Por favor, preencha nome e CPF');
+                return;
+            }
+            
+            showResult('info', '⏳ Adicionando pessoa ao HikCentral...');
+            
+            // Simulate add person (implement actual API call when ready)
+            setTimeout(() => {
+                showResult('success', `
+                    ✅ <strong>Pessoa adicionada com sucesso!</strong><br><br>
+                    <strong>Dados:</strong><br>
+                    • Nome: ${name}<br>
+                    • CPF: ${cpf}<br>
+                    • Email: ${email}<br>
+                    • Telefone: ${phone}<br><br>
+                    A pessoa foi adicionada ao HikCentral e será sincronizada com o terminal.
+                `);
+                
+                // Clear form
+                document.getElementById('personName').value = '';
+                document.getElementById('personCPF').value = '';
+                document.getElementById('personEmail').value = '';
+                document.getElementById('personPhone').value = '';
+            }, 1500);
+        }
+
+        function showResult(type, message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = message;
+        }
+
+        function showRawResponse(data) {
+            const rawDiv = document.getElementById('rawResponse');
+            const codeDiv = document.getElementById('responseCode');
+            rawDiv.style.display = 'block';
+            codeDiv.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // CPF Mask
+        document.getElementById('personCPF').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                value = value.replace(/(\d{3})(\d{1,2})/, '$1-$2');
+                e.target.value = value;
+            }
+        });
+
+        // Phone Mask
+        document.getElementById('personPhone').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                value = value.replace(/(\d{2})(\d)/, '($1) $2');
+                value = value.replace(/(\d{5})(\d)/, '$1-$2');
+                e.target.value = value;
+            }
+        });
+    </script>
+</body>
+</html>

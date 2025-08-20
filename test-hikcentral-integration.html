@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HikCentral Integration Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+        }
+        
+        .test-section h3 {
+            color: #555;
+            margin-bottom: 15px;
+        }
+        
+        .test-button {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 5px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .test-button.success {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+        }
+        
+        .test-button.secondary {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .result-box {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .result-box.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .result-box.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .result-box.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .result-box.loading {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            display: block;
+        }
+        
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-indicator.online {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.offline {
+            background: #dc3545;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 HikCentral Integration Test Suite</h1>
+        
+        <div class="test-section">
+            <h3>🔌 Status da Conexão</h3>
+            <p>
+                <span class="status-indicator offline" id="status-indicator"></span>
+                <span id="status-text">Verificando...</span>
+            </p>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔧 Testes de Integração</h3>
+            <button onclick="testPuppeteerIntegration()" class="test-button success">
+                🤖 Testar Automação Browser
+            </button>
+            <button onclick="testOptimusIntegration()" class="test-button">
+                🔌 Testar Optimus Integration
+            </button>
+            <button onclick="autoConfigureHikCentral()" class="test-button secondary">
+                ⚙️ Auto-configurar HikCentral
+            </button>
+            <button onclick="directAccess()" class="test-button secondary">
+                🚀 Acesso Direto (Add Visitor)
+            </button>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 Operações</h3>
+            <button onclick="syncApprovedParticipants()" class="test-button">
+                🔄 Sincronizar Aprovados
+            </button>
+            <button onclick="testApproval()" class="test-button">
+                ✅ Testar Aprovação
+            </button>
+        </div>
+        
+        <div id="result" class="result-box"></div>
+    </div>
+    
+    <script>
+        // Check status on load
+        window.addEventListener('load', checkStatus);
+        
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/hikcentral/test-connection');
+                const data = await response.json();
+                
+                const indicator = document.getElementById('status-indicator');
+                const text = document.getElementById('status-text');
+                
+                if (data.success) {
+                    indicator.className = 'status-indicator online';
+                    text.textContent = 'HikCentral Online';
+                } else {
+                    indicator.className = 'status-indicator offline';
+                    text.textContent = 'HikCentral Offline';
+                }
+            } catch (error) {
+                const indicator = document.getElementById('status-indicator');
+                const text = document.getElementById('status-text');
+                indicator.className = 'status-indicator offline';
+                text.textContent = 'Servidor não disponível';
+            }
+        }
+        
+        function showLoading(message) {
+            const result = document.getElementById('result');
+            result.className = 'result-box loading';
+            result.innerHTML = `⏳ ${message}`;
+        }
+        
+        function showSuccess(message) {
+            const result = document.getElementById('result');
+            result.className = 'result-box success';
+            result.innerHTML = message;
+        }
+        
+        function showError(message) {
+            const result = document.getElementById('result');
+            result.className = 'result-box error';
+            result.innerHTML = message;
+        }
+        
+        function showInfo(message) {
+            const result = document.getElementById('result');
+            result.className = 'result-box info';
+            result.innerHTML = message;
+        }
+        
+        async function testPuppeteerIntegration() {
+            showLoading('Testando automação do browser...');
+            
+            try {
+                const response = await fetch('/api/hikcentral/test-puppeteer');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ ${data.message}<br><br>Próximos passos:<br>${data.nextSteps.join('<br>')}`);
+                } else {
+                    showError(`❌ Falha no teste: ${data.error}<br><br>Sugestão: ${data.suggestion}`);
+                }
+            } catch (error) {
+                showError('Erro ao testar automação: ' + error.message);
+            }
+        }
+        
+        async function testOptimusIntegration() {
+            showLoading('Testando Optimus Integration...');
+            
+            try {
+                const response = await fetch('/api/hikcentral/test-optimus');
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ ${data.message}<br><br>Detalhes:<pre>${JSON.stringify(data.details, null, 2)}</pre>`);
+                } else {
+                    showError(`❌ Falha: ${data.error}<br><br>Sugestão: ${data.suggestion}`);
+                }
+            } catch (error) {
+                showError('Erro ao testar Optimus: ' + error.message);
+            }
+        }
+        
+        async function autoConfigureHikCentral() {
+            showLoading('Auto-configurando HikCentral...');
+            
+            try {
+                const response = await fetch('/api/hikcentral/auto-configure', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ ${data.message}<br><br>Configurações aplicadas!`);
+                } else {
+                    showError(`❌ Falha: ${data.error}`);
+                }
+            } catch (error) {
+                showError('Erro na configuração: ' + error.message);
+            }
+        }
+        
+        async function directAccess() {
+            showLoading('Acessando HikCentral diretamente...');
+            
+            try {
+                const response = await fetch('/api/hikcentral/direct-access', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'addVisitor',
+                        data: {
+                            name: 'Teste Direto',
+                            cpf: '12345678901',
+                            email: 'teste@example.com',
+                            phone: '11999999999'
+                        }
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ Acesso direto funcionando!<br><br>URL: ${data.currentUrl}<br>Título: ${data.pageTitle}`);
+                } else {
+                    showError(`❌ Falha no acesso: ${data.error}`);
+                }
+            } catch (error) {
+                showError('Erro no acesso direto: ' + error.message);
+            }
+        }
+        
+        async function syncApprovedParticipants() {
+            showLoading('Sincronizando participantes aprovados...');
+            
+            try {
+                const response = await fetch('/api/admin/sync-approved', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer admin123'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSuccess(`✅ Sincronização concluída!<br><br>Total: ${data.total}<br>Sincronizados: ${data.synced}<br>Falhas: ${data.failed}`);
+                } else {
+                    showError(`❌ Erro na sincronização: ${data.error}`);
+                }
+            } catch (error) {
+                showError('Erro ao sincronizar: ' + error.message);
+            }
+        }
+        
+        async function testApproval() {
+            showLoading('Testando aprovação de participante...');
+            
+            // First get a participant to approve
+            try {
+                const listResponse = await fetch('/api/admin/participants-with-approval', {
+                    headers: {
+                        'Authorization': 'Bearer admin123'
+                    }
+                });
+                const participants = await listResponse.json();
+                
+                if (participants.length === 0) {
+                    showError('Nenhum participante pendente encontrado');
+                    return;
+                }
+                
+                const participant = participants.find(p => p.approvalStatus === 'pending') || participants[0];
+                
+                // Approve the participant
+                const approveResponse = await fetch('/api/admin/approve-participant', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer admin123'
+                    },
+                    body: JSON.stringify({
+                        participantId: participant.id,
+                        action: 'approve'
+                    })
+                });
+                
+                const result = await approveResponse.json();
+                
+                if (result.success) {
+                    const syncStatus = result.hikvisionSync === 'success' ? '✅ Sincronizado' : '❌ Falha na sincronização';
+                    showSuccess(`✅ ${participant.name} aprovado!<br><br>Status HikCentral: ${syncStatus}`);
+                } else {
+                    showError(`❌ Erro ao aprovar: ${result.error}`);
+                }
+            } catch (error) {
+                showError('Erro no teste de aprovação: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
