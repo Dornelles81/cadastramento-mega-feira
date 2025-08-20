@@ -7,6 +7,56 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [2.0.0] - 2025-08-20
+
+### 🎉 Nova Versão Principal - Integração HikCentral
+
+Esta versão adiciona integração completa com o sistema HikCentral Professional e terminal Hikvision DS-K1T671M-L.
+
+### ✨ Adicionado
+- **Sistema de Aprovação Administrativa**
+  - Interface completa para aprovar/rejeitar participantes
+  - Visualização de status de sincronização em tempo real
+  - Exportação de dados aprovados para Excel
+  - Sistema de auditoria e logs detalhados
+
+- **Integração HikCentral Professional**
+  - Automação via Puppeteer para adicionar visitantes
+  - Múltiplos métodos de integração com fallback automático
+  - Login automático e gestão de sessão
+  - Sincronização bidirecional com terminal
+
+- **Métodos de Integração**
+  - Browser automation (Puppeteer) - método principal
+  - Optimus Integration API
+  - ISAPI Protocol com Digest Authentication
+  - Web API com gestão de sessão
+
+- **Componentes de Integração**
+  - Cliente HikCentral com múltiplas estratégias
+  - Cliente Hikvision com Digest Auth customizada
+  - Sistema de retry e fallback automático
+  - Páginas de teste para validação
+
+### 🔧 Modificado
+- Schema Prisma com campos de aprovação e sincronização
+- Configurações de ambiente para credenciais HikCentral
+- Sistema de navegação administrativa
+- Package.json com dependências Puppeteer e xml2js
+
+### 🐛 Corrigido
+- Autenticação Digest para dispositivos Hikvision
+- Persistência de sessão entre páginas administrativas
+- Submissão de formulários via automação browser
+- Tratamento de erros de sincronização
+
+### 📦 Dependências
+- puppeteer: ^24.16.2 (automação de browser)
+- xml2js: ^0.6.2 (parsing de respostas XML)
+- xlsx: ^0.18.5 (exportação Excel)
+
+---
+
 ## [1.2.3] - 2025-08-18
 
 ### 🐛 Corrigido
@@ -167,19 +217,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## 📋 Roadmap (Próximas Versões)
 
-### [1.3.0] - Planejado
-- [ ] Integração com HikCenter
+### [2.1.0] - Planejado
 - [ ] Sistema de QR Code para check-in
 - [ ] Dashboard com gráficos estatísticos
 - [ ] Notificações por email/SMS
+- [ ] Relatórios avançados de presença
 
-### [1.4.0] - Planejado
+### [2.2.0] - Planejado
 - [ ] Sistema de backup automático
 - [ ] Autenticação 2FA para admin
 - [ ] Logs de auditoria detalhados
 - [ ] API pública documentada
 
-### [2.0.0] - Futuro
+### [3.0.0] - Futuro
 - [ ] Aplicativo mobile nativo
 - [ ] Reconhecimento facial com IA
 - [ ] Multi-tenancy (múltiplos eventos)
@@ -189,13 +239,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## 📊 Estatísticas
 
-### Versão Atual: 1.2.3
-- **Total de Commits**: 15+
-- **Arquivos**: 45+
-- **Linhas de Código**: ~8,000
-- **APIs**: 15 endpoints
-- **Componentes React**: 12
-- **Tabelas DB**: 5
+### Versão Atual: 2.0.0
+- **Total de Commits**: 20+
+- **Arquivos**: 100+
+- **Linhas de Código**: ~15,000
+- **APIs**: 40+ endpoints
+- **Componentes React**: 20+
+- **Tabelas DB**: 8
 
 ---
 
@@ -209,4 +259,4 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ---
 
 *Mantido por: Equipe de Desenvolvimento Mega Feira*
-*Última atualização: 18/08/2025*
+*Última atualização: 20/08/2025*
