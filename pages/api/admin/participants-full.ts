@@ -35,7 +35,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         faceImageUrl: true, // This now contains the full face image
         faceData: false, // Don't send encrypted data to frontend
         customData: true,
-        documents: true // Include documents field
+        documents: true, // Include documents field
+        approvalStatus: true, // Include approval status
+        approvedAt: true,
+        approvedBy: true,
+        rejectionReason: true,
+        standCode: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -57,7 +62,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       hasValidFace: (participant.captureQuality || 0) > 0.5,
       faceImageUrl: participant.faceImageUrl || '',
       customData: participant.customData || {},
-      documents: participant.documents || {}
+      documents: participant.documents || {},
+      approvalStatus: participant.approvalStatus || 'pending',
+      approvedAt: participant.approvedAt?.toISOString() || null,
+      approvedBy: participant.approvedBy || null,
+      rejectionReason: participant.rejectionReason || null,
+      standCode: participant.standCode || null
     }))
 
     res.status(200).json({ 
