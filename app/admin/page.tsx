@@ -416,10 +416,11 @@ export default function AdminPage() {
                 </a>
                 <a
                   href="/admin/hikcental"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                  title="Sincronizar com HikCentral"
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                  title="Integração com HikCentral - Exportar participantes para reconhecimento facial"
                 >
-                  🔄 HikCentral
+                  <span className="text-xl mr-2">🔗</span>
+                  HikCentral
                 </a>
                 <a
                   href="/admin/logs"
