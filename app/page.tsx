@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import DynamicForm from '../components/DynamicForm'
-import EnhancedFaceCapture from '../components/EnhancedFaceCapture'
+import UniversalFaceCapture from '../components/UniversalFaceCapture'
 import MegaFeiraLogo from '../components/MegaFeiraLogo'
 import { formatTextWithMarkdown } from '../utils/formatText'
 
@@ -139,22 +139,31 @@ export default function HomePage() {
         console.log('✅ Registration successful:', result)
         setCurrentStep('success')
       } else {
-        const errorData = await response.json()
-        console.error('❌ Registration failed:', errorData)
-        
-        // Better error messages
+        let errorData: any = {}
         let errorMessage = 'Erro desconhecido'
-        if (errorData.message) {
-          if (errorData.message.includes('CPF')) {
-            errorMessage = 'CPF inválido. Por favor, verifique o número digitado.'
-          } else if (errorData.message.includes('já está cadastrado')) {
-            errorMessage = 'Este CPF já está cadastrado no sistema.'
-          } else {
+
+        try {
+          errorData = await response.json()
+          console.error('❌ Registration failed:', errorData)
+
+          // Better error messages
+          if (errorData.message) {
             errorMessage = errorData.message
+          } else if (errorData.error) {
+            errorMessage = errorData.error
           }
+        } catch (jsonError) {
+          console.error('Error parsing error response:', jsonError)
+          errorMessage = `Erro no servidor (${response.status})`
         }
-        
+
         alert(`Erro no cadastro: ${errorMessage}`)
+
+        // Check if error is about stand limit exceeded
+        if (errorData.error === 'Stand limit reached' || errorMessage.includes('limite de credenciais') || errorMessage.includes('limite')) {
+          // Reload page to start over
+          window.location.reload()
+        }
       }
     } catch (error) {
       console.error('💥 Registration error:', error)
@@ -444,7 +453,7 @@ export default function HomePage() {
           </div>
 
           <div className="bg-white rounded-lg p-6 shadow-sm">
-            <EnhancedFaceCapture 
+            <UniversalFaceCapture 
               onCapture={handleFaceCaptured}
               onBack={() => setCurrentStep('personal')}
             />

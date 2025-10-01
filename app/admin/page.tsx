@@ -17,6 +17,10 @@ interface Participant {
   faceImage?: string
   customData?: any
   documents?: any
+  approvalStatus?: string
+  approvedAt?: string
+  approvedBy?: string
+  rejectionReason?: string
 }
 
 const MOCK_PARTICIPANTS: Participant[] = [
@@ -282,6 +286,72 @@ export default function AdminPage() {
     }
   }
 
+  const handleApprove = async (participant: Participant) => {
+    try {
+      const response = await fetch('/api/admin/participant-approval', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer admin-token-mega-feira-2025'
+        },
+        body: JSON.stringify({
+          participantId: participant.id,
+          action: 'approve'
+        })
+      })
+      
+      if (response.ok) {
+        // Update local state
+        setParticipants(prev => 
+          prev.map(p => p.id === participant.id 
+            ? { ...p, approvalStatus: 'approved', approvedAt: new Date().toISOString(), approvedBy: 'admin' } 
+            : p)
+        )
+        alert(`✅ ${participant.name} aprovado com sucesso!`)
+      } else {
+        alert('Erro ao aprovar participante')
+      }
+    } catch (error) {
+      console.error('Error approving participant:', error)
+      alert('Erro ao aprovar participante')
+    }
+  }
+
+  const handleReject = async (participant: Participant) => {
+    const reason = prompt(`Motivo da rejeição de ${participant.name}:`)
+    if (!reason) return
+    
+    try {
+      const response = await fetch('/api/admin/participant-approval', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer admin-token-mega-feira-2025'
+        },
+        body: JSON.stringify({
+          participantId: participant.id,
+          action: 'reject',
+          reason
+        })
+      })
+      
+      if (response.ok) {
+        // Update local state
+        setParticipants(prev => 
+          prev.map(p => p.id === participant.id 
+            ? { ...p, approvalStatus: 'rejected', rejectionReason: reason } 
+            : p)
+        )
+        alert(`❌ ${participant.name} rejeitado!`)
+      } else {
+        alert('Erro ao rejeitar participante')
+      }
+    } catch (error) {
+      console.error('Error rejecting participant:', error)
+      alert('Erro ao rejeitar participante')
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este registro? Esta ação será registrada nos logs.')) {
       try {
@@ -345,6 +415,13 @@ export default function AdminPage() {
                   📄 PDF
                 </a>
                 <a
+                  href="/admin/hikcental"
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  title="Sincronizar com HikCentral"
+                >
+                  🔄 HikCentral
+                </a>
+                <a
                   href="/admin/logs"
                   className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
                   title="Ver logs de auditoria"
@@ -400,10 +477,23 @@ export default function AdminPage() {
         {/* Results Summary */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
           <div className="flex justify-between items-center">
-            <p className="text-gray-600">
-              Mostrando <strong>{filteredParticipants.length}</strong> registros
-              {loading && <span className="ml-2 text-blue-500">🔄 Carregando...</span>}
-            </p>
+            <div className="flex gap-6">
+              <p className="text-gray-600">
+                Mostrando <strong>{filteredParticipants.length}</strong> registros
+                {loading && <span className="ml-2 text-blue-500">🔄 Carregando...</span>}
+              </p>
+              <div className="flex gap-4 text-sm">
+                <span className="text-green-600">
+                  ✅ Aprovados: <strong>{filteredParticipants.filter(p => p.approvalStatus === 'approved').length}</strong>
+                </span>
+                <span className="text-yellow-600">
+                  ⏳ Pendentes: <strong>{filteredParticipants.filter(p => !p.approvalStatus || p.approvalStatus === 'pending').length}</strong>
+                </span>
+                <span className="text-red-600">
+                  ❌ Rejeitados: <strong>{filteredParticipants.filter(p => p.approvalStatus === 'rejected').length}</strong>
+                </span>
+              </div>
+            </div>
             <button
               onClick={() => loadParticipants(searchTerm)}
               className="text-sm bg-mega-500 text-white px-3 py-1 rounded hover:bg-mega-600"
@@ -417,25 +507,26 @@ export default function AdminPage() {
         {/* Participants Table */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="min-w-full table-auto">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Face</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Nome</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">CPF</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Evento</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Email</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Telefone</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Qualidade</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Cadastrado em</th>
-                  <th className="text-left px-6 py-4 font-semibold text-gray-700">Ações</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Face</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Nome</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">CPF</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Status</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Evento</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Email</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Telefone</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Qualidade</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Cadastrado em</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredParticipants.map((participant) => (
                   <tr key={participant.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center">
                         {participantImages[participant.id] ? (
                           <button
                             onClick={() => setViewingImage(participant)}
@@ -457,35 +548,70 @@ export default function AdminPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-900">{participant.name}</td>
-                    <td className="px-6 py-4 text-gray-600 font-mono">{participant.cpf}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-mega-100 text-mega-800">
+                    <td className="px-4 py-3 text-gray-900 text-sm">{participant.name}</td>
+                    <td className="px-4 py-3 text-gray-600 font-mono text-sm">{participant.cpf}</td>
+                    <td className="px-4 py-3">
+                      {participant.approvalStatus === 'approved' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          ✅ Aprovado
+                        </span>
+                      ) : participant.approvalStatus === 'rejected' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          ❌ Rejeitado
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          ⏳ Pendente
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-mega-100 text-mega-800">
                         {formatEventName(participant.eventCode)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{participant.email || '-'}</td>
-                    <td className="px-6 py-4 text-gray-600 font-mono">{participant.phone || '-'}</td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 text-sm">{participant.email || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600 font-mono text-sm">{participant.phone || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600 text-sm">
                       {participant.captureQuality ? 
                         `${Math.round(participant.captureQuality * 100)}%` : 
                         '-'
                       }
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 text-sm">
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-2">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-start gap-2 min-w-[200px]">
+                        {participant.approvalStatus !== 'approved' && (
+                          <button
+                            onClick={() => handleApprove(participant)}
+                            className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-medium transition-colors"
+                            title="Aprovar participante"
+                          >
+                            ✅ Aprovar
+                          </button>
+                        )}
+                        {participant.approvalStatus !== 'rejected' && (
+                          <button
+                            onClick={() => handleReject(participant)}
+                            className="px-3 py-1 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded text-xs font-medium transition-colors"
+                            title="Rejeitar participante"
+                          >
+                            ❌ Rejeitar
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(participant)}
-                          className="text-mega-600 hover:text-mega-800 text-sm font-medium"
+                          className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-medium transition-colors"
+                          title="Editar participante"
                         >
                           ✏️ Editar
                         </button>
                         <button
                           onClick={() => handleDelete(participant.id)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+                          title="Excluir participante"
                         >
                           🗑️ Excluir
                         </button>
@@ -874,6 +1000,12 @@ export default function AdminPage() {
             className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             📄 Gerenciar Documentos
+          </a>
+          <a
+            href="/admin/stands"
+            className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+          >
+            🏪 Gerenciar Estandes
           </a>
           <a
             href="/admin/logs"

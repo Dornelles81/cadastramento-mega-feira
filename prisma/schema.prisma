@@ -15,46 +15,52 @@ model Participant {
   email     String?
   phone     String?
   eventCode String?
-  
+
+  // Stand assignment
+  standId   String?
+  stand     Stand?   @relation(fields: [standId], references: [id])
+
   // Facial data stored directly in NEON
   faceImageUrl    String?  // NEON blob storage URL
   faceData        Bytes?   // Encrypted biometric template
   captureQuality  Float?   // Face detection quality score
-  
+
   // Consent and compliance
   consentAccepted Boolean  @default(false)
   consentIp       String?
   consentDate     DateTime?
-  
+
   // Mobile capture metadata
   deviceInfo      String?  // User agent + device details
   captureLocation String?  // Optional location data
-  
+
   // Dynamic custom fields data
   customData      Json?    // Stores all custom field values as JSON
-  
+
   // Document uploads
   documents       Json?    // Stores document URLs and metadata
-  
+
   // Approval status
   approvalStatus       String?  @default("pending") // pending, approved, rejected
   approvedAt           DateTime? // Data da aprovação
   approvedBy           String?  // Admin que aprovou
   rejectionReason      String?  // Motivo da rejeição
-  
+
   // HikCentral sync status
   hikCentralSyncStatus String?  @default("pending") // pending, syncing, synced, failed
   hikCentralPersonId   String?  // ID no sistema HikCentral
   hikCentralSyncedAt   DateTime? // Data da última sincronização
   hikCentralErrorMsg   String?  // Mensagem de erro se houver falha
-  
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Relations
   syncLogs HikCentralSyncLog[]
-  
+  approvalLogs ApprovalLog[]
+
+  @@index([standId])
   @@map("participants")
 }
 
@@ -68,8 +74,45 @@ model Event {
   maxCapacity Int      @default(2000)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
-  
+
   @@map("events")
+}
+
+// Stand Management (Booth/Kiosk registration limits)
+model Stand {
+  id              String   @id @default(uuid())
+  name            String   // Nome do estande (ex: "Estande 1", "Samsung", "Apple")
+  code            String   @unique // Código único (ex: "STAND001", "SAMSUNG")
+  description     String?  // Descrição opcional
+
+  // Registration limits
+  maxRegistrations Int     @default(3) // Limite máximo de registros faciais
+  currentCount     Int     @default(0) // Contador atual de registros
+
+  // Event association
+  eventCode        String? // Associar a um evento específico
+
+  // Contact and metadata
+  responsibleName  String? // Nome do responsável
+  responsibleEmail String? // Email do responsável
+  responsiblePhone String? // Telefone do responsável
+  location         String? // Localização física do estande
+  notes            Json?   // Notas adicionais em JSON
+
+  // Status
+  isActive         Boolean @default(true)
+
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  participants     Participant[]
+
+  @@index([code])
+  @@index([eventCode])
+  @@index([isActive])
+  @@map("stands")
 }
 
 // Custom Field Management
@@ -154,6 +197,32 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// Approval/Rejection Log
+model ApprovalLog {
+  id            String   @id @default(uuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id])
+  
+  action        String   // "approved" or "rejected"
+  previousStatus String  // Status before the action
+  newStatus     String   // Status after the action
+  
+  reason        String?  // Reason for approval/rejection
+  notes         String?  // Additional notes from admin
+  
+  // Admin who performed the action
+  adminUser     String   @default("admin")
+  adminIp       String?
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  
+  @@index([participantId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("approval_logs")
 }
 
 // HikCentral Integration Tables

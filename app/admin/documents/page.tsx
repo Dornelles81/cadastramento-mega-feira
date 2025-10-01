@@ -85,7 +85,7 @@ export default function DocumentsAdminPage() {
     // Swap orders
     const tempOrder = newDocs[index].order
     newDocs[index].order = newDocs[targetIndex].order
-    newDocs[targetIndex].order = tempOrder
+    newDocs[targetIndex].order = tempOrder as number
     
     // Swap positions in array
     [newDocs[index], newDocs[targetIndex]] = [newDocs[targetIndex], newDocs[index]]

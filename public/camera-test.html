@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Câmera - Desktop & Mobile</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .device-info {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .device-info h2 {
+            color: #0066cc;
+            margin-bottom: 10px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .info-item {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #0066cc;
+        }
+        .info-label {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .info-value {
+            color: #333;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .camera-section {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: #0066cc;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0052a3;
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        select {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+        }
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        canvas {
+            display: none;
+        }
+        .status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .status.active {
+            background: rgba(40, 167, 69, 0.9);
+        }
+        .captured-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .captured-image {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .captured-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .camera-list {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .camera-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .permission-denied {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Teste de Câmera Universal</h1>
+            <p>Funciona em Desktop, Notebook, Tablet e Mobile</p>
+        </div>
+
+        <div class="device-info">
+            <h2>📊 Informações do Dispositivo</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Sistema Operacional</div>
+                    <div class="info-value" id="osInfo">Detectando...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Navegador</div>
+                    <div class="info-value" id="browserInfo">Detectando...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Dispositivo</div>
+                    <div class="info-value" id="deviceType">Detectando...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Resolução da Tela</div>
+                    <div class="info-value" id="screenRes">Detectando...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Câmeras Detectadas</div>
+                    <div class="info-value" id="cameraCount">0</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Permissão da Câmera</div>
+                    <div class="info-value" id="cameraPermission">Não solicitada</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="camera-section">
+            <div id="permissionDenied" class="permission-denied" style="display: none;">
+                <h3>⚠️ Acesso à Câmera Negado</h3>
+                <p>Para usar este recurso, você precisa permitir o acesso à câmera:</p>
+                <ul>
+                    <li>Chrome/Edge: Clique no ícone do cadeado na barra de endereço</li>
+                    <li>Firefox: Clique no ícone da câmera na barra de endereço</li>
+                    <li>Safari: Preferências → Sites → Câmera</li>
+                </ul>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" onclick="startCamera()">▶️ Iniciar Câmera</button>
+                <button class="btn btn-danger" onclick="stopCamera()" disabled id="stopBtn">⏹️ Parar</button>
+                <button class="btn btn-success" onclick="capturePhoto()" disabled id="captureBtn">📸 Capturar Foto</button>
+                <select id="cameraSelect" onchange="switchCamera()" style="display: none;">
+                    <option value="">Selecione a câmera</option>
+                </select>
+                <select id="qualitySelect" onchange="changeQuality()">
+                    <option value="low">Qualidade Baixa (480p)</option>
+                    <option value="medium">Qualidade Média (720p)</option>
+                    <option value="high" selected>Qualidade Alta (1080p)</option>
+                </select>
+            </div>
+
+            <div class="video-container">
+                <video id="videoElement" autoplay playsinline muted></video>
+                <canvas id="canvasElement"></canvas>
+                <div id="status" class="status">Câmera não iniciada</div>
+            </div>
+
+            <div id="cameraList" class="camera-list" style="display: none;">
+                <h3>📷 Câmeras Disponíveis:</h3>
+                <div id="cameraListItems"></div>
+            </div>
+
+            <div id="capturedImages" class="captured-images"></div>
+        </div>
+    </div>
+
+    <script>
+        let stream = null;
+        let videoElement = document.getElementById('videoElement');
+        let canvasElement = document.getElementById('canvasElement');
+        let currentQuality = 'high';
+        let cameras = [];
+        let currentCameraId = null;
+
+        // Detect device information
+        function detectDeviceInfo() {
+            // OS Detection
+            const userAgent = navigator.userAgent;
+            let os = 'Unknown';
+            if (userAgent.indexOf('Win') !== -1) os = 'Windows';
+            else if (userAgent.indexOf('Mac') !== -1) os = 'macOS';
+            else if (userAgent.indexOf('Linux') !== -1) os = 'Linux';
+            else if (userAgent.indexOf('Android') !== -1) os = 'Android';
+            else if (userAgent.indexOf('iOS') !== -1 || userAgent.indexOf('iPhone') !== -1) os = 'iOS';
+            
+            document.getElementById('osInfo').textContent = os;
+            
+            // Browser Detection
+            let browser = 'Unknown';
+            if (userAgent.indexOf('Chrome') !== -1) browser = 'Chrome';
+            else if (userAgent.indexOf('Safari') !== -1) browser = 'Safari';
+            else if (userAgent.indexOf('Firefox') !== -1) browser = 'Firefox';
+            else if (userAgent.indexOf('Edge') !== -1) browser = 'Edge';
+            
+            document.getElementById('browserInfo').textContent = browser;
+            
+            // Device Type
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isTablet = /iPad|Android.*Tab|Tab.*Android/i.test(userAgent);
+            let deviceType = 'Desktop/Notebook';
+            if (isTablet) deviceType = 'Tablet';
+            else if (isMobile) deviceType = 'Smartphone';
+            
+            document.getElementById('deviceType').textContent = deviceType;
+            
+            // Screen Resolution
+            const screenRes = `${window.screen.width} x ${window.screen.height}`;
+            document.getElementById('screenRes').textContent = screenRes;
+        }
+
+        // Get available cameras
+        async function getCameras() {
+            try {
+                // Request permission first
+                await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                cameras = devices.filter(device => device.kind === 'videoinput');
+                
+                document.getElementById('cameraCount').textContent = cameras.length;
+                
+                const cameraSelect = document.getElementById('cameraSelect');
+                const cameraListItems = document.getElementById('cameraListItems');
+                
+                // Clear existing options
+                cameraSelect.innerHTML = '<option value="">Selecione a câmera</option>';
+                cameraListItems.innerHTML = '';
+                
+                cameras.forEach((camera, index) => {
+                    const option = document.createElement('option');
+                    option.value = camera.deviceId;
+                    option.textContent = camera.label || `Câmera ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                    
+                    const cameraItem = document.createElement('div');
+                    cameraItem.className = 'camera-item';
+                    cameraItem.innerHTML = `
+                        <span>${camera.label || `Câmera ${index + 1}`}</span>
+                        <button class="btn btn-primary" onclick="selectCamera('${camera.deviceId}')">Usar</button>
+                    `;
+                    cameraListItems.appendChild(cameraItem);
+                });
+                
+                if (cameras.length > 1) {
+                    cameraSelect.style.display = 'inline-block';
+                    document.getElementById('cameraList').style.display = 'block';
+                }
+                
+                document.getElementById('cameraPermission').textContent = 'Permitida';
+                document.getElementById('cameraPermission').style.color = '#28a745';
+            } catch (error) {
+                console.error('Error getting cameras:', error);
+                document.getElementById('cameraPermission').textContent = 'Negada';
+                document.getElementById('cameraPermission').style.color = '#dc3545';
+                document.getElementById('permissionDenied').style.display = 'block';
+            }
+        }
+
+        // Start camera
+        async function startCamera(cameraId = null) {
+            try {
+                // Stop existing stream
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                const qualitySettings = {
+                    low: { width: 640, height: 480 },
+                    medium: { width: 1280, height: 720 },
+                    high: { width: 1920, height: 1080 }
+                };
+                
+                const quality = qualitySettings[currentQuality];
+                
+                const constraints = {
+                    video: {
+                        deviceId: cameraId ? { exact: cameraId } : undefined,
+                        width: { ideal: quality.width },
+                        height: { ideal: quality.height },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: false
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                
+                document.getElementById('status').textContent = 'Câmera ativa';
+                document.getElementById('status').className = 'status active';
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('captureBtn').disabled = false;
+                
+                // Update cameras list after permission
+                await getCameras();
+                
+                // Get actual video dimensions
+                videoElement.onloadedmetadata = () => {
+                    const actualRes = `${videoElement.videoWidth}x${videoElement.videoHeight}`;
+                    document.getElementById('status').textContent = `Câmera ativa (${actualRes})`;
+                };
+            } catch (error) {
+                console.error('Error starting camera:', error);
+                alert('Erro ao iniciar câmera: ' + error.message);
+                document.getElementById('permissionDenied').style.display = 'block';
+            }
+        }
+
+        // Stop camera
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+                stream = null;
+            }
+            
+            document.getElementById('status').textContent = 'Câmera parada';
+            document.getElementById('status').className = 'status';
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('captureBtn').disabled = true;
+        }
+
+        // Switch camera
+        function switchCamera() {
+            const cameraId = document.getElementById('cameraSelect').value;
+            if (cameraId) {
+                startCamera(cameraId);
+            }
+        }
+
+        // Select specific camera
+        function selectCamera(cameraId) {
+            currentCameraId = cameraId;
+            document.getElementById('cameraSelect').value = cameraId;
+            startCamera(cameraId);
+        }
+
+        // Change quality
+        function changeQuality() {
+            currentQuality = document.getElementById('qualitySelect').value;
+            if (stream) {
+                startCamera(currentCameraId);
+            }
+        }
+
+        // Capture photo
+        function capturePhoto() {
+            const context = canvasElement.getContext('2d');
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0);
+            
+            const imageData = canvasElement.toDataURL('image/jpeg', 0.95);
+            
+            const imageContainer = document.getElementById('capturedImages');
+            const imageDiv = document.createElement('div');
+            imageDiv.className = 'captured-image';
+            
+            const img = document.createElement('img');
+            img.src = imageData;
+            imageDiv.appendChild(img);
+            
+            imageContainer.insertBefore(imageDiv, imageContainer.firstChild);
+            
+            // Flash effect
+            videoElement.style.opacity = '0.5';
+            setTimeout(() => {
+                videoElement.style.opacity = '1';
+            }, 200);
+            
+            // Show success message
+            const originalText = document.getElementById('status').textContent;
+            document.getElementById('status').textContent = '✅ Foto capturada!';
+            setTimeout(() => {
+                document.getElementById('status').textContent = originalText;
+            }, 2000);
+        }
+
+        // Initialize on page load
+        window.onload = () => {
+            detectDeviceInfo();
+            getCameras();
+        };
+    </script>
+</body>
+</html>

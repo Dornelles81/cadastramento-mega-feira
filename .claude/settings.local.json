@@ -40,7 +40,20 @@
       "Bash(ping:*)",
       "Bash(nslookup:*)",
       "Bash(telnet:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git tag:*)",
+      "Bash(ipconfig)",
+      "Bash(vercel:*)",
+      "Bash(npm run build:*)",
+      "Bash(powershell:*)",
+      "Read(/C:\\Users\\dorne\\Downloads/**)",
+      "Read(/C:\\Users\\dorne\\Downloads/**)",
+      "Read(/C:\\Users\\dorne\\Downloads/**)",
+      "Bash(npm update:*)",
+      "Bash(dir:*)",
+      "Bash(del:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)"
     ],
     "defaultMode": "acceptEdits"
   }

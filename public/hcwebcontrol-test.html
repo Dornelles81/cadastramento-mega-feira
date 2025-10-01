@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HCWebControl - Teste de Conexão</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #0066cc;
+            border-radius: 5px;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 HCWebControl - Diagnóstico de Conexão</h1>
+        
+        <div id="status" class="status info">
+            Pronto para iniciar testes...
+        </div>
+
+        <div class="test-section">
+            <h3>1️⃣ Teste Básico - Verificar Serviços</h3>
+            <button onclick="testLocalServices()">Testar Portas Locais</button>
+            <button onclick="testHikCentralPorts()">Testar Portas HikCentral</button>
+        </div>
+
+        <div class="test-section">
+            <h3>2️⃣ Teste de API REST</h3>
+            <input type="text" id="test-url" placeholder="URL do HikCentral (ex: http://localhost:80)" value="http://localhost:80">
+            <input type="text" id="test-user" placeholder="Usuário" value="admin">
+            <input type="password" id="test-pass" placeholder="Senha" value="Index2016">
+            <br>
+            <button onclick="testRESTConnection()">Testar REST API</button>
+            <button onclick="testAllEndpoints()">Testar Todos Endpoints</button>
+        </div>
+
+        <div class="test-section">
+            <h3>3️⃣ Teste ActiveX/Plugin</h3>
+            <button onclick="detectActiveX()">Detectar ActiveX</button>
+            <button onclick="testActiveXConnection()">Testar Conexão ActiveX</button>
+        </div>
+
+        <div class="test-section">
+            <h3>4️⃣ Teste de Sincronização</h3>
+            <button onclick="testParticipantLoad()">Carregar Participantes</button>
+            <button onclick="testSyncAPI()">Testar API de Sync</button>
+        </div>
+
+        <div class="log" id="log">
+            > Console de diagnóstico iniciado...<br>
+        </div>
+    </div>
+
+    <script>
+        // Função de log
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                error: '#f00',
+                success: '#0f0',
+                warning: '#ff0',
+                info: '#0ff'
+            };
+            const color = colors[type] || '#fff';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span><br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+
+        // 1. Testar portas locais
+        async function testLocalServices() {
+            log('========== TESTE DE PORTAS LOCAIS ==========');
+            const ports = [80, 443, 8080, 8443, 3000, 3001, 5000, 7001, 8000];
+            
+            for (const port of ports) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    
+                    const response = await fetch(`http://localhost:${port}`, {
+                        method: 'GET',
+                        signal: controller.signal,
+                        mode: 'no-cors'
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    log(`✅ Porta ${port}: ABERTA`, 'success');
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        log(`⏱️ Porta ${port}: Timeout (possível firewall)`, 'warning');
+                    } else {
+                        log(`❌ Porta ${port}: Fechada ou sem serviço`, 'error');
+                    }
+                }
+            }
+            updateStatus('Teste de portas concluído', 'info');
+        }
+
+        // 2. Testar portas HikCentral específicas
+        async function testHikCentralPorts() {
+            log('========== TESTE DE PORTAS HIKCENTRAL ==========');
+            
+            const configs = [
+                { url: 'http://localhost:80', desc: 'HTTP porta 80' },
+                { url: 'https://localhost:443', desc: 'HTTPS porta 443' },
+                { url: 'http://localhost:8080', desc: 'HTTP porta 8080' },
+                { url: 'https://localhost:8443', desc: 'HTTPS porta 8443' },
+                { url: 'http://127.0.0.1:80', desc: '127.0.0.1 porta 80' },
+                { url: 'http://192.168.1.20:80', desc: 'IP Local porta 80' }
+            ];
+
+            for (const config of configs) {
+                log(`Testando: ${config.desc} - ${config.url}`);
+                try {
+                    const response = await fetch(config.url, {
+                        method: 'GET',
+                        mode: 'no-cors',
+                        timeout: 3000
+                    });
+                    log(`✅ ${config.desc}: Respondendo`, 'success');
+                } catch (error) {
+                    log(`❌ ${config.desc}: Não acessível - ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // 3. Testar conexão REST
+        async function testRESTConnection() {
+            log('========== TESTE DE CONEXÃO REST API ==========');
+            
+            const url = document.getElementById('test-url').value;
+            const user = document.getElementById('test-user').value;
+            const pass = document.getElementById('test-pass').value;
+            
+            log(`URL: ${url}`);
+            log(`Usuário: ${user}`);
+            
+            const endpoints = [
+                '/api/acs/v1/person/list',
+                '/api/acs/v1/door/search',
+                '/api/system/v1/info',
+                '/artemis/api/common/v1/health',
+                '/ISAPI/System/deviceInfo',
+                '/api/v2/person/list'
+            ];
+
+            let successCount = 0;
+            
+            for (const endpoint of endpoints) {
+                const fullUrl = url + endpoint;
+                log(`Testando: ${fullUrl}`);
+                
+                try {
+                    const response = await fetch(fullUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': 'Basic ' + btoa(`${user}:${pass}`),
+                            'Accept': 'application/json'
+                        },
+                        timeout: 5000
+                    });
+                    
+                    if (response.ok) {
+                        log(`✅ ${endpoint}: OK (Status: ${response.status})`, 'success');
+                        successCount++;
+                        
+                        try {
+                            const data = await response.json();
+                            log(`   Resposta: ${JSON.stringify(data).substring(0, 100)}...`, 'info');
+                        } catch (e) {
+                            log(`   Resposta não é JSON`, 'warning');
+                        }
+                    } else {
+                        log(`⚠️ ${endpoint}: Status ${response.status}`, 'warning');
+                    }
+                } catch (error) {
+                    log(`❌ ${endpoint}: ${error.message}`, 'error');
+                }
+            }
+            
+            if (successCount > 0) {
+                updateStatus(`${successCount} endpoints funcionando!`, 'success');
+            } else {
+                updateStatus('Nenhum endpoint REST funcionou', 'error');
+            }
+        }
+
+        // 4. Detectar ActiveX
+        function detectActiveX() {
+            log('========== DETECÇÃO DE ACTIVEX ==========');
+            
+            // Verificar se é Internet Explorer ou Edge legado
+            const isIE = window.ActiveXObject !== undefined;
+            const isEdgeLegacy = window.navigator.userAgent.indexOf('Edge') > -1;
+            
+            log(`Navegador: ${navigator.userAgent}`);
+            log(`ActiveX disponível: ${isIE ? 'SIM' : 'NÃO'}`);
+            log(`Edge Legado: ${isEdgeLegacy ? 'SIM' : 'NÃO'}`);
+            
+            // Tentar criar objeto ActiveX
+            if (isIE || window.ActiveXObject) {
+                try {
+                    const testObj = new ActiveXObject("WScript.Shell");
+                    log('✅ ActiveX funcionando (WScript.Shell criado)', 'success');
+                } catch (e) {
+                    log('⚠️ ActiveX bloqueado ou não permitido', 'warning');
+                }
+            }
+            
+            // Verificar plugin NPAPI
+            if (navigator.plugins) {
+                log(`Plugins instalados: ${navigator.plugins.length}`);
+                for (let i = 0; i < navigator.plugins.length; i++) {
+                    const plugin = navigator.plugins[i];
+                    if (plugin.name.toLowerCase().includes('hik') || 
+                        plugin.name.toLowerCase().includes('control')) {
+                        log(`✅ Plugin encontrado: ${plugin.name}`, 'success');
+                    }
+                }
+            }
+            
+            // Recomendações
+            if (!isIE && !isEdgeLegacy) {
+                log('');
+                log('📝 RECOMENDAÇÕES:', 'warning');
+                log('1. ActiveX funciona melhor no Internet Explorer', 'warning');
+                log('2. Para Chrome/Firefox, use o modo REST API', 'warning');
+                log('3. Ou instale a extensão IE Tab para Chrome', 'warning');
+            }
+        }
+
+        // 5. Testar conexão ActiveX
+        function testActiveXConnection() {
+            log('========== TESTE DE CONEXÃO ACTIVEX ==========');
+            
+            try {
+                // Tentar criar o objeto HCWebControl
+                const webControl = document.createElement('object');
+                webControl.classid = 'clsid:D5E14042-E87C-4646-9F3C-9A7F9F1F9F9F';
+                webControl.id = 'HCWebControl';
+                webControl.width = '1';
+                webControl.height = '1';
+                document.body.appendChild(webControl);
+                
+                if (webControl.Init) {
+                    webControl.Init();
+                    log('✅ HCWebControl inicializado!', 'success');
+                    
+                    // Tentar conectar
+                    const url = document.getElementById('test-url').value;
+                    const user = document.getElementById('test-user').value;
+                    const pass = document.getElementById('test-pass').value;
+                    
+                    webControl.Connect(url, 80, user, pass);
+                    log('Tentando conectar via ActiveX...', 'info');
+                } else {
+                    log('❌ HCWebControl não tem método Init', 'error');
+                }
+            } catch (e) {
+                log(`❌ Erro ao criar ActiveX: ${e.message}`, 'error');
+                log('Use o modo REST API como alternativa', 'warning');
+            }
+        }
+
+        // 6. Testar carregamento de participantes
+        async function testParticipantLoad() {
+            log('========== TESTE DE CARREGAMENTO DE PARTICIPANTES ==========');
+            
+            try {
+                const response = await fetch('/api/admin/participants', {
+                    headers: {
+                        'Authorization': 'Bearer admin123'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ ${data.participants.length} participantes carregados`, 'success');
+                    
+                    // Mostrar alguns participantes
+                    data.participants.slice(0, 3).forEach(p => {
+                        log(`   - ${p.name} (${p.cpf}) - Status: ${p.hikCentralSyncStatus || 'pending'}`, 'info');
+                    });
+                } else {
+                    log(`❌ Erro ao carregar: Status ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // 7. Testar API de sincronização
+        async function testSyncAPI() {
+            log('========== TESTE DE API DE SINCRONIZAÇÃO ==========');
+            
+            try {
+                // Testar bridge API
+                const response = await fetch('/api/admin/hcwebcontrol-bridge?action=getSyncStats', {
+                    headers: {
+                        'Authorization': 'Bearer admin123'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ API Bridge funcionando!', 'success');
+                    log(`   Total: ${data.stats.total}`, 'info');
+                    log(`   Sincronizados: ${data.stats.synced}`, 'info');
+                    log(`   Pendentes: ${data.stats.pending}`, 'info');
+                    log(`   Falhas: ${data.stats.failed}`, 'info');
+                } else {
+                    log(`❌ Erro na API: Status ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // 8. Testar todos os endpoints
+        async function testAllEndpoints() {
+            log('========== TESTE COMPLETO DE ENDPOINTS ==========');
+            await testLocalServices();
+            await new Promise(r => setTimeout(r, 1000));
+            await testRESTConnection();
+            await new Promise(r => setTimeout(r, 1000));
+            await testParticipantLoad();
+            await new Promise(r => setTimeout(r, 1000));
+            await testSyncAPI();
+            
+            log('');
+            log('========== TESTE COMPLETO FINALIZADO ==========', 'success');
+            updateStatus('Todos os testes concluídos - verifique o log', 'info');
+        }
+
+        // Log inicial
+        log('Página de diagnóstico carregada', 'success');
+        log('Clique nos botões para executar os testes', 'info');
+    </script>
+</body>
+</html>

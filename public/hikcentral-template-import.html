@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HikCentral Professional - Importação via Template</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .header h1 {
+            color: #1e3c72;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            color: #2a5298;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #2a5298;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            color: #2a5298;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .btn {
+            background: #2a5298;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn:hover {
+            background: #1e3c72;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(42,82,152,0.3);
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .btn.success:hover {
+            background: #218838;
+        }
+        .btn.warning {
+            background: #ffc107;
+            color: #333;
+        }
+        .btn.warning:hover {
+            background: #e0a800;
+        }
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .steps {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            padding-left: 40px;
+            position: relative;
+        }
+        .step-number {
+            position: absolute;
+            left: 0;
+            width: 30px;
+            height: 30px;
+            background: #2a5298;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .step-content {
+            flex: 1;
+        }
+        .step-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .step-desc {
+            color: #666;
+            font-size: 0.95rem;
+        }
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #0c5460;
+        }
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #155724;
+        }
+        .alert.warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #856404;
+        }
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #721c24;
+        }
+        .participant-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        .participant-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .participant-item:hover {
+            background: #f8f9fa;
+        }
+        .participant-info {
+            flex: 1;
+        }
+        .participant-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .participant-details {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 3px;
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        .badge.approved {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge.has-photo {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2a5298;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .icon {
+            font-size: 1.2em;
+        }
+        .progress-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            background: #2a5298;
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏢 HikCentral Professional - Importação via Template</h1>
+            <p>Sistema otimizado para importação em massa de participantes com reconhecimento facial</p>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <div class="grid">
+            <!-- Card de Status -->
+            <div class="card">
+                <h2>📊 Status da Base de Dados</h2>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-label">Total Aprovados</div>
+                        <div class="stat-value" id="totalApproved">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Com Foto</div>
+                        <div class="stat-value" id="totalWithPhoto">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Sincronizados</div>
+                        <div class="stat-value" id="totalSynced">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Pendentes</div>
+                        <div class="stat-value" id="totalPending">0</div>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn" onclick="loadParticipants()">
+                        <span class="icon">🔄</span> Atualizar Status
+                    </button>
+                    <button class="btn warning" onclick="showParticipants()">
+                        <span class="icon">👥</span> Ver Participantes
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card de Download -->
+            <div class="card">
+                <h2>📥 Baixar Arquivos para Importação</h2>
+                <div class="alert info">
+                    <span class="icon">ℹ️</span>
+                    <span>Gere os arquivos necessários para importação no HikCentral</span>
+                </div>
+                <div class="btn-group">
+                    <button class="btn success" onclick="downloadExcel()">
+                        <span class="icon">📑</span> Baixar Excel
+                    </button>
+                    <button class="btn success" onclick="downloadPhotos()">
+                        <span class="icon">📸</span> Baixar ZIP Fotos
+                    </button>
+                    <button class="btn" onclick="downloadBoth()">
+                        <span class="icon">📦</span> Baixar Tudo
+                    </button>
+                </div>
+                <div id="downloadProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card de Instruções -->
+        <div class="card">
+            <h2>📋 Instruções de Importação</h2>
+            <div class="alert warning">
+                <span class="icon">⚠️</span>
+                <span>Certifique-se de ter acesso administrativo ao HikCentral Professional antes de continuar</span>
+            </div>
+            
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <div class="step-title">Preparar os Arquivos</div>
+                        <div class="step-desc">Clique em "Baixar Tudo" acima para obter o arquivo Excel e o ZIP com as fotos</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Acessar o HikCentral</div>
+                        <div class="step-desc">
+                            Acesse <a href="http://127.0.0.1" target="_blank">http://127.0.0.1</a> e faça login com admin/Index2016
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-title">Navegar para Importação</div>
+                        <div class="step-desc">Vá para Person → Person Management → Import Person Information via Excel</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <div class="step-title">Selecionar Arquivo Excel</div>
+                        <div class="step-desc">Clique em "Browse" e selecione o arquivo Excel baixado (hikcentral-import-*.xlsx)</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <div class="step-title">Importar Fotos</div>
+                        <div class="step-desc">
+                            Na seção "Import Profile Picture", faça upload do arquivo ZIP com as fotos.<br>
+                            <small style="color: #666;">
+                                • Formato dos nomes: "firstname+lastname_ID.jpg"<br>
+                                • O sistema criará novos perfis se o ID não existir<br>
+                                • Selecione "All Departments" no dropdown
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        <div class="step-title">Verificar Mapeamento</div>
+                        <div class="step-desc">O sistema deve mapear automaticamente as colunas. Verifique se está correto</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">7</div>
+                    <div class="step-content">
+                        <div class="step-title">Iniciar Importação</div>
+                        <div class="step-desc">Clique em "Import" e aguarde o processamento completo</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">8</div>
+                    <div class="step-content">
+                        <div class="step-title">Verificar Resultados</div>
+                        <div class="step-desc">Confira o relatório de importação e teste o reconhecimento facial</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-group" style="justify-content: center; margin-top: 30px;">
+                <button class="btn success" onclick="window.open('http://127.0.0.1', '_blank')">
+                    <span class="icon">🌐</span> Abrir HikCentral
+                </button>
+                <button class="btn" onclick="testConnection()">
+                    <span class="icon">🧪</span> Testar Conexão
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal de Participantes (oculto por padrão) -->
+        <div class="card" id="participantsCard" style="display: none;">
+            <h2>👥 Lista de Participantes Aprovados</h2>
+            <div class="participant-list" id="participantList">
+                <!-- Lista será preenchida dinamicamente -->
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="hideParticipants()">
+                    <span class="icon">✖️</span> Fechar Lista
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_PASSWORD = 'admin123';
+        let participants = [];
+
+        // Função para mostrar alertas
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.innerHTML = `
+                <span class="icon">${
+                    type === 'success' ? '✅' : 
+                    type === 'error' ? '❌' : 
+                    type === 'warning' ? '⚠️' : 'ℹ️'
+                }</span>
+                <span>${message}</span>
+            `;
+            container.appendChild(alert);
+            
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Carregar participantes
+        async function loadParticipants() {
+            showAlert('Carregando dados dos participantes...', 'info');
+            
+            try {
+                const response = await fetch('/api/admin/participants', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao carregar participantes');
+                
+                const data = await response.json();
+                participants = data.participants.filter(p => p.approvalStatus === 'approved');
+                
+                updateStats();
+                showAlert(`${participants.length} participantes aprovados carregados!`, 'success');
+            } catch (error) {
+                showAlert(`Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // Atualizar estatísticas
+        function updateStats() {
+            const totalApproved = participants.length;
+            const withPhoto = participants.filter(p => p.faceImageUrl || p.faceData).length;
+            const synced = participants.filter(p => p.hikCentralSyncStatus === 'synced').length;
+            const pending = participants.filter(p => !p.hikCentralSyncStatus || p.hikCentralSyncStatus === 'pending').length;
+            
+            document.getElementById('totalApproved').textContent = totalApproved;
+            document.getElementById('totalWithPhoto').textContent = withPhoto;
+            document.getElementById('totalSynced').textContent = synced;
+            document.getElementById('totalPending').textContent = pending;
+        }
+
+        // Mostrar lista de participantes
+        function showParticipants() {
+            const card = document.getElementById('participantsCard');
+            const list = document.getElementById('participantList');
+            
+            if (participants.length === 0) {
+                loadParticipants().then(() => {
+                    if (participants.length > 0) {
+                        renderParticipantList();
+                        card.style.display = 'block';
+                    }
+                });
+            } else {
+                renderParticipantList();
+                card.style.display = 'block';
+            }
+        }
+
+        // Renderizar lista de participantes
+        function renderParticipantList() {
+            const list = document.getElementById('participantList');
+            list.innerHTML = participants.map(p => `
+                <div class="participant-item">
+                    <div class="participant-info">
+                        <div class="participant-name">${p.name}</div>
+                        <div class="participant-details">
+                            CPF: ${p.cpf} | ${p.email || 'Sem email'}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge approved">Aprovado</span>
+                        ${p.faceImageUrl || p.faceData ? '<span class="badge has-photo">📸 Foto</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Ocultar lista de participantes
+        function hideParticipants() {
+            document.getElementById('participantsCard').style.display = 'none';
+        }
+
+        // Download Excel
+        async function downloadExcel() {
+            showAlert('Gerando arquivo Excel...', 'info');
+            showProgress(50);
+            
+            try {
+                const response = await fetch('/api/admin/export-hikcentral?format=excel', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao gerar Excel');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hikcentral-import-${new Date().toISOString().split('T')[0]}.xlsx`;
+                a.click();
+                
+                showProgress(100);
+                setTimeout(() => hideProgress(), 1000);
+                showAlert('Arquivo Excel baixado com sucesso!', 'success');
+            } catch (error) {
+                hideProgress();
+                showAlert(`Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // Download ZIP com fotos
+        async function downloadPhotos() {
+            showAlert('Gerando ZIP com fotos...', 'info');
+            showProgress(50);
+            
+            try {
+                const response = await fetch('/api/admin/export-hikcentral?format=photos', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao gerar ZIP');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hikcentral-photos-${new Date().toISOString().split('T')[0]}.zip`;
+                a.click();
+                
+                showProgress(100);
+                setTimeout(() => hideProgress(), 1000);
+                showAlert('ZIP com fotos baixado com sucesso!', 'success');
+            } catch (error) {
+                hideProgress();
+                showAlert(`Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // Download ambos os arquivos
+        async function downloadBoth() {
+            await downloadExcel();
+            setTimeout(() => downloadPhotos(), 1000);
+        }
+
+        // Testar conexão
+        async function testConnection() {
+            showAlert('Testando conexão com a API...', 'info');
+            
+            try {
+                const response = await fetch('/api/admin/export-hikcentral', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (response.ok) {
+                    showAlert('✅ API funcionando corretamente!', 'success');
+                } else {
+                    showAlert('❌ Erro na API', 'error');
+                }
+            } catch (error) {
+                showAlert(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // Mostrar/ocultar progresso
+        function showProgress(percent) {
+            const container = document.getElementById('downloadProgress');
+            const fill = document.getElementById('progressFill');
+            container.style.display = 'block';
+            fill.style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            document.getElementById('downloadProgress').style.display = 'none';
+        }
+
+        // Carregar ao iniciar
+        window.onload = function() {
+            loadParticipants();
+        };
+    </script>
+</body>
+</html>

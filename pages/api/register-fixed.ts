@@ -10,8 +10,9 @@ const registrationSchema = Joi.object({
   email: Joi.string().email().allow('', null).optional(),
   phone: Joi.string().min(10).allow('', null).optional(), // Make phone optional
   eventCode: Joi.string().allow('', null).optional().default('MEGA-FEIRA-2025'), // Optional with default
+  standCode: Joi.string().allow('', null).optional(), // Stand code for registration limit control
   faceImage: Joi.string().required(),
-  faceData: Joi.object().optional(), // Azure Face API data
+  faceData: Joi.object().allow(null).optional(), // Azure Face API data
   consent: Joi.boolean().valid(true).required(),
   customData: Joi.object().optional() // Allow any custom fields
 })
@@ -73,12 +74,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    const { name, cpf, email, phone, faceImage, faceData, consent, customData } = value
-    
+    const { name, cpf, email, phone, standCode, faceImage, faceData, consent, customData } = value
+
     // Get eventCode from customData if it exists, otherwise use default
     const eventCode = customData?.eventCode || customData?.evento || value.eventCode || 'MEGA-FEIRA-2025'
     console.log('🎯 Event code:', eventCode)
-    
+
+    // Get standCode from customData if it exists
+    let finalStandCode = standCode || customData?.standCode || customData?.estande
+
+    // Load custom fields to check for fields with limits
+    let customFields: any[] = []
+    let fieldWithLimits: any = null
+
+    try {
+      customFields = await prisma.customField.findMany({
+        where: { active: true, type: 'select' }
+      })
+
+      // Check if there's a field with limits in customData
+      if (!finalStandCode && customData) {
+        for (const field of customFields) {
+          const fieldValue = customData[field.fieldName]
+
+          // Check if this field has limits enabled
+          if (fieldValue && field.validation && typeof field.validation === 'object') {
+            const validation = field.validation as any
+            if (validation.hasLimits && validation.optionLimits && validation.optionLimits[fieldValue]) {
+              // Generate stand code from field name and selected option
+              finalStandCode = `${field.fieldName}_${fieldValue}`.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
+              fieldWithLimits = field
+              console.log('🏪 Stand code generated from field:', field.fieldName, '=', fieldValue, '->', finalStandCode)
+              break
+            }
+          }
+        }
+      }
+
+      // Also check if current finalStandCode matches a field with limits
+      if (finalStandCode && !fieldWithLimits && customData) {
+        for (const field of customFields) {
+          const fieldValue = customData[field.fieldName]
+          if (fieldValue && field.validation && typeof field.validation === 'object') {
+            const validation = field.validation as any
+            if (validation.hasLimits && validation.optionLimits) {
+              fieldWithLimits = field
+              break
+            }
+          }
+        }
+      }
+    } catch (fieldError) {
+      console.error('Error loading custom fields:', fieldError)
+    }
+
+    // Normalize stand code to uppercase for consistent matching
+    if (finalStandCode) {
+      finalStandCode = finalStandCode.toUpperCase()
+    }
+
+    console.log('🏪 Final stand code:', finalStandCode)
+
     // Clean CPF
     const cleanCPF = cpf.replace(/\D/g, '')
     console.log('🔍 Processing CPF:', cleanCPF)
@@ -103,6 +159,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         error: 'CPF already registered',
         message: 'Este CPF já está cadastrado'
       })
+    }
+
+    // Validate stand limits if standCode is provided
+    let standId: string | null = null
+    if (finalStandCode) {
+      console.log('🔍 Checking stand limits for:', finalStandCode)
+
+      const stand = await prisma.stand.findUnique({
+        where: { code: finalStandCode },
+        include: {
+          _count: {
+            select: { participants: true }
+          }
+        }
+      })
+
+      if (!stand) {
+        // Check if this field requires limits (has hasLimits enabled)
+        if (fieldWithLimits) {
+          console.log('❌ Stand not found but field requires limits')
+          return res.status(400).json({
+            error: 'Configuration error',
+            message: 'Estande não configurado. Entre em contato com o administrador.'
+          })
+        }
+
+        console.log('⚠️ Stand not found, proceeding without stand association')
+        standId = null
+      } else {
+
+      if (!stand.isActive) {
+        console.log('❌ Stand is inactive')
+        return res.status(400).json({
+          error: 'Stand inactive',
+          message: 'Este estande está inativo'
+        })
+      }
+
+      const currentCount = stand._count.participants
+      console.log(`📊 Stand usage: ${currentCount}/${stand.maxRegistrations}`)
+
+      if (currentCount >= stand.maxRegistrations) {
+        console.log('❌ Stand limit reached')
+        return res.status(400).json({
+          error: 'Stand limit reached',
+          message: `O limite de credenciais para este estande foi excedido. Entre em contato com o responsável.`,
+          standName: stand.name,
+          currentCount: currentCount,
+          maxRegistrations: stand.maxRegistrations
+        })
+      }
+
+        standId = stand.id
+        console.log('✅ Stand validation passed')
+      }
     }
 
     // Process face image and Azure data
@@ -175,6 +286,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         email: email || null,
         phone: phone ? phone.replace(/\D/g, '') : '',
         eventCode: eventCode,
+        standId: standId, // Associate with stand if provided
         faceImageUrl: faceImageUrl, // Store complete face image
         faceData: encryptedFaceData,
         captureQuality: captureQuality,

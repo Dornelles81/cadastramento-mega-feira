@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Simples de Câmera</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .video-container {
+            position: relative;
+            background: black;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .status.active {
+            background: rgba(40, 167, 69, 0.9);
+        }
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 0;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        canvas {
+            display: none;
+        }
+        #preview {
+            width: 100%;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📷 Teste Simples de Câmera</h1>
+        
+        <div class="video-container">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas"></canvas>
+            <div id="status" class="status">Câmera não iniciada</div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <button class="btn" onclick="startSimpleCamera()">▶️ Iniciar Câmera</button>
+        <button class="btn" onclick="captureSimple()" id="captureBtn" disabled>📸 Capturar</button>
+        <button class="btn" onclick="stopSimpleCamera()">⏹️ Parar</button>
+        
+        <img id="preview" style="display: none;">
+    </div>
+
+    <script>
+        let stream = null;
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const status = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+        const captureBtn = document.getElementById('captureBtn');
+        const preview = document.getElementById('preview');
+
+        async function startSimpleCamera() {
+            try {
+                console.log('Iniciando câmera...');
+                errorDiv.style.display = 'none';
+                
+                // Parar stream anterior se existir
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Configuração simples
+                const constraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+                
+                // Obter stream
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log('Stream obtido:', stream);
+                
+                // Atribuir ao vídeo
+                video.srcObject = stream;
+                
+                // Aguardar metadata e iniciar
+                video.onloadedmetadata = () => {
+                    console.log('Metadata carregado');
+                    video.play()
+                        .then(() => {
+                            console.log('Vídeo iniciado');
+                            status.textContent = 'Câmera ativa';
+                            status.classList.add('active');
+                            captureBtn.disabled = false;
+                        })
+                        .catch(err => {
+                            console.error('Erro ao iniciar vídeo:', err);
+                            showError('Erro ao iniciar vídeo: ' + err.message);
+                        });
+                };
+                
+            } catch (err) {
+                console.error('Erro:', err);
+                showError('Erro ao acessar câmera: ' + err.message);
+            }
+        }
+
+        function captureSimple() {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0);
+            
+            const imageData = canvas.toDataURL('image/jpeg', 0.95);
+            preview.src = imageData;
+            preview.style.display = 'block';
+            
+            // Flash effect
+            video.style.opacity = '0.5';
+            setTimeout(() => {
+                video.style.opacity = '1';
+            }, 200);
+        }
+
+        function stopSimpleCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            status.textContent = 'Câmera parada';
+            status.classList.remove('active');
+            captureBtn.disabled = true;
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        // Log inicial
+        console.log('Página carregada. Clique em "Iniciar Câmera" para começar.');
+    </script>
+</body>
+</html>

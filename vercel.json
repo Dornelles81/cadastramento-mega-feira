@@ -4,11 +4,10 @@
   "framework": "nextjs",
   "functions": {
     "pages/api/**/*.ts": {
-      "runtime": "nodejs18.x",
       "maxDuration": 30
     }
   },
-  "regions": ["gru1", "iad1"],
+  "regions": ["gru1"],
   "headers": [
     {
       "source": "/(.*)",

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HCWebControl - Integração HikCentral</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        .control-panel {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover { background: #0052a3; }
+        button:disabled { 
+            background: #ccc; 
+            cursor: not-allowed; 
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        #webcontrol-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #ddd;
+            margin: 20px 0;
+            background: #000;
+        }
+        .participant-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .participant-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .participant-item:hover {
+            background: #f8f9fa;
+        }
+        .log-container {
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 HCWebControl - Integração com HikCentral</h1>
+        
+        <div id="status" class="status info">
+            Aguardando inicialização do HCWebControl...
+        </div>
+
+        <div class="control-panel">
+            <h2>⚙️ Configuração de Conexão</h2>
+            <div class="form-group">
+                <label for="server-ip">IP do Servidor HikCentral:</label>
+                <input type="text" id="server-ip" value="127.0.0.1" />
+            </div>
+            <div class="form-group">
+                <label for="server-port">Porta:</label>
+                <input type="text" id="server-port" value="80" />
+            </div>
+            <div class="form-group">
+                <label for="username">Usuário:</label>
+                <input type="text" id="username" value="admin" />
+            </div>
+            <div class="form-group">
+                <label for="password">Senha:</label>
+                <input type="password" id="password" value="Index2016" />
+            </div>
+            <button onclick="connectToHikCentral()">🔗 Conectar ao HikCentral</button>
+            <button onclick="testConnection()">🧪 Testar Conexão</button>
+        </div>
+
+        <!-- Container para o HCWebControl ActiveX/Plugin -->
+        <div id="webcontrol-container">
+            <object id="HCWebControl" 
+                    classid="clsid:D5E14042-E87C-4646-9F3C-9A7F9F1F9F9F"
+                    width="100%" 
+                    height="100%">
+                <param name="AutoConnect" value="0" />
+                <param name="ShowToolbar" value="1" />
+                <param name="ShowStatusbar" value="1" />
+                <!-- Fallback para navegadores sem suporte ActiveX -->
+                <embed id="HCWebControlPlugin"
+                       type="application/x-hikcentral-webcontrol"
+                       width="100%"
+                       height="100%">
+            </object>
+        </div>
+
+        <div class="control-panel">
+            <h2>👥 Participantes para Sincronizar</h2>
+            <button onclick="loadParticipants()">📋 Carregar Participantes</button>
+            <button onclick="syncSelected()">🔄 Sincronizar Selecionados</button>
+            <button onclick="syncAll()">⚡ Sincronizar Todos</button>
+            
+            <div class="participant-list" id="participant-list">
+                <!-- Lista será preenchida dinamicamente -->
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <h2>🎯 Ações do HCWebControl</h2>
+            <button onclick="addPerson()">➕ Adicionar Pessoa Teste</button>
+            <button onclick="searchPersons()">🔍 Buscar Pessoas</button>
+            <button onclick="getDoorList()">🚪 Listar Portas</button>
+            <button onclick="getDeviceInfo()">📱 Info do Dispositivo</button>
+        </div>
+
+        <div class="log-container" id="log">
+            > Sistema inicializado...<br>
+        </div>
+    </div>
+
+    <script>
+        let webControl = null;
+        let participants = [];
+        let isConnected = false;
+
+        // Função de log
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#f00' : type === 'success' ? '#0f0' : '#fff';
+            logDiv.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span><br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Inicializar HCWebControl
+        window.onload = function() {
+            try {
+                webControl = document.getElementById('HCWebControl');
+                if (!webControl) {
+                    webControl = document.getElementById('HCWebControlPlugin');
+                }
+                
+                if (webControl && webControl.Init) {
+                    webControl.Init();
+                    updateStatus('HCWebControl inicializado com sucesso!', 'success');
+                    log('HCWebControl carregado e pronto', 'success');
+                    
+                    // Registrar callbacks
+                    if (webControl.SetCallback) {
+                        webControl.SetCallback('OnConnect', onConnect);
+                        webControl.SetCallback('OnDisconnect', onDisconnect);
+                        webControl.SetCallback('OnError', onError);
+                        webControl.SetCallback('OnData', onData);
+                    }
+                } else {
+                    updateStatus('HCWebControl não encontrado. Verifique se está instalado.', 'error');
+                    log('Erro: HCWebControl não detectado', 'error');
+                    
+                    // Tentar API REST como fallback
+                    log('Usando modo API REST como alternativa');
+                    useRESTMode();
+                }
+            } catch (e) {
+                updateStatus('Erro ao inicializar: ' + e.message, 'error');
+                log('Exceção: ' + e.message, 'error');
+                useRESTMode();
+            }
+        };
+
+        // Modo REST API (fallback)
+        function useRESTMode() {
+            webControl = {
+                mode: 'REST',
+                baseURL: '',
+                auth: '',
+                
+                Connect: async function(ip, port, user, pass) {
+                    this.baseURL = `http://${ip}:${port}`;
+                    this.auth = btoa(`${user}:${pass}`);
+                    
+                    try {
+                        const response = await fetch(`${this.baseURL}/api/system/v1/info`, {
+                            headers: {
+                                'Authorization': 'Basic ' + this.auth
+                            }
+                        });
+                        return response.ok;
+                    } catch (e) {
+                        return false;
+                    }
+                },
+                
+                AddPerson: async function(personData) {
+                    const response = await fetch(`${this.baseURL}/api/acs/v1/person/single/add`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Basic ' + this.auth,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(personData)
+                    });
+                    return response.json();
+                },
+                
+                SearchPersons: async function() {
+                    const response = await fetch(`${this.baseURL}/api/acs/v1/person/list`, {
+                        headers: {
+                            'Authorization': 'Basic ' + this.auth
+                        }
+                    });
+                    return response.json();
+                }
+            };
+            
+            log('Modo REST API ativado', 'info');
+        }
+
+        // Conectar ao HikCentral
+        async function connectToHikCentral() {
+            const ip = document.getElementById('server-ip').value;
+            const port = document.getElementById('server-port').value;
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            
+            log(`Conectando a ${ip}:${port}...`);
+            
+            try {
+                if (webControl.mode === 'REST') {
+                    const success = await webControl.Connect(ip, port, user, pass);
+                    if (success) {
+                        isConnected = true;
+                        updateStatus('Conectado ao HikCentral via REST API!', 'success');
+                        log('Conexão REST estabelecida', 'success');
+                    } else {
+                        throw new Error('Falha na autenticação');
+                    }
+                } else if (webControl.Connect) {
+                    webControl.Connect(ip, parseInt(port), user, pass);
+                } else {
+                    throw new Error('Método Connect não disponível');
+                }
+            } catch (e) {
+                updateStatus('Erro ao conectar: ' + e.message, 'error');
+                log('Erro de conexão: ' + e.message, 'error');
+            }
+        }
+
+        // Callbacks do HCWebControl
+        function onConnect() {
+            isConnected = true;
+            updateStatus('Conectado ao HikCentral com sucesso!', 'success');
+            log('Conexão estabelecida via HCWebControl', 'success');
+        }
+
+        function onDisconnect() {
+            isConnected = false;
+            updateStatus('Desconectado do HikCentral', 'info');
+            log('Conexão encerrada', 'info');
+        }
+
+        function onError(error) {
+            updateStatus('Erro: ' + error, 'error');
+            log('Erro HCWebControl: ' + error, 'error');
+        }
+
+        function onData(data) {
+            log('Dados recebidos: ' + JSON.stringify(data));
+        }
+
+        // Testar conexão
+        async function testConnection() {
+            if (!isConnected) {
+                alert('Por favor, conecte-se primeiro!');
+                return;
+            }
+            
+            log('Testando conexão...');
+            
+            try {
+                if (webControl.mode === 'REST') {
+                    const response = await fetch(`${webControl.baseURL}/api/system/v1/info`, {
+                        headers: {
+                            'Authorization': 'Basic ' + webControl.auth
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        updateStatus('Conexão OK! Sistema: ' + (data.name || 'HikCentral'), 'success');
+                        log('Teste bem-sucedido: ' + JSON.stringify(data), 'success');
+                    }
+                } else if (webControl.TestConnection) {
+                    webControl.TestConnection();
+                }
+            } catch (e) {
+                log('Erro no teste: ' + e.message, 'error');
+            }
+        }
+
+        // Carregar participantes do banco
+        async function loadParticipants() {
+            log('Carregando participantes...');
+            
+            try {
+                const response = await fetch('/api/admin/participants', {
+                    headers: {
+                        'Authorization': 'Bearer admin123'
+                    }
+                });
+                
+                const data = await response.json();
+                participants = data.participants.filter(p => p.approvalStatus === 'approved');
+                
+                displayParticipants();
+                log(`${participants.length} participantes aprovados carregados`, 'success');
+            } catch (e) {
+                log('Erro ao carregar participantes: ' + e.message, 'error');
+            }
+        }
+
+        // Exibir lista de participantes
+        function displayParticipants() {
+            const listDiv = document.getElementById('participant-list');
+            listDiv.innerHTML = '';
+            
+            participants.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'participant-item';
+                item.innerHTML = `
+                    <div>
+                        <input type="checkbox" id="p-${p.id}" value="${p.id}">
+                        <label for="p-${p.id}" style="display: inline; margin-left: 10px;">
+                            <strong>${p.name}</strong> - CPF: ${p.cpf}
+                            ${p.hikCentralSyncStatus === 'synced' ? '✅' : '⏳'}
+                        </label>
+                    </div>
+                    <button onclick="syncParticipant('${p.id}')">Sincronizar</button>
+                `;
+                listDiv.appendChild(item);
+            });
+        }
+
+        // Sincronizar participante individual
+        async function syncParticipant(participantId) {
+            const participant = participants.find(p => p.id === participantId);
+            if (!participant) return;
+            
+            log(`Sincronizando ${participant.name}...`);
+            
+            const personData = {
+                employeeNo: participant.cpf.replace(/\D/g, ''),
+                name: participant.name,
+                userType: 'normal',
+                Valid: {
+                    enable: true,
+                    beginTime: new Date().toISOString(),
+                    endTime: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+                },
+                doorRight: '1',
+                RightPlan: [{
+                    doorNo: 1,
+                    planTemplateNo: '1'
+                }]
+            };
+            
+            // Adicionar foto se disponível
+            if (participant.faceImageUrl) {
+                personData.faceData = {
+                    faceLibType: 'blackFD',
+                    libMatching: {
+                        libID: '1',
+                        FDID: '1',
+                        FPID: '1'
+                    },
+                    face: {
+                        binaryData: participant.faceImageUrl.split(',')[1] || ''
+                    }
+                };
+            }
+            
+            try {
+                if (webControl.mode === 'REST') {
+                    const result = await webControl.AddPerson(personData);
+                    log(`✅ ${participant.name} sincronizado: ${JSON.stringify(result)}`, 'success');
+                } else if (webControl.AddPerson) {
+                    webControl.AddPerson(JSON.stringify(personData));
+                }
+                
+                // Atualizar status no banco
+                await updateSyncStatus(participantId, 'synced');
+            } catch (e) {
+                log(`Erro ao sincronizar ${participant.name}: ${e.message}`, 'error');
+            }
+        }
+
+        // Atualizar status de sincronização
+        async function updateSyncStatus(participantId, status) {
+            try {
+                await fetch('/api/admin/sync-hikcental', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer admin123',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        participantIds: [participantId]
+                    })
+                });
+            } catch (e) {
+                log('Erro ao atualizar status: ' + e.message, 'error');
+            }
+        }
+
+        // Sincronizar selecionados
+        async function syncSelected() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            for (let cb of checkboxes) {
+                await syncParticipant(cb.value);
+            }
+        }
+
+        // Sincronizar todos
+        async function syncAll() {
+            for (let p of participants) {
+                if (p.hikCentralSyncStatus !== 'synced') {
+                    await syncParticipant(p.id);
+                }
+            }
+        }
+
+        // Adicionar pessoa teste
+        async function addPerson() {
+            if (!isConnected) {
+                alert('Por favor, conecte-se primeiro!');
+                return;
+            }
+            
+            const testPerson = {
+                employeeNo: '99999999999',
+                name: 'Pessoa Teste HCWebControl',
+                userType: 'normal',
+                Valid: {
+                    enable: true,
+                    beginTime: new Date().toISOString(),
+                    endTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                }
+            };
+            
+            log('Adicionando pessoa teste...');
+            
+            try {
+                if (webControl.mode === 'REST') {
+                    const result = await webControl.AddPerson(testPerson);
+                    log('Pessoa teste adicionada: ' + JSON.stringify(result), 'success');
+                } else if (webControl.AddPerson) {
+                    webControl.AddPerson(JSON.stringify(testPerson));
+                }
+            } catch (e) {
+                log('Erro ao adicionar: ' + e.message, 'error');
+            }
+        }
+
+        // Buscar pessoas
+        async function searchPersons() {
+            if (!isConnected) {
+                alert('Por favor, conecte-se primeiro!');
+                return;
+            }
+            
+            log('Buscando pessoas no HikCentral...');
+            
+            try {
+                if (webControl.mode === 'REST') {
+                    const result = await webControl.SearchPersons();
+                    log(`Encontradas ${result.length || 0} pessoas`, 'success');
+                } else if (webControl.SearchPersons) {
+                    webControl.SearchPersons();
+                }
+            } catch (e) {
+                log('Erro na busca: ' + e.message, 'error');
+            }
+        }
+
+        // Atualizar status visual
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+    </script>
+</body>
+</html>

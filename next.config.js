@@ -2,7 +2,6 @@
 const nextConfig = {
   // Development optimization
   reactStrictMode: true,
-  swcMinify: true,
   
   // PWA for mobile experience
   async headers() {

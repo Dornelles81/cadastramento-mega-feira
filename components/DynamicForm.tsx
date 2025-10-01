@@ -31,6 +31,17 @@ interface DynamicFormProps {
   initialData?: any
 }
 
+interface Stand {
+  id: string
+  name: string
+  code: string
+  description?: string
+  location?: string
+  maxRegistrations: number
+  currentCount: number
+  availableSlots: number
+}
+
 export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }: DynamicFormProps) {
   const [fields, setFields] = useState<FormField[]>([])
   const [documentFields, setDocumentFields] = useState<DocumentFieldConfig[]>([])
@@ -39,10 +50,13 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState<any>({})
   const [uploadedFiles, setUploadedFiles] = useState<any>({})
+  const [stands, setStands] = useState<Stand[]>([])
+  const [loadingStands, setLoadingStands] = useState(true)
 
   useEffect(() => {
     loadFormFields()
     loadDocumentFields()
+    loadStands()
   }, [eventCode])
 
   useEffect(() => {
@@ -62,6 +76,25 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
     } catch (error) {
       console.error('Failed to load document fields:', error)
       setDocumentFields([])
+    }
+  }
+
+  const loadStands = async () => {
+    try {
+      setLoadingStands(true)
+      const response = await fetch(`/api/public/stands${eventCode ? `?eventCode=${eventCode}` : ''}`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('🏪 Stands loaded:', data.stands)
+        setStands(data.stands || [])
+      } else {
+        setStands([])
+      }
+    } catch (error) {
+      console.error('Failed to load stands:', error)
+      setStands([])
+    } finally {
+      setLoadingStands(false)
     }
   }
 
@@ -228,7 +261,18 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
     const newErrors: any = {}
     let isValid = true
 
+    // Validate stand selection if stands are available
+    if (stands.length > 0 && !formData.standCode && !formData.estande) {
+      newErrors.standCode = 'Seleção de estande é obrigatória'
+      isValid = false
+    }
+
     fields.forEach(field => {
+      // Skip estande field as it's validated above
+      if (field.fieldName.toLowerCase() === 'estande') {
+        return
+      }
+
       if (field.required && !formData[field.fieldName]) {
         newErrors[field.fieldName] = `${field.label} é obrigatório`
         isValid = false
@@ -464,23 +508,72 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
         </div>
       ) : (
         <>
+          {/* Stand Selection - Required */}
+          {stands.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                🏪 Estande <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="standCode"
+                value={formData.standCode || formData.estande || ''}
+                onChange={(e) => {
+                  // Update both standCode and estande fields for compatibility
+                  handleFieldChange('standCode', e.target.value)
+                  handleFieldChange('estande', e.target.value)
+                }}
+                required
+                className={`w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
+                  errors.standCode ? 'border-red-300' : 'border-gray-300'
+                }`}
+              >
+                <option value="">Nenhum estande selecionado</option>
+                {stands.map(stand => (
+                  <option key={stand.code} value={stand.code}>
+                    {stand.name}
+                    {stand.location && ` (${stand.location})`}
+                  </option>
+                ))}
+              </select>
+              {errors.standCode ? (
+                <p className="text-red-500 text-sm mt-2">{errors.standCode}</p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-2">
+                  {formData.standCode ? (
+                    <>✓ Seu registro será associado ao estande selecionado</>
+                  ) : (
+                    <>Selecione o estande para o qual você foi convidado</>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Render text fields */}
-          {fields.map((field) => {
-            console.log('Rendering field:', field.fieldName, field.type)
-            return (
-              <div key={field.fieldName}>
-                {field.type !== 'checkbox' && (
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {field.label} {field.required && '*'}
-                  </label>
-                )}
-                {renderField(field)}
-                {errors[field.fieldName] && (
-                  <p className="text-red-500 text-sm mt-1">{errors[field.fieldName]}</p>
-                )}
-              </div>
-            )
-          })}
+          {fields
+            .filter(field => {
+              // Skip "estande" field as it's already shown in the header section
+              if (field.fieldName.toLowerCase() === 'estande' && stands.length > 0) {
+                return false
+              }
+              return true
+            })
+            .map((field) => {
+              console.log('Rendering field:', field.fieldName, field.type)
+              return (
+                <div key={field.fieldName}>
+                  {field.type !== 'checkbox' && (
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {field.label} {field.required && '*'}
+                    </label>
+                  )}
+                  {renderField(field)}
+                  {errors[field.fieldName] && (
+                    <p className="text-red-500 text-sm mt-1">{errors[field.fieldName]}</p>
+                  )}
+                </div>
+              )
+            })}
           
           {/* Render document fields */}
           {documentFields.length > 0 && (

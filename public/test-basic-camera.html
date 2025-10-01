@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Básico - Câmera</title>
+</head>
+<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif;">
+    <h1>Teste Direto da Câmera</h1>
+    
+    <!-- Vídeo com estilo direto -->
+    <video id="video" style="width: 640px; height: 480px; background: black; border: 2px solid #333;"></video>
+    <br><br>
+    
+    <!-- Canvas para captura -->
+    <canvas id="canvas" style="display: none;"></canvas>
+    
+    <!-- Imagem capturada -->
+    <img id="photo" style="display: none; width: 640px; height: 480px; border: 2px solid #333;">
+    <br><br>
+    
+    <!-- Botões -->
+    <button onclick="startCamera()" style="padding: 10px 20px; font-size: 16px;">Iniciar Câmera</button>
+    <button onclick="takePhoto()" style="padding: 10px 20px; font-size: 16px;">Capturar Foto</button>
+    <button onclick="stopCamera()" style="padding: 10px 20px; font-size: 16px;">Parar Câmera</button>
+    
+    <!-- Status -->
+    <div id="status" style="margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+        Status: Aguardando...
+    </div>
+    
+    <!-- Log de depuração -->
+    <div id="log" style="margin-top: 20px; padding: 10px; background: #333; color: #0f0; font-family: monospace; white-space: pre-wrap; height: 200px; overflow-y: auto;">
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photo = document.getElementById('photo');
+        const status = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        let stream = null;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        async function startCamera() {
+            try {
+                log('Iniciando câmera...');
+                status.textContent = 'Status: Solicitando permissão...';
+                
+                // Tentar diferentes configurações
+                const constraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    },
+                    audio: false
+                };
+                
+                log('Constraints: ' + JSON.stringify(constraints));
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                log('Stream obtido: ' + stream.id);
+                
+                video.srcObject = stream;
+                log('Stream atribuído ao vídeo');
+                
+                video.onloadedmetadata = () => {
+                    log('Metadata carregado');
+                    log('Dimensões do vídeo: ' + video.videoWidth + 'x' + video.videoHeight);
+                    status.textContent = 'Status: Câmera ativa (' + video.videoWidth + 'x' + video.videoHeight + ')';
+                };
+                
+                video.onplaying = () => {
+                    log('Vídeo está tocando');
+                };
+                
+                // Forçar play
+                video.play().then(() => {
+                    log('Play executado com sucesso');
+                }).catch(err => {
+                    log('Erro ao executar play: ' + err.message);
+                });
+                
+            } catch (error) {
+                log('ERRO: ' + error.name + ' - ' + error.message);
+                status.textContent = 'Status: Erro - ' + error.message;
+                
+                if (error.name === 'NotAllowedError') {
+                    alert('Por favor, permita o acesso à câmera!');
+                } else if (error.name === 'NotFoundError') {
+                    alert('Nenhuma câmera encontrada!');
+                } else {
+                    alert('Erro: ' + error.message);
+                }
+            }
+        }
+        
+        function takePhoto() {
+            if (!stream) {
+                log('Erro: Stream não está ativo');
+                return;
+            }
+            
+            log('Capturando foto...');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            photo.src = dataUrl;
+            photo.style.display = 'block';
+            
+            log('Foto capturada com sucesso');
+            status.textContent = 'Status: Foto capturada';
+        }
+        
+        function stopCamera() {
+            if (stream) {
+                log('Parando câmera...');
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    log('Track parada: ' + track.kind);
+                });
+                video.srcObject = null;
+                stream = null;
+                status.textContent = 'Status: Câmera parada';
+                log('Câmera parada com sucesso');
+            } else {
+                log('Nenhum stream ativo para parar');
+            }
+        }
+        
+        // Log inicial
+        log('Página carregada');
+        log('User Agent: ' + navigator.userAgent);
+        log('Protocolo: ' + location.protocol);
+        
+        // Verificar APIs disponíveis
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            log('API getUserMedia disponível');
+        } else {
+            log('ERRO: API getUserMedia NÃO disponível');
+        }
+        
+        // Auto iniciar para teste
+        window.addEventListener('load', () => {
+            log('Window loaded - pronto para iniciar');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HikCentral - Exportar Fotos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .info-box {
+            background: #f0f8ff;
+            border-left: 4px solid #0066cc;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .info-box h3 {
+            color: #0066cc;
+            margin-bottom: 10px;
+        }
+        .info-box p {
+            color: #555;
+            line-height: 1.6;
+            margin: 5px 0;
+        }
+        .format-example {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+            color: #d63384;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            color: #0066cc;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin: 10px 0;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn:hover {
+            background: #0052a3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,102,204,0.3);
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .btn.success:hover {
+            background: #218838;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        .alert.show {
+            display: block;
+        }
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .participant-preview {
+            max-height: 200からpx;
+            overflow-y: auto;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+        .participant-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading.show {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0066cc;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Exportar Fotos para HikCentral</h1>
+        
+        <div class="info-box">
+            <h3>ℹ️ Formato Correto dos Arquivos</h3>
+            <p>O HikCentral requer que os nomes das fotos sigam o padrão:</p>
+            <div class="format-example">firstname+lastname_ID.jpg</div>
+            <p><strong>Exemplos:</strong></p>
+            <div class="format-example">
+                João+Silva_12345678901.jpg<br>
+                Maria+Santos_98765432109.jpg
+            </div>
+            <p>📌 O ID é o CPF sem formatação</p>
+            <p>📌 Use + entre o primeiro e último nome</p>
+            <p>📌 Extensão sempre .jpg (minúscula)</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Total Aprovados</div>
+                <div class="stat-value" id="totalCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Com Foto</div>
+                <div class="stat-value" id="photoCount">0</div>
+            </div>
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <button class="btn" onclick="loadAndPreview()">
+            <span>👁️</span> Carregar e Visualizar
+        </button>
+
+        <div id="preview" style="display: none;">
+            <h3 style="margin: 20px 0 10px;">📋 Prévia dos Arquivos:</h3>
+            <div class="participant-preview" id="participantPreview"></div>
+        </div>
+
+        <button class="btn success" onclick="downloadPhotos()" id="downloadBtn" style="display: none;">
+            <span>📥</span> Baixar ZIP com Fotos
+        </button>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 20px;">Processando fotos...</p>
+        </div>
+
+        <div class="info-box" style="margin-top: 30px; background: #fff3cd; border-color: #ffc107;">
+            <h3>⚠️ Instruções de Importação</h3>
+            <p>1. Baixe o ZIP com as fotos</p>
+            <p>2. No HikCentral, vá para <strong>Import Profile Picture</strong></p>
+            <p>3. Selecione o arquivo ZIP</p>
+            <p>4. Escolha <strong>All Departments</strong></p>
+            <p>5. Clique em <strong>Import</strong></p>
+        </div>
+    </div>
+
+    <script>
+        const API_PASSWORD = 'admin123';
+        let participants = [];
+
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.className = `alert ${type} show`;
+            alertBox.textContent = message;
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+            }, 5000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').className = show ? 'loading show' : 'loading';
+        }
+
+        async function loadAndPreview() {
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/api/admin/participants', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao carregar participantes');
+                
+                const data = await response.json();
+                participants = data.participants.filter(p => p.approvalStatus === 'approved');
+                
+                const withPhoto = participants.filter(p => p.faceImageUrl || p.faceData);
+                
+                document.getElementById('totalCount').textContent = participants.length;
+                document.getElementById('photoCount').textContent = withPhoto.length;
+                
+                // Mostrar prévia
+                const preview = document.getElementById('participantPreview');
+                preview.innerHTML = withPhoto.slice(0, 10).map(p => {
+                    const nameParts = p.name.split(' ');
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts[nameParts.length - 1] || '';
+                    const fileName = `${firstName}+${lastName}_${p.cpf.replace(/\D/g, '')}.jpg`;
+                    return `
+                        <div class="participant-item">
+                            <strong>${p.name}</strong> → <code>${fileName}</code>
+                        </div>
+                    `;
+                }).join('');
+                
+                if (withPhoto.length > 10) {
+                    preview.innerHTML += `<div style="text-align: center; padding: 10px; color: #666;">... e mais ${withPhoto.length - 10} arquivos</div>`;
+                }
+                
+                document.getElementById('preview').style.display = 'block';
+                document.getElementById('downloadBtn').style.display = 'block';
+                
+                showAlert(`${withPhoto.length} participantes com foto encontrados!`, 'success');
+            } catch (error) {
+                showAlert(`Erro: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function downloadPhotos() {
+            showLoading(true);
+            showAlert('Gerando arquivo ZIP com fotos...', 'success');
+            
+            try {
+                const response = await fetch('/api/admin/export-hikcentral?format=photos', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao gerar ZIP');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hikcentral-photos-${new Date().toISOString().split('T')[0]}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showAlert('✅ ZIP baixado com sucesso! Pronto para importar no HikCentral.', 'success');
+            } catch (error) {
+                showAlert(`❌ Erro: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>

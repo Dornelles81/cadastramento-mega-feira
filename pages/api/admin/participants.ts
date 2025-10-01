@@ -1,239 +1,259 @@
-import type { NextApiRequest, NextApiResponse } from 'next'
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { PrismaClient } from '@prisma/client';
 
-// Mock database - in real app this would come from NEON database
-let mockParticipants = [
-  {
-    id: '1',
-    name: 'João Silva',
-    cpf: '123.456.789-00',
-    email: 'joao@email.com',
-    phone: '(11) 99999-1234',
-    event: 'expointer',
-    mesa: '01',
-    registeredAt: '2025-08-14T10:30:00Z',
-    faceImage: {
-      data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAoACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q==',
-      metadata: {
-        width: 640,
-        height: 480,
-        format: 'jpeg',
-        quality: 0.9,
-        fileSize: 45672,
-        capturedAt: '2025-08-14T10:30:00Z'
-      }
-    }
-  },
-  {
-    id: '2', 
-    name: 'Maria Santos',
-    cpf: '987.654.321-00',
-    phone: '(11) 98888-5678',
-    event: 'freio-de-ouro',
-    mesa: '15',
-    registeredAt: '2025-08-14T11:15:00Z',
-    faceImage: {
-      data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAoACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q==',
-      metadata: {
-        width: 640,
-        height: 480,
-        format: 'jpeg',
-        quality: 0.85,
-        fileSize: 42315,
-        capturedAt: '2025-08-14T11:15:00Z'
-      }
-    }
-  },
-  {
-    id: '3',
-    name: 'Carlos Oliveira', 
-    cpf: '456.789.123-00',
-    email: 'carlos@email.com',
-    phone: '(11) 97777-9012',
-    event: 'morfologia',
-    mesa: '33',
-    registeredAt: '2025-08-14T09:45:00Z',
-    faceImage: {
-      data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAoACgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAxQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD5/ooooA//2Q==',
-      metadata: {
-        width: 640,
-        height: 480,
-        format: 'jpeg',
-        quality: 0.9,
-        fileSize: 48923,
-        capturedAt: '2025-08-14T09:45:00Z'
-      }
-    }
-  },
-  {
-    id: '4',
-    name: 'Ana Costa',
-    cpf: '321.654.987-00',
-    email: 'ana@email.com',
-    event: 'expointer',
-    mesa: '07',
-    registeredAt: '2025-08-14T08:20:00Z'
-  },
-  {
-    id: '5',
-    name: 'Pedro Mendes',
-    cpf: '789.123.456-00',
-    phone: '(11) 95555-3456',
-    event: 'morfologia',
-    mesa: '42',
-    registeredAt: '2025-08-14T12:00:00Z'
-  }
-]
+const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end()
-    return
+    res.status(200).end();
+    return;
+  }
+
+  // Check admin authentication
+  const authHeader = req.headers.authorization;
+  const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  
+  if (!authHeader || authHeader !== `Bearer ${validPassword}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
     if (req.method === 'GET') {
       // Get all participants with optional filtering
-      const { search, event } = req.query
+      const { search, event, approvalStatus } = req.query;
 
-      let filtered = mockParticipants
+      let where: any = {};
 
       // Filter by search term (name or CPF)
       if (search && typeof search === 'string') {
-        filtered = filtered.filter(p => 
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.cpf.includes(search)
-        )
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { cpf: { contains: search } }
+        ];
       }
 
       // Filter by event
       if (event && typeof event === 'string') {
-        filtered = filtered.filter(p => p.event === event)
+        where.eventCode = event;
       }
+
+      // Filter by approval status
+      if (approvalStatus && typeof approvalStatus === 'string') {
+        where.approvalStatus = approvalStatus;
+      }
+
+      const participants = await prisma.participant.findMany({
+        where,
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      // Format participants for response
+      const formattedParticipants = participants.map(p => ({
+        id: p.id,
+        name: p.name,
+        cpf: p.cpf,
+        email: p.email,
+        phone: p.phone,
+        eventCode: p.eventCode,
+        consentAccepted: p.consentAccepted,
+        captureQuality: p.captureQuality,
+        hasValidFace: !!p.faceImageUrl || !!p.faceData,
+        faceImageUrl: p.faceImageUrl,
+        faceData: p.faceData ? true : false, // Don't send actual binary data in list
+        customData: p.customData,
+        documents: p.documents,
+        approvalStatus: p.approvalStatus,
+        approvedAt: p.approvedAt,
+        approvedBy: p.approvedBy,
+        rejectionReason: p.rejectionReason,
+        hikCentralSyncStatus: p.hikCentralSyncStatus,
+        hikCentralPersonId: p.hikCentralPersonId,
+        hikCentralSyncedAt: p.hikCentralSyncedAt,
+        hikCentralErrorMsg: p.hikCentralErrorMsg,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt
+      }));
 
       res.status(200).json({
         success: true,
-        participants: filtered,
-        total: mockParticipants.length,
-        filtered: filtered.length
-      })
+        participants: formattedParticipants,
+        total: formattedParticipants.length
+      });
     }
 
     else if (req.method === 'PUT') {
       // Update participant
-      const { id, ...updateData } = req.body
+      const { id } = req.query;
+      const updateData = req.body;
 
-      const participantIndex = mockParticipants.findIndex(p => p.id === id)
-      if (participantIndex === -1) {
-        return res.status(404).json({
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
           success: false,
-          message: 'Participante não encontrado'
-        })
+          message: 'ID do participante é obrigatório'
+        });
       }
 
-      mockParticipants[participantIndex] = {
-        ...mockParticipants[participantIndex],
-        ...updateData
-      }
+      // Update participant in database
+      const updatedParticipant = await prisma.participant.update({
+        where: { id },
+        data: {
+          name: updateData.name,
+          cpf: updateData.cpf,
+          email: updateData.email,
+          phone: updateData.phone,
+          eventCode: updateData.eventCode,
+          approvalStatus: updateData.approvalStatus,
+          approvedBy: updateData.approvalStatus === 'approved' ? 'admin' : undefined,
+          approvedAt: updateData.approvalStatus === 'approved' ? new Date() : undefined,
+          rejectionReason: updateData.rejectionReason,
+          customData: updateData.customData,
+          documents: updateData.documents
+        }
+      });
 
-      console.log(`✅ Participant updated:`, mockParticipants[participantIndex])
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          action: 'UPDATE',
+          entityType: 'participant',
+          entityId: id,
+          adminUser: 'admin',
+          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
+          newData: updateData,
+          description: `Participante ${updatedParticipant.name} atualizado`
+        }
+      });
+
+      console.log(`✅ Participant updated:`, updatedParticipant.id);
 
       res.status(200).json({
         success: true,
-        participant: mockParticipants[participantIndex],
+        participant: updatedParticipant,
         message: 'Participante atualizado com sucesso'
-      })
+      });
     }
 
     else if (req.method === 'DELETE') {
       // Delete participant
-      const { id } = req.query
+      const { id } = req.query;
 
-      const participantIndex = mockParticipants.findIndex(p => p.id === id)
-      if (participantIndex === -1) {
+      if (!id || typeof id !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'ID do participante é obrigatório'
+        });
+      }
+
+      // Get participant data before deletion for audit
+      const participantToDelete = await prisma.participant.findUnique({
+        where: { id }
+      });
+
+      if (!participantToDelete) {
         return res.status(404).json({
           success: false,
           message: 'Participante não encontrado'
-        })
+        });
       }
 
-      const deletedParticipant = mockParticipants.splice(participantIndex, 1)[0]
+      // Delete participant
+      await prisma.participant.delete({
+        where: { id }
+      });
+
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          action: 'DELETE',
+          entityType: 'participant',
+          entityId: id,
+          adminUser: 'admin',
+          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
+          previousData: participantToDelete as any,
+          description: `Participante ${participantToDelete.name} excluído`
+        }
+      });
       
-      console.log(`❌ Participant deleted:`, deletedParticipant)
+      console.log(`❌ Participant deleted:`, id);
 
       res.status(200).json({
         success: true,
         message: 'Participante excluído com sucesso'
-      })
+      });
     }
 
     else if (req.method === 'POST') {
-      // Add new participant (from registration form)
-      const { name, cpf, event, mesa, email, phone } = req.body
+      // Approve or reject participant
+      const { participantId, action, reason } = req.body;
 
-      // Check if CPF already exists
-      if (mockParticipants.find(p => p.cpf === cpf)) {
-        return res.status(409).json({
+      if (!participantId || !action) {
+        return res.status(400).json({
           success: false,
-          message: 'CPF já cadastrado'
-        })
+          message: 'ID do participante e ação são obrigatórios'
+        });
       }
 
-      // Process face image if provided
-      let faceImageData = null
-      if (req.body.faceImage) {
-        faceImageData = {
-          data: req.body.faceImage,
-          metadata: {
-            width: req.body.imageWidth || 640,
-            height: req.body.imageHeight || 480,
-            format: req.body.imageFormat || 'jpeg',
-            quality: req.body.imageQuality || 0.9,
-            fileSize: Buffer.from(req.body.faceImage.split(',')[1] || '', 'base64').length,
-            capturedAt: new Date().toISOString()
-          }
+      const updateData: any = {};
+      
+      if (action === 'approve') {
+        updateData.approvalStatus = 'approved';
+        updateData.approvedAt = new Date();
+        updateData.approvedBy = 'admin';
+        updateData.rejectionReason = null;
+      } else if (action === 'reject') {
+        updateData.approvalStatus = 'rejected';
+        updateData.rejectionReason = reason || 'Rejeitado pelo administrador';
+        updateData.approvedAt = null;
+        updateData.approvedBy = null;
+      }
+
+      const updatedParticipant = await prisma.participant.update({
+        where: { id: participantId },
+        data: updateData
+      });
+
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          action: 'UPDATE',
+          entityType: 'participant',
+          entityId: participantId,
+          adminUser: 'admin',
+          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
+          newData: updateData,
+          description: `Participante ${updatedParticipant.name} ${action === 'approve' ? 'aprovado' : 'rejeitado'}`
         }
-      }
+      });
 
-      const newParticipant = {
-        id: (mockParticipants.length + 1).toString(),
-        name,
-        cpf,
-        event,
-        mesa,
-        phone,
-        email: email || undefined,
-        registeredAt: new Date().toISOString(),
-        ...(faceImageData && { faceImage: faceImageData })
-      }
-
-      mockParticipants.push(newParticipant)
-
-      console.log(`➕ New participant added:`, newParticipant)
-
-      res.status(201).json({
+      res.status(200).json({
         success: true,
-        participant: newParticipant,
-        message: 'Participante cadastrado com sucesso'
-      })
+        participant: updatedParticipant,
+        message: `Participante ${action === 'approve' ? 'aprovado' : 'rejeitado'} com sucesso`
+      });
     }
 
     else {
       res.status(405).json({
         success: false,
         message: 'Método não permitido'
-      })
+      });
     }
-  } catch (error) {
-    console.error('Admin API error:', error)
+  } catch (error: any) {
+    console.error('Admin API error:', error);
     
     res.status(500).json({
       success: false,
-      message: 'Erro interno do servidor'
-    })
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  } finally {
+    await prisma.$disconnect();
   }
 }

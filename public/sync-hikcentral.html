@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sincronização HikCentral - Modo Simples</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #0066cc;
+        }
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .actions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: #0052a3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,102,204,0.3);
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .btn.danger {
+            background: #dc3545;
+        }
+        .participants {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .participants-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .participant-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .participant-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s;
+        }
+        .participant-item:hover {
+            background: #f8f9fa;
+        }
+        .participant-info {
+            flex: 1;
+        }
+        .participant-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .participant-details {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .status-synced {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-syncing {
+            background: #d1ecf1;
+            color: #0c5460;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0066cc;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Sincronização com HikCentral</h1>
+            <p>Sistema de integração de participantes com reconhecimento facial</p>
+        </div>
+
+        <div class="content">
+            <div id="alertContainer"></div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <h3>Total Aprovados</h3>
+                    <div class="number" id="statTotal">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Sincronizados</h3>
+                    <div class="number" id="statSynced">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Pendentes</h3>
+                    <div class="number" id="statPending">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Falhas</h3>
+                    <div class="number" id="statFailed">0</div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn" onclick="loadParticipants()">
+                    📋 Carregar Participantes
+                </button>
+                <button class="btn success" onclick="syncAll()" id="btnSyncAll" disabled>
+                    ⚡ Sincronizar Todos Pendentes
+                </button>
+                <button class="btn" onclick="testConnection()">
+                    🧪 Testar Conexão
+                </button>
+                <button class="btn danger" onclick="resetFailed()">
+                    🔄 Resetar Falhas
+                </button>
+            </div>
+
+            <div class="participants">
+                <div class="participants-header">
+                    <h3>👥 Participantes Aprovados</h3>
+                    <span id="participantCount">0 participantes</span>
+                </div>
+                <div id="participantList" class="participant-list">
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>Carregue os participantes para começar...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let participants = [];
+        let isSyncing = false;
+        const API_PASSWORD = 'admin123';
+
+        // Mostrar alerta
+        function showAlert(message, type = 'info') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            alertContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // Atualizar estatísticas
+        function updateStats() {
+            const total = participants.length;
+            const synced = participants.filter(p => p.hikCentralSyncStatus === 'synced').length;
+            const pending = participants.filter(p => !p.hikCentralSyncStatus || p.hikCentralSyncStatus === 'pending').length;
+            const failed = participants.filter(p => p.hikCentralSyncStatus === 'failed').length;
+            
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statSynced').textContent = synced;
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statFailed').textContent = failed;
+            
+            document.getElementById('participantCount').textContent = `${total} participantes`;
+            document.getElementById('btnSyncAll').disabled = pending === 0 || isSyncing;
+        }
+
+        // Carregar participantes
+        async function loadParticipants() {
+            showAlert('Carregando participantes...', 'info');
+            
+            try {
+                const response = await fetch('/api/admin/participants', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                participants = data.participants.filter(p => p.approvalStatus === 'approved');
+                
+                renderParticipants();
+                updateStats();
+                showAlert(`${participants.length} participantes carregados com sucesso!`, 'success');
+            } catch (error) {
+                showAlert(`Erro ao carregar participantes: ${error.message}`, 'error');
+                console.error('Erro:', error);
+            }
+        }
+
+        // Renderizar lista de participantes
+        function renderParticipants() {
+            const listDiv = document.getElementById('participantList');
+            
+            if (participants.length === 0) {
+                listDiv.innerHTML = `
+                    <div class="loading">
+                        <p>Nenhum participante aprovado encontrado.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listDiv.innerHTML = participants.map(p => `
+                <div class="participant-item">
+                    <div class="participant-info">
+                        <div class="participant-name">${p.name}</div>
+                        <div class="participant-details">
+                            CPF: ${p.cpf} | 
+                            ${p.email || 'Sem email'} | 
+                            ${p.phone || 'Sem telefone'}
+                            ${p.faceImageUrl || p.faceData ? ' | 📸 Com foto' : ' | ❌ Sem foto'}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="status-badge status-${p.hikCentralSyncStatus || 'pending'}" id="status-${p.id}">
+                            ${getStatusText(p.hikCentralSyncStatus)}
+                        </span>
+                        ${p.hikCentralSyncStatus !== 'synced' ? `
+                            <button class="btn" onclick="syncParticipant('${p.id}')" style="padding: 5px 10px; font-size: 12px;">
+                                Sincronizar
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Obter texto do status
+        function getStatusText(status) {
+            const statusMap = {
+                'synced': '✅ Sincronizado',
+                'pending': '⏳ Pendente',
+                'failed': '❌ Falhou',
+                'syncing': '🔄 Sincronizando...',
+                null: '⏳ Pendente'
+            };
+            return statusMap[status] || '⏳ Pendente';
+        }
+
+        // Sincronizar participante individual
+        async function syncParticipant(participantId) {
+            const participant = participants.find(p => p.id === participantId);
+            if (!participant) return;
+            
+            // Atualizar status visual
+            const statusElement = document.getElementById(`status-${participantId}`);
+            if (statusElement) {
+                statusElement.className = 'status-badge status-syncing';
+                statusElement.textContent = '🔄 Sincronizando...';
+            }
+            
+            try {
+                const response = await fetch('/api/admin/sync-hikcental', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        participantIds: [participantId]
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.successful > 0) {
+                    participant.hikCentralSyncStatus = 'synced';
+                    showAlert(`✅ ${participant.name} sincronizado com sucesso!`, 'success');
+                } else {
+                    participant.hikCentralSyncStatus = 'failed';
+                    showAlert(`❌ Erro ao sincronizar ${participant.name}`, 'error');
+                }
+            } catch (error) {
+                participant.hikCentralSyncStatus = 'failed';
+                showAlert(`❌ Erro ao sincronizar: ${error.message}`, 'error');
+            }
+            
+            renderParticipants();
+            updateStats();
+        }
+
+        // Sincronizar todos os pendentes
+        async function syncAll() {
+            const pendingParticipants = participants.filter(p => 
+                !p.hikCentralSyncStatus || p.hikCentralSyncStatus === 'pending'
+            );
+            
+            if (pendingParticipants.length === 0) {
+                showAlert('Não há participantes pendentes para sincronizar', 'info');
+                return;
+            }
+            
+            isSyncing = true;
+            updateStats();
+            showAlert(`Iniciando sincronização de ${pendingParticipants.length} participantes...`, 'info');
+            
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (const participant of pendingParticipants) {
+                await syncParticipant(participant.id);
+                
+                if (participant.hikCentralSyncStatus === 'synced') {
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            }
+            
+            isSyncing = false;
+            updateStats();
+            
+            showAlert(
+                `Sincronização concluída: ${successCount} sucesso, ${failCount} falhas`,
+                successCount > 0 ? 'success' : 'error'
+            );
+        }
+
+        // Testar conexão
+        async function testConnection() {
+            showAlert('Testando conexão com HikCentral...', 'info');
+            
+            try {
+                // Testar a API de sincronização
+                const response = await fetch('/api/admin/hcwebcontrol-bridge?action=getSyncStats', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showAlert('✅ Conexão com API funcionando!', 'success');
+                } else {
+                    showAlert('❌ Erro na conexão com API', 'error');
+                }
+            } catch (error) {
+                showAlert(`❌ Erro ao testar conexão: ${error.message}`, 'error');
+            }
+        }
+
+        // Resetar participantes com falha
+        async function resetFailed() {
+            const failedParticipants = participants.filter(p => p.hikCentralSyncStatus === 'failed');
+            
+            if (failedParticipants.length === 0) {
+                showAlert('Não há participantes com falha para resetar', 'info');
+                return;
+            }
+            
+            failedParticipants.forEach(p => {
+                p.hikCentralSyncStatus = 'pending';
+            });
+            
+            renderParticipants();
+            updateStats();
+            showAlert(`${failedParticipants.length} participantes resetados para pendente`, 'success');
+        }
+
+        // Carregar ao iniciar
+        window.onload = function() {
+            showAlert('Bem-vindo ao sistema de sincronização HikCentral!', 'info');
+        };
+    </script>
+</body>
+</html>

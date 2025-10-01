@@ -117,8 +117,8 @@ export default function FieldsManagerPage() {
         const data = await response.json()
         
         // Filter out system field configs and update system fields state
-        const customFields = []
-        const systemConfigs = []
+        const customFields: any[] = []
+        const systemConfigs: any[] = []
         
         for (const field of (data.fields || [])) {
           if (field.fieldName?.startsWith('_system_')) {
@@ -181,8 +181,48 @@ export default function FieldsManagerPage() {
       console.log('Response:', response.status, data)
 
       if (response.ok) {
-        setNotification({ type: 'success', message: 'Campo salvo com sucesso!' })
-        setTimeout(() => setNotification(null), 3000)
+        // Sync with Stand table if field has limits
+        if (field.validation?.hasLimits && field.options) {
+          try {
+            const syncResponse = await fetch('/api/admin/sync-field-stands', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                fieldName: field.fieldName,
+                options: field.options,
+                validation: field.validation,
+                eventCode: 'MEGA-FEIRA-2025' // or get from context
+              })
+            });
+
+            if (syncResponse.ok) {
+              const syncData = await syncResponse.json();
+              console.log('Stand sync results:', syncData);
+              setNotification({
+                type: 'success',
+                message: `Campo salvo e ${syncData.synced} estandes sincronizados!`
+              });
+            } else {
+              setNotification({
+                type: 'success',
+                message: 'Campo salvo, mas houve erro na sincronização dos estandes'
+              });
+            }
+          } catch (syncError) {
+            console.error('Sync error:', syncError);
+            setNotification({
+              type: 'success',
+              message: 'Campo salvo, mas houve erro na sincronização dos estandes'
+            });
+          }
+        } else {
+          setNotification({ type: 'success', message: 'Campo salvo com sucesso!' });
+        }
+
+        setTimeout(() => setNotification(null), 5000)
         await loadFields()
         setEditingField(null)
         setShowNewField(false)
@@ -293,18 +333,30 @@ export default function FieldsManagerPage() {
   }
 
   const FieldEditor = ({ field, onSave, onCancel }: any) => {
-    const [localField, setLocalField] = useState<CustomField>(
-      field || {
-        fieldName: '',
-        label: '',
-        type: 'text',
-        required: false,
-        placeholder: '',
-        options: [],
-        order: fields.length,
-        active: true
+    // Ensure hasLimits is always true by default for select fields
+    const initialField = field ? {
+      ...field,
+      validation: {
+        ...(field.validation || {}),
+        hasLimits: field.validation?.hasLimits !== undefined ? field.validation.hasLimits : true,
+        optionLimits: field.validation?.optionLimits || {}
       }
-    )
+    } : {
+      fieldName: '',
+      label: '',
+      type: 'text',
+      required: false,
+      placeholder: '',
+      options: [],
+      order: fields.length,
+      active: true,
+      validation: {
+        hasLimits: true, // Always checked by default
+        optionLimits: {}
+      }
+    }
+
+    const [localField, setLocalField] = useState<CustomField>(initialField)
     const [isSaving, setIsSaving] = useState(false)
 
     return (
@@ -362,7 +414,31 @@ export default function FieldsManagerPage() {
             </label>
             <select
               value={localField.type}
-              onChange={(e) => setLocalField({ ...localField, type: e.target.value })}
+              onChange={(e) => {
+                const newType = e.target.value
+                const updates: any = { ...localField, type: newType }
+
+                // Auto-enable limits control for select fields (always checked by default)
+                if (newType === 'select') {
+                  // Only set hasLimits if not already defined (preserve user's choice)
+                  const currentHasLimits = localField.validation?.hasLimits
+                  updates.validation = {
+                    ...(localField.validation || {}),
+                    hasLimits: currentHasLimits !== undefined ? currentHasLimits : true,
+                    optionLimits: localField.validation?.optionLimits || {}
+                  }
+                  // Initialize limits for existing options if hasLimits is enabled
+                  if (updates.validation.hasLimits && localField.options && localField.options.length > 0) {
+                    localField.options.forEach((opt) => {
+                      if (!updates.validation.optionLimits[opt]) {
+                        updates.validation.optionLimits[opt] = 3
+                      }
+                    })
+                  }
+                }
+
+                setLocalField(updates)
+              }}
               className="w-full px-3 py-2 border rounded-lg bg-white"
             >
               {FIELD_TYPES.map(type => (
@@ -462,34 +538,108 @@ export default function FieldsManagerPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Opções da Lista
               </label>
-              
+
+              {/* Checkbox para ativar controle de limites */}
+              <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localField.validation?.hasLimits || false}
+                    onChange={(e) => {
+                      const newValidation = { ...(localField.validation || {}), hasLimits: e.target.checked }
+                      if (!e.target.checked) {
+                        delete newValidation.optionLimits
+                      } else {
+                        // Initialize limits for existing options
+                        newValidation.optionLimits = {}
+                        localField.options?.forEach((opt) => {
+                          newValidation.optionLimits[opt] = 3 // Default limit
+                        })
+                      }
+                      setLocalField({ ...localField, validation: newValidation })
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    🔢 Controlar limite de registros por opção (para estandes)
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  Ative para definir quantos registros cada opção pode ter
+                </p>
+              </div>
+
               {/* Lista de opções existentes */}
               <div className="space-y-2 mb-3">
                 {localField.options && localField.options.length > 0 ? (
                   localField.options.map((option, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                      <span className="text-sm text-gray-500 w-6">{index + 1}.</span>
-                      <input
-                        type="text"
-                        value={option}
-                        onChange={(e) => {
-                          const newOptions = [...(localField.options || [])]
-                          newOptions[index] = e.target.value
-                          setLocalField({ ...localField, options: newOptions })
-                        }}
-                        className="flex-1 px-2 py-1 border rounded text-sm"
-                        placeholder="Digite o texto da opção"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newOptions = localField.options?.filter((_, i) => i !== index)
-                          setLocalField({ ...localField, options: newOptions })
-                        }}
-                        className="text-red-500 hover:text-red-700 text-sm px-2"
-                      >
-                        ✕ Remover
-                      </button>
+                    <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm text-gray-500 w-6">{index + 1}.</span>
+                        <input
+                          type="text"
+                          value={option}
+                          onChange={(e) => {
+                            const oldOption = option
+                            const newOptions = [...(localField.options || [])]
+                            newOptions[index] = e.target.value
+
+                            // Update limits if enabled
+                            const newValidation = { ...(localField.validation || {}) }
+                            if (newValidation.hasLimits && newValidation.optionLimits) {
+                              const limit = newValidation.optionLimits[oldOption] || 3
+                              delete newValidation.optionLimits[oldOption]
+                              newValidation.optionLimits[e.target.value] = limit
+                            }
+
+                            setLocalField({ ...localField, options: newOptions, validation: newValidation })
+                          }}
+                          className="flex-1 px-3 py-2 border rounded text-sm"
+                          placeholder="Digite o texto da opção"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newOptions = localField.options?.filter((_, i) => i !== index)
+
+                            // Remove limit for this option
+                            const newValidation = { ...(localField.validation || {}) }
+                            if (newValidation.optionLimits) {
+                              delete newValidation.optionLimits[option]
+                            }
+
+                            setLocalField({ ...localField, options: newOptions, validation: newValidation })
+                          }}
+                          className="text-red-500 hover:text-red-700 text-sm px-2 py-1"
+                        >
+                          ✕ Remover
+                        </button>
+                      </div>
+
+                      {/* Campo de limite se ativado */}
+                      {localField.validation?.hasLimits && (
+                        <div className="ml-8 flex items-center gap-2">
+                          <label className="text-xs text-gray-600 whitespace-nowrap">
+                            Limite de registros:
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={localField.validation?.optionLimits?.[option] || 3}
+                            onChange={(e) => {
+                              const newValidation = { ...(localField.validation || {}) }
+                              if (!newValidation.optionLimits) {
+                                newValidation.optionLimits = {}
+                              }
+                              newValidation.optionLimits[option] = parseInt(e.target.value) || 3
+                              setLocalField({ ...localField, validation: newValidation })
+                            }}
+                            className="w-24 px-2 py-1 border rounded text-sm"
+                            placeholder="3"
+                          />
+                          <span className="text-xs text-gray-500">registros</span>
+                        </div>
+                      )}
                     </div>
                   ))
                 ) : (
@@ -504,7 +654,17 @@ export default function FieldsManagerPage() {
                 type="button"
                 onClick={() => {
                   const newOptions = [...(localField.options || []), '']
-                  setLocalField({ ...localField, options: newOptions })
+                  const newValidation = { ...(localField.validation || {}) }
+
+                  // If limits are enabled, initialize limit for new option
+                  if (newValidation.hasLimits) {
+                    if (!newValidation.optionLimits) {
+                      newValidation.optionLimits = {}
+                    }
+                    newValidation.optionLimits[''] = 3 // Default limit for new option
+                  }
+
+                  setLocalField({ ...localField, options: newOptions, validation: newValidation })
                 }}
                 className="w-full px-3 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 text-sm font-medium"
               >

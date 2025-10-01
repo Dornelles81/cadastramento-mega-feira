@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HikCentral - Preparar Fotos para Importação</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .warning-box h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .warning-box p {
+            color: #856404;
+            line-height: 1.6;
+        }
+        .solution-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .solution-box h3 {
+            color: #155724;
+            margin-bottom: 10px;
+        }
+        .steps {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .step {
+            margin-bottom: 15px;
+            padding-left: 30px;
+            position: relative;
+        }
+        .step-number {
+            position: absolute;
+            left: 0;
+            width: 25px;
+            height: 25px;
+            background: #0066cc;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .step-content {
+            line-height: 1.6;
+        }
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: #0052a3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,102,204,0.3);
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .btn.success:hover {
+            background: #218838;
+        }
+        .file-list {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .file-item {
+            padding: 5px 0;
+            font-family: monospace;
+            font-size: 14px;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ Problema: HikCentral não exibe arquivos .ZIP</h1>
+        
+        <div class="warning-box">
+            <h3>🔍 Problema Identificado</h3>
+            <p>O diálogo de seleção de arquivos do HikCentral está filtrando apenas arquivos de imagem (JPG, PNG, etc.) e não mostra arquivos .ZIP na pasta Downloads.</p>
+        </div>
+
+        <div class="solution-box">
+            <h3>✅ Solução: Extrair as fotos antes de importar</h3>
+            <p>Você precisa extrair o arquivo ZIP primeiro e depois selecionar a pasta com as fotos extraídas.</p>
+        </div>
+
+        <div class="steps">
+            <h2 style="margin-bottom: 20px;">📋 Instruções Passo a Passo:</h2>
+            
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <strong>Baixe o arquivo ZIP com as fotos</strong><br>
+                    <button class="btn success" onclick="downloadPhotos()">📥 Baixar ZIP de Fotos</button>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <strong>Extraia o arquivo ZIP na pasta Downloads</strong><br>
+                    <small>Clique com o botão direito no arquivo <code>hikcentral-photos-*.zip</code> e escolha "Extrair Tudo..." ou "Extract All..."</small>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <strong>No HikCentral, ao importar:</strong><br>
+                    <small>
+                        • Em vez de selecionar um arquivo ZIP<br>
+                        • Navegue até a pasta extraída<br>
+                        • Selecione todos os arquivos JPG (Ctrl+A)<br>
+                        • Clique em "Abrir"
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="warning-box">
+            <h3>💡 Dica Importante</h3>
+            <p><strong>Estrutura esperada dos arquivos:</strong></p>
+            <div class="file-list">
+                <div class="file-item">📁 hikcentral-photos-2025-08-26/</div>
+                <div class="file-item">├── Pedro+Mendes_78912345600.jpg</div>
+                <div class="file-item">├── Ana+Costa_32165498700.jpg</div>
+                <div class="file-item">├── Maria+Santos_98765432100.jpg</div>
+                <div class="file-item">└── ... (outros arquivos .jpg)</div>
+            </div>
+        </div>
+
+        <div class="steps">
+            <h3>🔧 Alternativa: Comando PowerShell</h3>
+            <p>Se preferir, use este comando PowerShell para extrair automaticamente:</p>
+            <div class="code-block">
+                Expand-Archive -Path "C:\Users\dorne\Downloads\hikcentral-photos-*.zip" -DestinationPath "C:\Users\dorne\Downloads\HikCentral-Photos" -Force
+            </div>
+            <button class="btn" onclick="copyCommand()">📋 Copiar Comando</button>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="btn success" onclick="window.open('http://127.0.0.1', '_blank')">
+                🌐 Abrir HikCentral
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const API_PASSWORD = 'admin123';
+
+        async function downloadPhotos() {
+            alert('Baixando ZIP com fotos...');
+            
+            try {
+                const response = await fetch('/api/admin/export-hikcentral?format=photos', {
+                    headers: {
+                        'Authorization': `Bearer ${API_PASSWORD}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Erro ao gerar ZIP');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hikcentral-photos-${new Date().toISOString().split('T')[0]}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                alert('✅ ZIP baixado! Agora extraia o arquivo na pasta Downloads.');
+            } catch (error) {
+                alert(`❌ Erro: ${error.message}`);
+            }
+        }
+
+        function copyCommand() {
+            const command = 'Expand-Archive -Path "C:\\Users\\dorne\\Downloads\\hikcentral-photos-*.zip" -DestinationPath "C:\\Users\\dorne\\Downloads\\HikCentral-Photos" -Force';
+            navigator.clipboard.writeText(command);
+            alert('Comando copiado para a área de transferência!');
+        }
+    </script>
+</body>
+</html>
