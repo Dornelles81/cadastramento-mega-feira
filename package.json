@@ -33,7 +33,6 @@
     "jspdf-autotable": "^5.0.2",
     "jszip": "^3.10.1",
     "next": "^15.5.2",
-    "puppeteer": "^24.16.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^3.0.0",
