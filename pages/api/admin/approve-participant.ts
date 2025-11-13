@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
-import HikCentralPuppeteer from '../../../lib/hikcental/hikcentral-puppeteer';
+// import HikCentralPuppeteer from '../../../lib/hikcental/hikcentral-puppeteer'; // Disabled for Vercel compatibility
 import OptimusClient from '../../../lib/hikcental/optimus-client';
 import HikCentralISAPI from '../../../lib/hikcental/hikcentral-isapi';
 import HikCentralWebAPI from '../../../lib/hikcental/hikcentral-api';
@@ -66,27 +66,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Try multiple integration methods
       console.log('Attempting HikCentral integration...');
 
-      // Method 1: Try Puppeteer browser automation (most reliable)
-      try {
-        console.log('Trying browser automation...');
-        const puppeteer = new HikCentralPuppeteer();
-        
-        const testResult = await puppeteer.testConnection();
-        if (testResult.success) {
-          const result = await puppeteer.addVisitor(personData);
-          personId = result.visitorId || personData.cpf.replace(/\D/g, '').substring(0, 8);
-          
-          await puppeteer.disconnect();
-          
-          syncSuccess = true;
-          console.log('User added via browser automation:', result);
-        }
-      } catch (puppeteerError: any) {
-        console.log('Browser automation failed:', puppeteerError.message);
-        syncError = puppeteerError.message;
-      }
+      // Method 1: Browser automation (Puppeteer) - Disabled for Vercel compatibility
+      // try {
+      //   console.log('Trying browser automation...');
+      //   const puppeteer = new HikCentralPuppeteer();
+      //
+      //   const testResult = await puppeteer.testConnection();
+      //   if (testResult.success) {
+      //     const result = await puppeteer.addVisitor(personData);
+      //     personId = result.visitorId || personData.cpf.replace(/\D/g, '').substring(0, 8);
+      //
+      //     await puppeteer.disconnect();
+      //
+      //     syncSuccess = true;
+      //     console.log('User added via browser automation:', result);
+      //   }
+      // } catch (puppeteerError: any) {
+      //   console.log('Browser automation failed:', puppeteerError.message);
+      //   syncError = puppeteerError.message;
+      // }
 
-      // Method 2: Try Optimus Integration if browser automation failed
+      // Method 1: Try Optimus Integration (primary method)
       if (!syncSuccess) {
         try {
         console.log('Trying Optimus integration...');
