@@ -378,8 +378,8 @@ export default function HomePage() {
                       Para dúvidas ou solicitações sobre seus dados:
                     </p>
                     <p className="mt-2">
-                      <strong>E-mail:</strong> privacidade@megafeira.com.br<br/>
-                      <strong>Telefone:</strong> (11) 9999-9999
+                      <strong>E-mail:</strong> megafeira@megafeira.com.br<br/>
+                      <strong>Telefone:</strong> (51) 99977-5388
                     </p>
                   </section>
 

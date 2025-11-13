@@ -19,6 +19,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const [brightness, setBrightness] = useState(0)
   const streamRef = useRef<MediaStream | null>(null)
   const detectionIntervalRef = useRef<NodeJS.Timeout>()
+  const [allowManualCapture, setAllowManualCapture] = useState(false)
+  const [showUploadOption, setShowUploadOption] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Calculate quality score based on multiple factors - more lenient
   const calculateQualityScore = (brightness: number, width: number, height: number): number => {
@@ -133,11 +136,28 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     ctx.setLineDash([])
   }, [])
 
-  // Start camera stream
+  // Start camera stream with HTTP detection
   const startCamera = async () => {
     try {
       setError(null)
-      
+
+      // Check if running on HTTP (not localhost) - skip WebRTC camera
+      const isHttp = window.location.protocol === 'http:' &&
+                     window.location.hostname !== 'localhost' &&
+                     window.location.hostname !== '127.0.0.1'
+
+      if (isHttp) {
+        // In HTTP contexts, WebRTC getUserMedia is blocked by browsers
+        // Skip trying camera and go straight to file upload
+        setError('📱 Use a câmera do seu celular!\n\n' +
+                 '👇 Toque no botão abaixo para tirar sua foto.\n\n' +
+                 '💡 O botão abrirá a câmera nativa do seu smartphone.')
+        setShowUploadOption(true)
+        setAllowManualCapture(true)
+        return
+      }
+
+      // For HTTPS or localhost, try WebRTC camera
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -148,22 +168,25 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         },
         audio: false
       })
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         streamRef.current = stream
         setIsStreaming(true)
-        
+
         // Start face detection - check more frequently
         detectionIntervalRef.current = setInterval(detectFace, 200)
+
+        // Enable manual capture after 3 seconds if face not detected
+        setTimeout(() => {
+          setAllowManualCapture(true)
+        }, 3000)
       }
     } catch (err: any) {
       console.error('Camera error:', err)
-      if (err.name === 'NotAllowedError') {
-        setError('Acesso à câmera negado. Por favor, permita o acesso à câmera.')
-      } else {
-        setError('Não foi possível acessar a câmera.')
-      }
+      setError('❌ Erro ao acessar câmera.\n\nUse o upload de foto abaixo.')
+      setShowUploadOption(true)
+      setAllowManualCapture(true)
     }
   }
 
@@ -181,6 +204,82 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     }
     setIsStreaming(false)
   }, [])
+
+  // Handle file upload from mobile camera
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('❌ Por favor, selecione um arquivo de imagem.')
+      return
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('❌ Imagem muito grande. Máximo 10MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const imageData = e.target?.result as string
+
+      // Create image to check dimensions
+      const img = new Image()
+      img.onload = () => {
+        // Create canvas to convert to proper format
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+
+        if (!ctx) return
+
+        // Set reasonable size (max 800x800 to keep payload small)
+        let width = img.width
+        let height = img.height
+        const maxSize = 800
+
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = (height / width) * maxSize
+            width = maxSize
+          } else {
+            width = (width / height) * maxSize
+            height = maxSize
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+
+        // Use 0.6 compression to keep payload under limits
+        const processedImage = canvas.toDataURL('image/jpeg', 0.6)
+
+        // Send directly to parent without preview
+        const faceData = {
+          brightness: 128,
+          timestamp: new Date().toISOString(),
+          quality: 0.7,
+          resolution: `${width}x${height}`,
+          qualityPercentage: 70,
+          uploadedFile: true
+        }
+
+        setCapturedImage(processedImage)
+
+        // Send to parent component
+        setTimeout(() => {
+          onCapture(processedImage, faceData)
+        }, 500)
+      }
+
+      img.src = imageData
+    }
+
+    reader.readAsDataURL(file)
+  }
 
   // Capture photo
   const handleCapture = async () => {
@@ -207,17 +306,32 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const video = videoRef.current
       const canvas = canvasRef.current
       const ctx = canvas.getContext('2d')
-      
+
       if (ctx) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        
+        // Resize to max 800px to prevent 413 errors
+        let width = video.videoWidth
+        let height = video.videoHeight
+        const maxSize = 800
+
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = (height / width) * maxSize
+            width = maxSize
+          } else {
+            width = (width / height) * maxSize
+            height = maxSize
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+
         // Draw mirrored image
         ctx.save()
         ctx.scale(-1, 1)
-        ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height)
+        ctx.drawImage(video, -width, 0, width, height)
         ctx.restore()
-        
+
         // Apply gentle brightness adjustments only if really needed
         if (brightness < 50) {
           ctx.filter = 'brightness(1.2) contrast(1.05)'
@@ -227,9 +341,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           ctx.drawImage(canvas, 0, 0)
         }
         // For normal lighting (50-220), don't apply any filters
-        
-        // Use maximum quality for better recognition
-        const imageData = canvas.toDataURL('image/jpeg', 1.0)
+
+        // Use 0.7 quality - good balance between size and recognition accuracy
+        const imageData = canvas.toDataURL('image/jpeg', 0.7)
         setCapturedImage(imageData)
         stopCamera()
         
@@ -362,10 +476,14 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         </div>
       )}
 
-      {/* Error message */}
+      {/* Error/Info message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+        <div className={`px-4 py-3 rounded-lg ${
+          error.includes('Use a câmera do seu celular')
+            ? 'bg-blue-50 border border-blue-200 text-blue-700'
+            : 'bg-red-50 border border-red-200 text-red-700'
+        }`}>
+          <pre className="whitespace-pre-wrap font-sans text-sm">{error}</pre>
         </div>
       )}
 
@@ -373,19 +491,53 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       <div className="space-y-3">
         {!capturedImage ? (
           <>
-            <button
-              onClick={handleCapture}
-              disabled={!isStreaming || !faceDetected || isCapturing}
-              className={`w-full py-4 rounded-lg font-semibold transition-colors shadow-md ${
-                faceDetected && !isCapturing
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {isCapturing ? '⏳ Capturando...' : 
-               !faceDetected ? '👤 Posicione seu rosto' : 
-               '📸 Capturar Foto'}
-            </button>
+            {/* Primary capture button - works with or without detection */}
+            {isStreaming && (
+              <button
+                onClick={handleCapture}
+                disabled={isCapturing}
+                className={`w-full py-4 rounded-lg font-semibold transition-colors shadow-md ${
+                  faceDetected && !isCapturing
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : !isCapturing && allowManualCapture
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isCapturing ? '⏳ Capturando...' :
+                 faceDetected ? '📸 Capturar Foto' :
+                 allowManualCapture ? '📸 Capturar Mesmo Assim' :
+                 '👤 Posicione seu rosto'}
+              </button>
+            )}
+
+            {/* Upload option - shown when camera fails or as alternative */}
+            {(showUploadOption || !isStreaming) && (
+              <>
+                <div className="relative">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
+                  >
+                    📸 Abrir Câmera e Tirar Foto
+                  </button>
+                </div>
+
+                <div className="bg-green-50 p-3 rounded-lg text-center">
+                  <p className="text-xs text-green-700">
+                    ✅ Este botão abrirá a câmera nativa do seu celular para tirar a foto
+                  </p>
+                </div>
+              </>
+            )}
 
             {onBack && (
               <button

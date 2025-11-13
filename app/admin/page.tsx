@@ -377,71 +377,70 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-6">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
-              <img 
-                src="/mega-feira-logo.svg" 
-                alt="Mega Feira" 
-                className="h-12 w-auto"
+              <img
+                src="/mega-feira-logo.svg"
+                alt="Mega Feira"
+                className="h-10 md:h-12 w-auto"
               />
               <div>
-                <h1 className="text-2xl font-bold text-gray-800 mb-2">
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-1">
                   📊 Painel Administrativo
                 </h1>
-                <p className="text-gray-600">
+                <p className="text-sm text-gray-600">
                   Gerenciar registros de participantes
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+              <div className="text-left sm:text-right">
                 <div className="text-sm text-gray-500">Total de registros</div>
                 <div className="text-2xl font-bold text-mega-600">{participants.length}</div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <a
                   href={`/api/export/participants?format=excel`}
-                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                  className="inline-flex items-center px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
                   title="Exportar para Excel"
                 >
-                  📊 Excel
+                  📊 <span className="hidden sm:inline ml-1">Excel</span>
                 </a>
                 <a
                   href={`/api/export/participants?format=pdf`}
-                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                  className="inline-flex items-center px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
                   title="Exportar para PDF"
                 >
-                  📄 PDF
+                  📄 <span className="hidden sm:inline ml-1">PDF</span>
                 </a>
                 <a
                   href="/admin/hikcental"
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                  className="inline-flex items-center px-3 py-2 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
                   title="Integração com HikCentral - Exportar participantes para reconhecimento facial"
                 >
-                  <span className="text-xl mr-2">🔗</span>
-                  HikCentral
+                  🔗 <span className="hidden md:inline ml-1">HikCentral</span>
                 </a>
                 <a
                   href="/admin/logs"
-                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                  className="inline-flex items-center px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
                   title="Ver logs de auditoria"
                 >
-                  📋 Logs
+                  📋 <span className="hidden sm:inline ml-1">Logs</span>
                 </a>
                 <a
                   href="/admin/hikvision"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  className="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                   title="Integração Hikvision"
                 >
-                  🎥 Hikvision
+                  🎥 <span className="hidden md:inline ml-1">Hikvision</span>
                 </a>
                 <a
                   href="/admin/approvals"
-                  className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                  className="inline-flex items-center px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
                   title="Central de Aprovações"
                 >
-                  ✅ Aprovações
+                  ✅ <span className="hidden sm:inline ml-1">Aprovações</span>
                 </a>
               </div>
             </div>
@@ -449,8 +448,8 @@ export default function AdminPage() {
         </div>
 
         {/* Search Filter */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-end gap-4">
+        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 🔍 Buscar por nome ou CPF
@@ -459,45 +458,43 @@ export default function AdminPage() {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
-                placeholder="Digite o nome ou CPF (ex: João, 123.456.789-01, 12345678901)..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 focus:border-mega-500 text-sm"
+                placeholder="Digite o nome ou CPF..."
               />
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSearchTerm('')}
-                className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                title="Limpar busca"
-              >
-                🧹 Limpar
-              </button>
-            </div>
+            <button
+              onClick={() => setSearchTerm('')}
+              className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm whitespace-nowrap"
+              title="Limpar busca"
+            >
+              🧹 Limpar
+            </button>
           </div>
         </div>
 
         {/* Results Summary */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <div className="flex gap-6">
-              <p className="text-gray-600">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 w-full sm:w-auto">
+              <p className="text-sm text-gray-600">
                 Mostrando <strong>{filteredParticipants.length}</strong> registros
                 {loading && <span className="ml-2 text-blue-500">🔄 Carregando...</span>}
               </p>
-              <div className="flex gap-4 text-sm">
-                <span className="text-green-600">
+              <div className="flex flex-wrap gap-3 text-xs sm:text-sm">
+                <span className="text-green-600 whitespace-nowrap">
                   ✅ Aprovados: <strong>{filteredParticipants.filter(p => p.approvalStatus === 'approved').length}</strong>
                 </span>
-                <span className="text-yellow-600">
+                <span className="text-yellow-600 whitespace-nowrap">
                   ⏳ Pendentes: <strong>{filteredParticipants.filter(p => !p.approvalStatus || p.approvalStatus === 'pending').length}</strong>
                 </span>
-                <span className="text-red-600">
+                <span className="text-red-600 whitespace-nowrap">
                   ❌ Rejeitados: <strong>{filteredParticipants.filter(p => p.approvalStatus === 'rejected').length}</strong>
                 </span>
               </div>
             </div>
             <button
               onClick={() => loadParticipants(searchTerm)}
-              className="text-sm bg-mega-500 text-white px-3 py-1 rounded hover:bg-mega-600"
+              className="text-xs sm:text-sm bg-mega-500 text-white px-3 py-2 rounded hover:bg-mega-600 whitespace-nowrap w-full sm:w-auto"
               disabled={loading}
             >
               🔄 Atualizar
@@ -511,47 +508,47 @@ export default function AdminPage() {
             <table className="min-w-full table-auto">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Face</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Nome</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">CPF</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Status</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Evento</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Email</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Telefone</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Qualidade</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Cadastrado em</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm whitespace-nowrap">Ações</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm">Face</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm">Nome</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm">CPF</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden sm:table-cell">Status</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden md:table-cell">Evento</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Email</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Telefone</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Qualidade</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Cadastrado em</th>
+                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredParticipants.map((participant) => (
                   <tr key={participant.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                    <td className="px-2 md:px-4 py-3">
                       <div className="flex items-center">
                         {participantImages[participant.id] ? (
                           <button
                             onClick={() => setViewingImage(participant)}
                             className="relative group"
                           >
-                            <img 
+                            <img
                               src={participantImages[participant.id]}
                               alt={`Foto de ${participant.name}`}
-                              className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 group-hover:border-mega-500 transition-colors"
+                              className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border-2 border-gray-200 group-hover:border-mega-500 transition-colors"
                             />
                             <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-20 flex items-center justify-center transition-opacity">
                               <span className="text-white opacity-0 group-hover:opacity-100 text-xs">👁️</span>
                             </div>
                           </button>
                         ) : (
-                          <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-200 rounded-full flex items-center justify-center">
                             <span className="text-gray-400 text-xs">👤</span>
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-900 text-sm">{participant.name}</td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-sm">{participant.cpf}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 md:px-4 py-3 text-gray-900 text-xs md:text-sm">{participant.name}</td>
+                    <td className="px-2 md:px-4 py-3 text-gray-600 font-mono text-xs md:text-sm">{participant.cpf}</td>
+                    <td className="px-2 md:px-4 py-3 hidden sm:table-cell">
                       {participant.approvalStatus === 'approved' ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           ✅ Aprovado
@@ -566,55 +563,59 @@ export default function AdminPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 md:px-4 py-3 hidden md:table-cell">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-mega-100 text-mega-800">
                         {formatEventName(participant.eventCode)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">{participant.email || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-sm">{participant.phone || '-'}</td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">
-                      {participant.captureQuality ? 
-                        `${Math.round(participant.captureQuality * 100)}%` : 
+                    <td className="px-2 md:px-4 py-3 text-gray-600 text-sm hidden lg:table-cell">{participant.email || '-'}</td>
+                    <td className="px-2 md:px-4 py-3 text-gray-600 font-mono text-sm hidden lg:table-cell">{participant.phone || '-'}</td>
+                    <td className="px-2 md:px-4 py-3 text-gray-600 text-sm hidden lg:table-cell">
+                      {participant.captureQuality ?
+                        `${Math.round(participant.captureQuality * 100)}%` :
                         '-'
                       }
                     </td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">
+                    <td className="px-2 md:px-4 py-3 text-gray-600 text-xs md:text-sm hidden lg:table-cell">
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-start gap-2 min-w-[200px]">
+                    <td className="px-2 md:px-4 py-3">
+                      <div className="flex items-center justify-start gap-1 md:gap-2 flex-wrap">
                         {participant.approvalStatus !== 'approved' && (
                           <button
                             onClick={() => handleApprove(participant)}
-                            className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-medium transition-colors"
+                            className="px-2 md:px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
                             title="Aprovar participante"
                           >
-                            ✅ Aprovar
+                            <span className="sm:hidden">✅</span>
+                            <span className="hidden sm:inline">✅ Aprovar</span>
                           </button>
                         )}
                         {participant.approvalStatus !== 'rejected' && (
                           <button
                             onClick={() => handleReject(participant)}
-                            className="px-3 py-1 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded text-xs font-medium transition-colors"
+                            className="px-2 md:px-3 py-1 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
                             title="Rejeitar participante"
                           >
-                            ❌ Rejeitar
+                            <span className="sm:hidden">❌</span>
+                            <span className="hidden sm:inline">❌ Rejeitar</span>
                           </button>
                         )}
                         <button
                           onClick={() => handleEdit(participant)}
-                          className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-medium transition-colors"
+                          className="px-2 md:px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
                           title="Editar participante"
                         >
-                          ✏️ Editar
+                          <span className="sm:hidden">✏️</span>
+                          <span className="hidden sm:inline">✏️ Editar</span>
                         </button>
                         <button
                           onClick={() => handleDelete(participant.id)}
-                          className="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+                          className="px-2 md:px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
                           title="Excluir participante"
                         >
-                          🗑️ Excluir
+                          <span className="sm:hidden">🗑️</span>
+                          <span className="hidden sm:inline">🗑️ Excluir</span>
                         </button>
                       </div>
                     </td>

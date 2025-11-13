@@ -1,13 +1,20 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
 
-const prisma = new PrismaClient();
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS' || req.method === 'HEAD') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -15,14 +22,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Check admin authentication
   // Allow access if coming from admin panel (check referer) or has valid auth header
   const referer = req.headers.referer || '';
+  const host = req.headers.host || '';
   const authHeader = req.headers.authorization;
   const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  
-  // Check if request is coming from admin pages
+
+  // Check if request is coming from admin pages or localhost
   const isFromAdmin = referer.includes('/admin');
-  
-  // Allow if from admin or has valid auth header
-  if (!isFromAdmin && (!authHeader || authHeader !== `Bearer ${validPassword}`)) {
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+
+  // Allow if from admin, localhost, or has valid auth header
+  if (!isFromAdmin && !isLocalhost && (!authHeader || authHeader !== `Bearer ${validPassword}`)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -43,92 +52,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Formato Excel para importação no HikCentral - Template Oficial
       // Baseado no template: Person Information Template_2025_08_27_10_28_22.xlsx
       
-      // Criar workbook
+      // Criar workbook e worksheet diretamente com json_to_sheet
       const wb = XLSX.utils.book_new();
-      
-      // Criar worksheet com as instruções/regras nas primeiras linhas
-      const rulesData = [
-        ['Rule'],
-        ['Either first name or last name is required.'],
-        ['Once configured, the ID cannot be edited. Confirm the ID rule before setting an ID.'],
-        ['Do NOT change the layout or column heading in this template file. Otherwise, importing may fail.'],
-        ['You can add persons to existing departments. The department name should be separated by /. For example, to import persons to Department A under All Departments, please enter All Departments/Department A.'],
-        ['Start Time of Effective Period is used for Access Control Module and Time & Attendance Module. Format: yyyy/mm/dd hh:mm:ss.'],
-        ['End Time of Effective Period is used for Access Control Module and Time & Attendance Module. Format: yyyy/mm/dd hh:mm:ss.']
-      ];
-      
-      // Adicionar cabeçalhos na linha 8 (index 7)
-      // IMPORTANTE: Usar os nomes exatos esperados pelo HikCentral
-      const headers = [
-        'Employee No.',  // Campo obrigatório - ID único
-        'Name',          // Nome completo
-        'Gender',        // M/F
-        'Organization',  // Departamento/Organização
-        'Phone',         // Telefone
-        'Email',         // Email
-        'Valid Begin Time',  // Data de início
-        'Valid End Time'     // Data de fim
-      ];
-      
-      // Preparar dados dos participantes aprovados
+
+      // Preparar dados dos participantes aprovados como objetos
       const participantData = participants.map(p => {
         // Formatar datas no padrão yyyy/mm/dd hh:mm:ss
         const startDate = new Date();
         const endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 dias
-        
+
         const formatDate = (date: Date) => {
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, '0');
           const day = String(date.getDate()).padStart(2, '0');
-          const hour = String(date.getHours()).padStart(2, '0');
-          const minute = String(date.getMinutes()).padStart(2, '0');
-          const second = String(date.getSeconds()).padStart(2, '0');
-          return `${year}/${month}/${day} ${hour}:${minute}:${second}`;
+          return `${year}/${month}/${day}`;
         };
-        
-        // Tentar detectar gênero pelo nome (básico)
-        const gender = 'M'; // Padrão masculino, pode ser melhorado
-        
+
+        // Dividir nome em First Name e Last Name
+        const nameParts = p.name.trim().split(' ');
+        const firstName = nameParts[0] || p.name;
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
         // Formatar telefone removendo caracteres especiais
         const phoneClean = p.phone ? p.phone.replace(/\D/g, '') : '';
-        
-        return [
-          p.cpf.replace(/\D/g, ''),  // Employee No. (CPF sem formatação)
-          p.name,                     // Name (nome completo)
-          gender,                     // Gender (M/F)
-          'MEGA-FEIRA-2025',         // Organization
-          phoneClean,                 // Phone (sem formatação)
-          p.email || '',             // Email
-          formatDate(startDate),      // Valid Begin Time
-          formatDate(endDate)         // Valid End Time
-        ];
+
+        return {
+          'Employee No.': p.cpf.replace(/\D/g, ''),
+          'First Name': firstName,
+          'Last Name': lastName,
+          'Gender': 'Male',
+          'Phone': phoneClean,
+          'Email': p.email || '',
+          'Organization': 'MEGA-FEIRA-2025',
+          'Valid Begin Time': formatDate(startDate),
+          'Valid End Time': formatDate(endDate)
+        };
       });
       
-      // Combinar todas as linhas
-      const allData = [
-        ...rulesData,
-        headers,
-        ...participantData
-      ];
-      
-      // Criar worksheet a partir dos dados
-      const ws = XLSX.utils.aoa_to_sheet(allData);
-      
+      // Criar worksheet a partir dos objetos JSON
+      const ws = XLSX.utils.json_to_sheet(participantData);
+
       // Definir largura das colunas para melhor visualização
       const colWidths = [
         { wch: 20 }, // Employee No.
-        { wch: 35 }, // Name
-        { wch: 10 }, // Gender
-        { wch: 25 }, // Organization
+        { wch: 20 }, // First Name
+        { wch: 25 }, // Last Name
+        { wch: 15 }, // Gender
         { wch: 20 }, // Phone
         { wch: 35 }, // Email
-        { wch: 25 }, // Valid Begin Time
-        { wch: 25 }  // Valid End Time
+        { wch: 25 }, // Organization
+        { wch: 20 }, // Valid Begin Time
+        { wch: 20 }  // Valid End Time
       ];
       ws['!cols'] = colWidths;
-      
-      // Adicionar a planilha ao workbook com o nome correto
-      XLSX.utils.book_append_sheet(wb, ws, 'Person Information Template');
+
+      // Adicionar a planilha ao workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
       
       const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
       
@@ -138,29 +117,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.send(buffer);
       
     } else if (format === 'csv') {
-      // Formato CSV para importação
-      const csvData = participants.map(p => ({
-        employeeNo: p.cpf.replace(/\D/g, ''),
-        name: p.name,
-        gender: 'unknown',
-        department: 'Mega Feira 2025',
-        phone: p.phone || '',
-        email: p.email || '',
-        cardNo: '',
-        validBegin: new Date().toISOString().split('T')[0],
-        validEnd: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        accessGroup: '1',
-        userType: 'normal',
-        facePhotoName: p.cpf.replace(/\D/g, '') + '.jpg'
-      }));
+      // Formato CSV: CPF como First Name, Nome como Last Name
+      const csvLines = ['ID,First Name (CPF),Last Name (Nome)'];
 
-      const ws = XLSX.utils.json_to_sheet(csvData);
-      const csv = XLSX.utils.sheet_to_csv(ws);
-      
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="hikcentral-import-${new Date().toISOString().split('T')[0]}.csv"`);
-      
-      return res.send(csv);
+      participants.forEach(p => {
+        const cpfClean = p.cpf.replace(/\D/g, '');
+        const nameClean = p.name.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+        csvLines.push(`${cpfClean},${cpfClean},${nameClean}`);
+      });
+
+      const csv = csvLines.join('\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="hikcentral-dados-${new Date().toISOString().split('T')[0]}.csv"`);
+
+      return res.send('\ufeff' + csv); // BOM para UTF-8
       
     } else if (format === 'photos') {
       // Gerar ZIP com as fotos
@@ -168,32 +139,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // NÃO criar pasta - colocar fotos na raiz do ZIP
       
       for (const participant of participants) {
-        if (participant.faceImageUrl || participant.faceData) {
-          let imageData = '';
-          // IMPORTANTE: Nome do arquivo deve corresponder ao Employee No.
-          // Formato: CPF_sem_formatacao.jpg
-          const employeeNo = participant.cpf.replace(/\D/g, '');
-          const fileName = `${employeeNo}.jpg`;
-          
-          if (participant.faceData) {
-            // Converter Buffer para base64
-            imageData = Buffer.from(participant.faceData).toString('base64');
-          } else if (participant.faceImageUrl) {
-            if (participant.faceImageUrl.startsWith('data:image')) {
-              // Extrair apenas a parte base64, removendo o header data:image/jpeg;base64,
-              const base64Part = participant.faceImageUrl.split(',')[1];
-              if (base64Part) {
-                imageData = base64Part;
-              }
-            }
+        if (!participant.faceImageUrl) {
+          console.log(`Skipping ${participant.name} - No face image`);
+          continue;
+        }
+
+        // FORMATO: CPF_Nome.jpg
+        // CPF será usado como First Name e Nome como Last Name
+        const cpfClean = participant.cpf.replace(/\D/g, '');
+        const nameClean = participant.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove caracteres especiais
+          .replace(/\s+/g, '_')           // Substitui espaços por underscore
+          .substring(0, 30);              // Limita a 30 caracteres
+
+        const fileName = `${cpfClean}_${nameClean}.jpg`;
+
+        let imageData = '';
+
+        // PRIORIZAR faceImageUrl que contém a imagem real
+        if (participant.faceImageUrl && participant.faceImageUrl.startsWith('data:image')) {
+          // Extrair apenas a parte base64, removendo o header data:image/jpeg;base64,
+          const base64Part = participant.faceImageUrl.split(',')[1];
+          if (base64Part && base64Part.length > 100) {
+            imageData = base64Part;
           }
-          
-          if (imageData && imageData.length > 0) {
-            // Adicionar arquivo diretamente na raiz do ZIP
-            // Garantir que o nome não tem caracteres especiais além de + e _
-            const safeFileName = fileName.replace(/[^\w\+_\-\.]/g, '');
-            zip.file(safeFileName, imageData, { base64: true });
-          }
+        }
+
+        if (imageData && imageData.length > 100) {
+          // Adicionar arquivo diretamente na raiz do ZIP
+          zip.file(fileName, imageData, { base64: true });
+          console.log(`Added photo: ${fileName} (${imageData.length} chars)`);
+        } else {
+          console.log(`Skipping ${participant.name} - Invalid or missing image data`);
         }
       }
       
@@ -261,12 +238,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   } catch (error: any) {
     console.error('Export error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Failed to export data',
       details: error.message
     });
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

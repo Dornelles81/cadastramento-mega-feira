@@ -353,3 +353,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+// Configure body parser to accept larger payloads
+// Increased to 10MB to handle high-res images from mobile cameras
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+}

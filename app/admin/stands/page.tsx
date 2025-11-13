@@ -3,6 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface Participant {
+  id: string;
+  name: string;
+  cpf: string;
+  email?: string;
+  phone?: string;
+  createdAt: string;
+  approvalStatus?: string;
+}
+
 interface Stand {
   id: string;
   name: string;
@@ -21,6 +31,7 @@ interface Stand {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  participants?: Participant[];
   _count?: {
     participants: number;
   };
@@ -122,21 +133,40 @@ export default function StandsManagementPage() {
     }
   };
 
-  const handleEdit = (stand: Stand) => {
-    setEditingStand(stand);
-    setFormData({
-      name: stand.name,
-      code: stand.code,
-      description: stand.description || '',
-      maxRegistrations: stand.maxRegistrations,
-      eventCode: stand.eventCode || 'MEGA-FEIRA-2025',
-      responsibleName: stand.responsibleName || '',
-      responsibleEmail: stand.responsibleEmail || '',
-      responsiblePhone: stand.responsiblePhone || '',
-      location: stand.location || '',
-      isActive: stand.isActive
-    });
-    setShowForm(true);
+  const handleEdit = async (stand: Stand) => {
+    const password = localStorage.getItem('adminPassword') || 'admin123';
+
+    try {
+      // Buscar detalhes completos do estande incluindo participantes
+      const response = await fetch(`/api/admin/stands?id=${stand.id}`, {
+        headers: {
+          'Authorization': `Bearer ${password}`
+        }
+      });
+
+      if (response.ok) {
+        const detailedStand = await response.json();
+        setEditingStand(detailedStand);
+        setFormData({
+          name: detailedStand.name,
+          code: detailedStand.code,
+          description: detailedStand.description || '',
+          maxRegistrations: detailedStand.maxRegistrations,
+          eventCode: detailedStand.eventCode || 'MEGA-FEIRA-2025',
+          responsibleName: detailedStand.responsibleName || '',
+          responsibleEmail: detailedStand.responsibleEmail || '',
+          responsiblePhone: detailedStand.responsiblePhone || '',
+          location: detailedStand.location || '',
+          isActive: detailedStand.isActive
+        });
+        setShowForm(true);
+      } else {
+        alert('Erro ao carregar detalhes do estande');
+      }
+    } catch (error) {
+      console.error('Error loading stand details:', error);
+      alert('Erro ao carregar detalhes do estande');
+    }
   };
 
   const handleDelete = async (standId: string) => {
@@ -163,6 +193,43 @@ export default function StandsManagementPage() {
       console.error('Error deleting stand:', error);
       alert('Erro ao deletar estande');
     }
+  };
+
+  const handleRemoveParticipant = async (participantId: string) => {
+    if (!confirm('Tem certeza que deseja remover este participante do estande?')) return;
+
+    const password = localStorage.getItem('adminPassword') || 'admin123';
+
+    try {
+      const response = await fetch(`/api/admin/participants/${participantId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${password}`
+        },
+        body: JSON.stringify({ standId: null })
+      });
+
+      if (response.ok) {
+        alert('Participante removido do estande!');
+        // Recarregar detalhes do estande
+        if (editingStand) {
+          handleEdit(editingStand);
+        }
+        loadStands();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Erro ao remover participante');
+      }
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      alert('Erro ao remover participante');
+    }
+  };
+
+  const handleEditParticipant = (participantId: string) => {
+    // Redirecionar para a página de admin com o participante selecionado
+    router.push(`/admin?participantId=${participantId}`);
   };
 
   const handleImportExcel = async () => {
@@ -503,6 +570,64 @@ export default function StandsManagementPage() {
                   </label>
                 </div>
               </div>
+
+              {/* Participants Section - Only show when editing and has participants */}
+              {editingStand && editingStand.participants && editingStand.participants.length > 0 && (
+                <div className="mt-6 border-t pt-6">
+                  <h3 className="text-lg font-bold mb-4">
+                    Participantes Vinculados ({editingStand.participants.length})
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Nome</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">CPF</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Email</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Telefone</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {editingStand.participants.map((participant) => (
+                          <tr key={participant.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900">{participant.name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{participant.cpf}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{participant.email || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{participant.phone || '-'}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                participant.approvalStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                                participant.approvalStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {participant.approvalStatus === 'approved' ? 'Aprovado' :
+                                 participant.approvalStatus === 'rejected' ? 'Rejeitado' :
+                                 'Pendente'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => handleEditParticipant(participant.id)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => handleRemoveParticipant(participant.id)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Remover
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button

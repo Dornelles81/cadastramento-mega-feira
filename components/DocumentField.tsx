@@ -147,11 +147,15 @@ export default function DocumentField({
   // Process with OCR
   const processOCR = async (imageData: string) => {
     if (!enableOCR) return
-    
+
     setIsProcessing(true)
     setError(null)
-    
+
     try {
+      // Check if OCR server is available
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+
       const response = await fetch('http://localhost:8000/ocr/extract-base64', {
         method: 'POST',
         headers: {
@@ -160,14 +164,16 @@ export default function DocumentField({
         body: JSON.stringify({
           image: imageData,
           document_type: documentType
-        })
+        }),
+        signal: controller.signal
       })
 
+      clearTimeout(timeoutId)
       const result = await response.json()
-      
+
       if (result.success && result.data) {
         setOcrResult(result.data)
-        
+
         // Notify parent component about extracted data
         if (onOCRExtract && result.data.is_valid) {
           onOCRExtract({
@@ -180,8 +186,9 @@ export default function DocumentField({
         }
       }
     } catch (err) {
-      console.error('OCR Error:', err)
-      // OCR is optional, don't show error to user
+      // OCR is optional - silently fail if server not available
+      console.log('OCR service not available, continuing without OCR')
+      // Don't show error to user
     } finally {
       setIsProcessing(false)
     }

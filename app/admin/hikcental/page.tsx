@@ -59,16 +59,30 @@ export default function HikCentralPage() {
   const handleExportAll = async () => {
     setExporting(true)
     try {
-      // Download Excel
-      window.open('/api/admin/export-hikcentral?format=excel', '_blank')
+      // Criar links temporários para forçar download
+      const downloadFile = (url: string, filename: string) => {
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
 
-      // Wait 1 second and download Photos
+      // Download Excel
+      downloadFile('/api/admin/export-hikcentral?format=excel', `hikcentral-import-${new Date().toISOString().split('T')[0]}.xlsx`)
+
+      // Wait 1.5 seconds and download Photos
       setTimeout(() => {
-        window.open('/api/admin/export-hikcentral?format=photos', '_blank')
-        setExporting(false)
-        alert('✅ Arquivos exportados com sucesso!\n\n📋 Próximos passos:\n1. Aguarde o download dos 2 arquivos\n2. Extraia as fotos do ZIP\n3. Abra o HikCentral (botão abaixo)\n4. Siga as instruções de importação')
-        setShowInstructions(true)
-      }, 1000)
+        downloadFile('/api/admin/export-hikcentral?format=photos', `hikcentral-photos-${new Date().toISOString().split('T')[0]}.zip`)
+
+        setTimeout(() => {
+          setExporting(false)
+          alert('✅ Arquivos exportados com sucesso!\n\n📋 Próximos passos:\n1. Verifique a pasta Downloads - devem ter 2 arquivos\n2. Extraia as fotos do ZIP\n3. Abra o HikCentral (botão abaixo)\n4. Siga as instruções de importação')
+          setShowInstructions(true)
+        }, 500)
+      }, 1500)
     } catch (error) {
       console.error('Export error:', error)
       alert('❌ Erro ao exportar arquivos. Tente novamente.')
@@ -231,7 +245,10 @@ export default function HikCentralPage() {
                     📸 Exportar Fotos (ZIP)
                   </h3>
                   <p className="text-sm text-gray-600 mt-1">
-                    Gera arquivo ZIP com as fotos dos {approvedCount} participantes aprovados (formato: nome_cpf.jpg)
+                    Gera arquivo ZIP com as fotos dos {approvedCount} participantes (formato: CPF_Nome.jpg)
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    💡 Use CPF como First Name e Nome como Last Name ao importar no HikCentral
                   </p>
                 </div>
                 <a
@@ -239,6 +256,26 @@ export default function HikCentralPage() {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Baixar Fotos
+                </a>
+              </div>
+            </div>
+
+            {/* CSV Reference */}
+            <div className="border rounded-lg p-4 bg-blue-50">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-semibold text-gray-800">
+                    📄 Lista de Referência (CSV)
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Tabela com ID, CPF (First Name) e Nome (Last Name) para consulta rápida
+                  </p>
+                </div>
+                <a
+                  href="/api/admin/export-hikcentral?format=csv"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Baixar CSV
                 </a>
               </div>
             </div>
@@ -263,13 +300,9 @@ export default function HikCentralPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    window.open('/api/admin/export-hikcentral?format=excel', '_blank')
-                    setTimeout(() => {
-                      window.open('/api/admin/export-hikcentral?format=photos', '_blank')
-                    }, 1000)
-                  }}
-                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-semibold"
+                  onClick={handleExportAll}
+                  disabled={exporting || approvedCount === 0}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   ⬇️ Baixar Tudo
                 </button>

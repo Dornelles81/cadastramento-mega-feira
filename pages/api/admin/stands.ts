@@ -101,7 +101,14 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
   }
 
   // Listar todos os estandes com filtros opcionais
-  const where: any = {};
+  const where: any = {
+    // Excluir estandes auto-criados por campos personalizados
+    NOT: {
+      description: {
+        contains: 'Auto-criado pelo campo:'
+      }
+    }
+  };
 
   if (eventCode) {
     where.eventCode = eventCode;

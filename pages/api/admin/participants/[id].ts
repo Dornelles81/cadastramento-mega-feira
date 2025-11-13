@@ -60,7 +60,8 @@ async function handleUpdate(id: string, data: any, adminIp: string, res: NextApi
         email: data.email,
         phone: data.phone,
         eventCode: data.eventCode,
-        customData: data.customData
+        customData: data.customData,
+        standId: data.standId !== undefined ? data.standId : undefined
       }
     })
 
@@ -141,17 +142,17 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
       // Check if auditLog table exists
       const auditLogExists = await prisma.$queryRaw`
         SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public'
           AND table_name = 'audit_logs'
         ) as exists
       ` as any[]
-      
+
       if (auditLogExists && auditLogExists[0]?.exists) {
         // Use raw query to insert audit log
         await prisma.$executeRaw`
           INSERT INTO audit_logs (
-            id, action, "entityType", "entityId", "adminUser", "adminIp", 
+            id, action, "entityType", "entityId", "adminUser", "adminIp",
             "previousData", "newData", description, metadata, "createdAt"
           ) VALUES (
             gen_random_uuid(),
@@ -180,12 +181,28 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
       // Continue without logging
     }
 
+    // Delete related records first to avoid foreign key constraint violations
+    try {
+      // Delete HikCentral sync logs
+      await prisma.hikCentralSyncLog.deleteMany({
+        where: { participantId: id }
+      })
+
+      // Delete approval logs
+      await prisma.approvalLog.deleteMany({
+        where: { participantId: id }
+      })
+    } catch (relatedError) {
+      console.log('Error deleting related records:', relatedError)
+      // Continue - tables might not exist yet
+    }
+
     // Delete the participant
     await prisma.participant.delete({
       where: { id }
     })
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       success: true,
       message: 'Participante excluído com sucesso'
     })

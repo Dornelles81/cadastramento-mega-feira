@@ -15,7 +15,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Build where clause
     const where: any = {
-      isActive: true
+      isActive: true,
+      // Excluir estandes auto-criados por campos personalizados
+      NOT: {
+        description: {
+          contains: 'Auto-criado pelo campo:'
+        }
+      }
     };
 
     if (eventCode) {

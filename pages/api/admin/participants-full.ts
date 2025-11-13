@@ -1,13 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../../../lib/prisma'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  // Disable cache to ensure fresh data
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
 
   if (req.method === 'OPTIONS') {
     res.status(200).end()
@@ -40,7 +42,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         approvedAt: true,
         approvedBy: true,
         rejectionReason: true,
-        standCode: true
+        standId: true, // Stand ID
+        stand: {
+          select: {
+            code: true,
+            name: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
@@ -67,7 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       approvedAt: participant.approvedAt?.toISOString() || null,
       approvedBy: participant.approvedBy || null,
       rejectionReason: participant.rejectionReason || null,
-      standCode: participant.standCode || null
+      standCode: participant.stand?.code || null,
+      standName: participant.stand?.name || null
     }))
 
     res.status(200).json({ 

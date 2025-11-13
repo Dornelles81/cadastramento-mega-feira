@@ -7,6 +7,65 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [2.1.0] - 2025-11-13
+
+### 🎨 Melhorias de Interface e UX
+
+Esta versão traz melhorias significativas na experiência mobile e gerenciamento de estandes.
+
+### ✨ Adicionado
+- **Gerenciamento de Participantes em Estandes**
+  - Visualização de participantes vinculados ao editar estande
+  - Tabela com informações completas (Nome, CPF, Email, Telefone, Status)
+  - Botão para editar participante (redireciona para página principal)
+  - Botão para remover participante do estande
+  - Atualização em tempo real após remoções
+
+- **Responsividade Mobile Aprimorada**
+  - Header adaptativo com layout flex-col/flex-row
+  - Botões de ação com texto oculto em mobile (apenas ícones)
+  - Tamanhos de fonte responsivos (text-xs em mobile)
+  - Colunas da tabela ocultas progressivamente por breakpoint
+  - Imagens de perfil menores em mobile (8x8 vs 10x10)
+  - Campos de busca e filtros totalmente responsivos
+
+### 🔧 Modificado
+- **API de Estandes**
+  - Filtro para excluir estandes auto-criados por campos personalizados
+  - Aplicado tanto na API admin quanto na API pública
+  - Usuários veem apenas estandes cadastrados manualmente e ativos
+  - API de estandes por ID retorna participantes vinculados
+
+- **API de Participantes**
+  - Suporte para atualizar `standId` via PUT
+  - Deleção em cascata de registros relacionados (HikCentral sync logs, approval logs)
+  - Correção de constraint de chave estrangeira
+
+### 🐛 Corrigido
+- **Exclusão de Participantes**
+  - Erro de foreign key constraint ao deletar participante
+  - Deleção automática de logs relacionados antes de remover participante
+  - Tratamento de erros para tabelas que podem não existir
+
+- **Filtro de Estandes**
+  - Estandes duplicados não aparecem mais para usuários
+  - Campos personalizados não são mostrados como estandes
+  - Sincronização correta entre painel admin e formulário público
+
+### 📱 Mobile-First
+- Breakpoints implementados:
+  - `sm:` (640px) - Mostra textos dos botões, coluna Status
+  - `md:` (768px) - Mostra coluna Evento
+  - `lg:` (1024px) - Mostra Email, Telefone, Qualidade, Data
+
+### 🎯 Experiência do Usuário
+- Interface mais limpa em dispositivos móveis
+- Navegação otimizada com menos cliques
+- Informações contextuais sempre visíveis
+- Performance melhorada em telas pequenas
+
+---
+
 ## [2.0.0] - 2025-08-20
 
 ### 🎉 Nova Versão Principal - Integração HikCentral
@@ -239,7 +298,7 @@ Esta versão adiciona integração completa com o sistema HikCentral Professiona
 
 ## 📊 Estatísticas
 
-### Versão Atual: 2.0.0
+### Versão Atual: 2.1.0
 - **Total de Commits**: 20+
 - **Arquivos**: 100+
 - **Linhas de Código**: ~15,000
@@ -259,4 +318,4 @@ Esta versão adiciona integração completa com o sistema HikCentral Professiona
 ---
 
 *Mantido por: Equipe de Desenvolvimento Mega Feira*
-*Última atualização: 20/08/2025*
+*Última atualização: 13/11/2025*
