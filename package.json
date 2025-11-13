@@ -1,6 +1,6 @@
 {
   "name": "facial-capture-mobile",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Sistema de captura facial mobile-first para eventos",
   "main": "index.js",
   "scripts": {
