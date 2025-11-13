@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
+import { cache, CacheTTL } from '../../../lib/cache';
 
 const prisma = new PrismaClient();
 
@@ -13,40 +14,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { eventCode } = req.query;
 
-    // Build where clause
-    const where: any = {
-      isActive: true,
-      // Excluir estandes auto-criados por campos personalizados
-      NOT: {
-        description: {
-          contains: 'Auto-criado pelo campo:'
-        }
-      }
-    };
+    // Cache key baseado no eventCode
+    const cacheKey = `stands:public:${eventCode || 'all'}`;
 
-    if (eventCode) {
-      where.eventCode = eventCode;
-    }
+    // Tentar buscar do cache
+    const result = await cache.getOrSet(
+      cacheKey,
+      async () => {
+        // Build where clause
+        const where: any = {
+          isActive: true,
+          // Excluir estandes auto-criados por campos personalizados
+          NOT: {
+            description: {
+              contains: 'Auto-criado pelo campo:'
+            }
+          }
+        };
 
-    // Get all active stands with participant count
-    const stands = await prisma.stand.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        description: true,
-        maxRegistrations: true,
-        location: true,
-        eventCode: true,
-        _count: {
-          select: { participants: true }
+        if (eventCode) {
+          where.eventCode = eventCode;
         }
+
+        // Get all active stands with participant count
+        const stands = await prisma.stand.findMany({
+          where,
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            maxRegistrations: true,
+            location: true,
+            eventCode: true,
+            _count: {
+              select: { participants: true }
+            }
+          },
+          orderBy: {
+            name: 'asc'
+          }
+        });
+
+        return stands;
       },
-      orderBy: {
-        name: 'asc'
-      }
-    });
+      CacheTTL.MEDIUM // 5 minutos
+    );
+
+    const stands = result;
 
     // Calculate availability - Return ALL active stands (including full ones)
     const availableStands = stands.map(stand => ({

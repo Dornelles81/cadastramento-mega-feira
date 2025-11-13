@@ -1,11 +1,13 @@
-// Prisma schema for NEON database
+// Prisma schema for NEON database - Optimized for 4000 participants, 800 stands
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Participant {
@@ -61,6 +63,11 @@ model Participant {
   approvalLogs ApprovalLog[]
 
   @@index([standId])
+  @@index([approvalStatus])
+  @@index([hikCentralSyncStatus])
+  @@index([eventCode])
+  @@index([createdAt(sort: Desc)])
+  @@index([cpf])
   @@map("participants")
 }
 
@@ -112,6 +119,8 @@ model Stand {
   @@index([code])
   @@index([eventCode])
   @@index([isActive])
+  @@index([eventCode, isActive])
+  @@index([name])
   @@map("stands")
 }
 
@@ -130,7 +139,11 @@ model CustomField {
   eventCode   String?  // Optional: field specific to an event
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
+  @@index([active])
+  @@index([eventCode])
+  @@index([order])
+  @@index([active, order])
   @@map("custom_fields")
 }
 

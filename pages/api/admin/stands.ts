@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
+import { invalidateStandCache } from '../../../lib/cache';
 
 const prisma = new PrismaClient();
 
@@ -200,6 +201,9 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse): Promise<vo
     }
   });
 
+  // Invalidar cache de estandes
+  invalidateStandCache();
+
   res.status(201).json({
     success: true,
     stand
@@ -277,6 +281,9 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse): Promise<voi
     }
   });
 
+  // Invalidar cache de estandes
+  invalidateStandCache(id as string);
+
   res.status(200).json({
     success: true,
     stand
@@ -320,6 +327,9 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse): Promise<
   await prisma.stand.delete({
     where: { id: id as string }
   });
+
+  // Invalidar cache de estandes
+  invalidateStandCache(id as string);
 
   res.status(200).json({
     success: true,

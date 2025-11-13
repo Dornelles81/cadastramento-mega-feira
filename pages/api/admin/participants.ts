@@ -24,8 +24,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (req.method === 'GET') {
-      // Get all participants with optional filtering
-      const { search, event, approvalStatus } = req.query;
+      // Get all participants with optional filtering and pagination
+      const { search, event, approvalStatus, page = '1', limit = '50' } = req.query;
+
+      // Parse pagination
+      const pageNum = parseInt(page as string, 10);
+      const limitNum = Math.min(parseInt(limit as string, 10), 100); // Max 100 por página
+      const skip = (pageNum - 1) * limitNum;
 
       let where: any = {};
 
@@ -47,11 +52,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where.approvalStatus = approvalStatus;
       }
 
+      // Buscar total de registros (para pagination)
+      const total = await prisma.participant.count({ where });
+
+      // Buscar participantes com select específico (otimizado)
       const participants = await prisma.participant.findMany({
         where,
+        select: {
+          id: true,
+          name: true,
+          cpf: true,
+          email: true,
+          phone: true,
+          eventCode: true,
+          standId: true,
+          consentAccepted: true,
+          captureQuality: true,
+          faceImageUrl: true,
+          // Não buscar faceData (binário pesado)
+          customData: true,
+          documents: true,
+          approvalStatus: true,
+          approvedAt: true,
+          approvedBy: true,
+          rejectionReason: true,
+          hikCentralSyncStatus: true,
+          hikCentralPersonId: true,
+          hikCentralSyncedAt: true,
+          hikCentralErrorMsg: true,
+          createdAt: true,
+          updatedAt: true
+        },
         orderBy: {
           createdAt: 'desc'
-        }
+        },
+        skip,
+        take: limitNum
       });
 
       // Format participants for response
@@ -62,11 +98,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         email: p.email,
         phone: p.phone,
         eventCode: p.eventCode,
+        standId: p.standId,
         consentAccepted: p.consentAccepted,
         captureQuality: p.captureQuality,
-        hasValidFace: !!p.faceImageUrl || !!p.faceData,
+        hasValidFace: !!p.faceImageUrl,
         faceImageUrl: p.faceImageUrl,
-        faceData: p.faceData ? true : false, // Don't send actual binary data in list
         customData: p.customData,
         documents: p.documents,
         approvalStatus: p.approvalStatus,
@@ -84,7 +120,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(200).json({
         success: true,
         participants: formattedParticipants,
-        total: formattedParticipants.length
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+        hasMore: skip + limitNum < total
       });
     }
 
