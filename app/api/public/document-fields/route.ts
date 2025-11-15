@@ -9,19 +9,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const eventCode = searchParams.get('eventCode')
     
-    // Get ONLY active document configurations that were explicitly configured by admin
+    // Get ONLY active documents (required field controls if user must fill it)
     const where: any = {
-      active: true,
-      required: true // Only show documents that admin marked as required
+      active: true
     }
-    
+
     // If eventCode is provided, get event-specific documents
     if (eventCode) {
       where.OR = [
-        { eventCode: null, active: true, required: true },
-        { eventCode: eventCode, active: true, required: true }
+        { eventCode: null, active: true },
+        { eventCode: eventCode, active: true }
       ]
-      delete where.required // Remove from top level when using OR
       delete where.active
     } else {
       where.eventCode = null
@@ -41,8 +39,18 @@ export async function GET(request: NextRequest) {
         order: true
       }
     })
-    
-    return NextResponse.json({ documents })
+
+    // Ensure acceptedFormats is always an array
+    const normalizedDocuments = documents.map(doc => ({
+      ...doc,
+      acceptedFormats: Array.isArray(doc.acceptedFormats)
+        ? doc.acceptedFormats
+        : (doc.acceptedFormats
+          ? ['jpg', 'jpeg', 'png']
+          : ['jpg', 'jpeg', 'png'])
+    }))
+
+    return NextResponse.json({ documents: normalizedDocuments })
   } catch (error) {
     console.error('Error fetching document fields:', error)
     return NextResponse.json(

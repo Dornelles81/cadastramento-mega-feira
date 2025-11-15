@@ -53,7 +53,14 @@
       "Bash(dir:*)",
       "Bash(del:*)",
       "Bash(netstat:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(git restore:*)",
+      "Bash(nul)",
+      "Bash(git rm:*)",
+      "Bash(DEPLOY-INSTRUCTIONS.md)",
+      "Bash(npm uninstall:*)",
+      "Bash(.npmrc)"
     ],
     "defaultMode": "acceptEdits"
   }

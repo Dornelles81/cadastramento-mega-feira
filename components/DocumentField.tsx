@@ -30,13 +30,20 @@ export default function DocumentField({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  
+
   const [mode, setMode] = useState<'idle' | 'camera' | 'preview'>('idle')
   const [preview, setPreview] = useState<string | null>(value?.imageData || null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Normalize acceptedFormats to always be an array
+  const normalizedFormats = Array.isArray(acceptedFormats)
+    ? acceptedFormats
+    : (typeof acceptedFormats === 'string'
+      ? [acceptedFormats]
+      : ['jpg', 'jpeg', 'png'])
 
   // Start camera
   const startCamera = async () => {
@@ -114,8 +121,8 @@ export default function DocumentField({
 
       // Check file format
       const extension = file.name.split('.').pop()?.toLowerCase()
-      if (extension && !acceptedFormats.includes(extension)) {
-        setError(`Formato não aceito. Use: ${acceptedFormats.join(', ')}`)
+      if (extension && !normalizedFormats.includes(extension)) {
+        setError(`Formato não aceito. Use: ${normalizedFormats.join(', ')}`)
         return
       }
 
@@ -346,13 +353,13 @@ export default function DocumentField({
       <input
         ref={fileInputRef}
         type="file"
-        accept={acceptedFormats.map(f => `.${f}`).join(',')}
+        accept={normalizedFormats.map(f => `.${f}`).join(',')}
         onChange={handleFileUpload}
         className="hidden"
       />
 
       <div className="text-xs text-gray-500 text-center">
-        Formatos: {acceptedFormats.join(', ').toUpperCase()} • Máx: {maxSizeMB}MB
+        Formatos: {normalizedFormats.join(', ').toUpperCase()} • Máx: {maxSizeMB}MB
       </div>
     </div>
   )
