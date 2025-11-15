@@ -31,10 +31,25 @@ export default function HomePage() {
     consent: false
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUpdateMode, setIsUpdateMode] = useState(false)
+  const [participantId, setParticipantId] = useState<string>('')
   const [textConfig, setTextConfig] = useState({
     successText: '✅ Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
     instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação'
   })
+
+  // Check for update mode on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const updateId = params.get('update')
+
+    if (updateId) {
+      console.log('🔄 Update mode detected for ID:', updateId)
+      setIsUpdateMode(true)
+      setParticipantId(updateId)
+      loadParticipantData(updateId)
+    }
+  }, [])
 
   // Load text configuration
   useEffect(() => {
@@ -57,6 +72,58 @@ export default function HomePage() {
     } catch (error) {
       console.error('Failed to load text config:', error)
       // Keep default values on error
+    }
+  }
+
+  const loadParticipantData = async (id: string) => {
+    try {
+      console.log('🔄 Loading participant data for ID:', id)
+      const response = await fetch(`/api/participants/get?id=${id}`)
+
+      if (response.ok) {
+        const { participant } = await response.json()
+        console.log('✅ Loaded participant data:', participant)
+
+        // Pre-fill registration data with all fields
+        const updatedData = {
+          name: participant.name || '',
+          cpf: participant.cpf || '',
+          email: participant.email || '',
+          phone: participant.phone || '',
+          event: participant.eventCode || '',
+          consent: true,
+          customData: {
+            ...participant.customData,
+            etapa: participant.customData?.etapa || '',
+            estande: participant.customData?.estande || '',
+            standCode: participant.standCode || participant.customData?.standCode || '',
+            mesa: participant.customData?.mesa || '',
+            documents: participant.documents || participant.customData?.documents || {}
+          }
+        }
+
+        console.log('📝 Setting registration data:', updatedData)
+
+        // Include face image if available
+        if (participant.faceImageUrl) {
+          console.log('📸 Loading existing face image')
+          updatedData.faceImage = participant.faceImageUrl
+        }
+
+        setRegistrationData(updatedData)
+
+        // Auto-accept consent and go to personal data step
+        setConsentChecked(true)
+        setCurrentStep('personal')
+
+        console.log('✅ Update mode initialized successfully')
+      } else {
+        console.error('❌ Failed to load participant data - Status:', response.status)
+        alert('Cadastro não encontrado. Por favor, faça um novo cadastro.')
+      }
+    } catch (error) {
+      console.error('❌ Error loading participant data:', error)
+      alert('Erro ao carregar dados. Por favor, tente novamente.')
     }
   }
 
@@ -124,19 +191,25 @@ export default function HomePage() {
       ...payload,
       faceImage: payload.faceImage.substring(0, 50) + '...' // Log truncated image
     })
-    
+
     try {
-      const response = await fetch('/api/register-fixed', {
+      // Use update endpoint if in update mode
+      const endpoint = isUpdateMode ? '/api/participants/update' : '/api/register-fixed'
+      const updatePayload = isUpdateMode ? { ...payload, id: participantId, documents: registrationData.customData?.documents } : payload
+
+      console.log(isUpdateMode ? '🔄 Updating existing registration' : '✨ Creating new registration')
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(updatePayload)
       })
 
       if (response.ok) {
         const result = await response.json()
-        console.log('✅ Registration successful:', result)
+        console.log(isUpdateMode ? '✅ Update successful:' : '✅ Registration successful:', result)
         setCurrentStep('success')
       } else {
         let errorData: any = {}
@@ -216,9 +289,26 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* Update Mode Banner */}
+            {isUpdateMode && (
+              <div className="bg-blue-100 border-2 border-blue-500 rounded-xl shadow-sm p-5 mb-6">
+                <div className="text-center">
+                  <div className="text-3xl mb-2">🔄</div>
+                  <h3 className="text-lg font-bold text-blue-900 mb-2">
+                    Modo de Atualização
+                  </h3>
+                  <p className="text-sm text-blue-800">
+                    Você está atualizando um cadastro existente.
+                    <br />
+                    Seus dados foram carregados automaticamente.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Steps Guide - Configurable */}
             <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-              <div 
+              <div
                 className="prose prose-sm max-w-none text-gray-700"
                 dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.instructionsText) }}
               />
@@ -428,7 +518,12 @@ export default function HomePage() {
             eventCode={registrationData.event}
             initialData={{
               name: registrationData.name,
-              cpf: registrationData.cpf
+              cpf: registrationData.cpf,
+              email: registrationData.email,
+              phone: registrationData.phone,
+              evento: registrationData.event,
+              mesa: registrationData.customData?.mesa,
+              ...registrationData.customData
             }}
           />
         </div>
@@ -471,13 +566,15 @@ export default function HomePage() {
             <div className="mb-4">
               <MegaFeiraLogo className="text-3xl" />
             </div>
-            <div className="text-5xl mb-3">✅</div>
+            <div className="text-5xl mb-3">{isUpdateMode ? '🔄' : '✅'}</div>
             <h1 className="text-xl font-bold text-green-600 mb-2">
-              Cadastro Realizado!
+              {isUpdateMode ? 'Cadastro Atualizado!' : 'Cadastro Realizado!'}
             </h1>
             <p className="text-sm text-gray-700">
               Parabéns, <strong>{registrationData.name}</strong>!<br/>
-              Seu cadastro foi concluído com sucesso
+              {isUpdateMode
+                ? 'Seus dados foram atualizados com sucesso'
+                : 'Seu cadastro foi concluído com sucesso'}
             </p>
           </div>
 

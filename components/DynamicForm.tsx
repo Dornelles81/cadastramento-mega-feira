@@ -155,16 +155,16 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
           console.log('📋 Filtered fields:', rawFields.length, '→', fieldsArray.length)
           setFields(fieldsArray)
           
-          // Initialize form data with default values
-          const initialData: any = {}
+          // Initialize form data with default values, preserving initialData
+          const defaultValues: any = {}
           fieldsArray.forEach((field: FormField) => {
             if (field.type === 'checkbox') {
-              initialData[field.fieldName] = false
+              defaultValues[field.fieldName] = false
             } else {
-              initialData[field.fieldName] = ''
+              defaultValues[field.fieldName] = ''
             }
           })
-          setFormData(initialData)
+          setFormData((prev: any) => ({ ...defaultValues, ...prev }))
           console.log('✅ Form initialized with:', fieldsArray.length, 'fields')
         } else {
           console.error('❌ Failed to fetch fields, using defaults. Status:', response.status)
@@ -183,13 +183,13 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
           !field.fieldName?.startsWith('_system_')
         )
         setFields(filteredDefaults)
-        
-        // Initialize with filtered defaults
-        const initialData: any = {}
+
+        // Initialize with filtered defaults, preserving initialData
+        const defaultValues: any = {}
         filteredDefaults.forEach((field: FormField) => {
-          initialData[field.fieldName] = field.type === 'checkbox' ? false : ''
+          defaultValues[field.fieldName] = field.type === 'checkbox' ? false : ''
         })
-        setFormData(initialData)
+        setFormData((prev: any) => ({ ...defaultValues, ...prev }))
       }
     } catch (error) {
       console.error('Critical error in loadFormFields:', error)

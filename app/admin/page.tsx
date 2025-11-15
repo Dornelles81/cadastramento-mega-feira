@@ -88,9 +88,18 @@ const MOCK_PARTICIPANTS: Participant[] = [
   }
 ]
 
+interface Stand {
+  code: string
+  name: string
+  count: number
+}
+
 export default function AdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedStand, setSelectedStand] = useState<string>('all')
+  const [stands, setStands] = useState<Stand[]>([])
+  const [darkMode, setDarkMode] = useState(false)
   // Event filter removed - showing all participants
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
   const [viewingImage, setViewingImage] = useState<Participant | null>(null)
@@ -98,6 +107,47 @@ export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [participantImages, setParticipantImages] = useState<Record<string, string>>({})
+
+  // Calculate stands and their counts whenever participants change
+  useEffect(() => {
+    const standCounts: Record<string, { name: string, count: number }> = {}
+
+    participants.forEach(participant => {
+      const standCode = participant.customData?.standCode || participant.customData?.estande || 'Sem estande'
+      if (!standCounts[standCode]) {
+        standCounts[standCode] = {
+          name: standCode,
+          count: 0
+        }
+      }
+      standCounts[standCode].count++
+    })
+
+    const standsArray: Stand[] = Object.entries(standCounts).map(([code, data]) => ({
+      code,
+      name: data.name,
+      count: data.count
+    })).sort((a, b) => b.count - a.count) // Sort by count descending
+
+    setStands(standsArray)
+  }, [participants])
+
+  // Load dark mode preference
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedDarkMode = localStorage.getItem('adminDarkMode')
+      setDarkMode(savedDarkMode === 'true')
+    }
+  }, [])
+
+  // Save dark mode preference
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode
+    setDarkMode(newDarkMode)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adminDarkMode', String(newDarkMode))
+    }
+  }
 
   // Check for saved password on mount
   useEffect(() => {
@@ -243,8 +293,21 @@ export default function AdminPage() {
     )
   }
 
-  // Use participants directly from API (already filtered)
-  const filteredParticipants = participants
+  // Filter participants by search term and selected stand
+  const filteredParticipants = participants.filter(participant => {
+    // Filter by search term
+    const matchesSearch = !searchTerm ||
+      participant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      participant.cpf.includes(searchTerm) ||
+      participant.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      participant.phone?.includes(searchTerm)
+
+    // Filter by selected stand
+    const participantStand = participant.customData?.standCode || participant.customData?.estande || ''
+    const matchesStand = selectedStand === 'all' || participantStand === selectedStand
+
+    return matchesSearch && matchesStand
+  })
 
   const formatEventName = (eventCode: string) => {
     switch(eventCode) {
@@ -374,10 +437,10 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className={`min-h-screen p-4 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-6">
+        <div className={`rounded-lg shadow-sm p-4 md:p-6 mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
               <img
@@ -386,18 +449,18 @@ export default function AdminPage() {
                 className="h-10 md:h-12 w-auto"
               />
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-1">
+                <h1 className={`text-xl md:text-2xl font-bold mb-1 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                   📊 Painel Administrativo
                 </h1>
-                <p className="text-sm text-gray-600">
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   Gerenciar registros de participantes
                 </p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
               <div className="text-left sm:text-right">
-                <div className="text-sm text-gray-500">Total de registros</div>
-                <div className="text-2xl font-bold text-mega-600">{participants.length}</div>
+                <div className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>Total de registros</div>
+                <div className={`text-2xl font-bold ${darkMode ? 'text-green-400' : 'text-mega-600'}`}>{participants.length}</div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <a
@@ -442,30 +505,73 @@ export default function AdminPage() {
                 >
                   ✅ <span className="hidden sm:inline ml-1">Aprovações</span>
                 </a>
+                <button
+                  onClick={toggleDarkMode}
+                  className={`inline-flex items-center px-3 py-2 text-sm rounded-lg transition-colors shadow-sm ${
+                    darkMode
+                      ? 'bg-yellow-500 text-gray-900 hover:bg-yellow-400'
+                      : 'bg-gray-700 text-white hover:bg-gray-600'
+                  }`}
+                  title={darkMode ? 'Modo Claro' : 'Modo Escuro'}
+                >
+                  {darkMode ? '☀️' : '🌙'} <span className="hidden sm:inline ml-1">{darkMode ? 'Claro' : 'Escuro'}</span>
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Search Filter */}
-        <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 mb-6">
+        {/* Search and Filter */}
+        <div className={`rounded-lg shadow-sm p-4 md:p-6 mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                 🔍 Buscar por nome ou CPF
               </label>
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 focus:border-mega-500 text-sm"
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-mega-500 text-sm ${
+                  darkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900'
+                }`}
                 placeholder="Digite o nome ou CPF..."
               />
             </div>
+            <div className="flex-1 sm:max-w-xs">
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                🏪 Filtrar por estande
+              </label>
+              <select
+                value={selectedStand}
+                onChange={(e) => setSelectedStand(e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-mega-500 text-sm ${
+                  darkMode
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              >
+                <option value="all">Todos os estandes ({participants.length})</option>
+                {stands.map(stand => (
+                  <option key={stand.code} value={stand.code}>
+                    {stand.name} ({stand.count})
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
-              onClick={() => setSearchTerm('')}
-              className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm whitespace-nowrap"
-              title="Limpar busca"
+              onClick={() => {
+                setSearchTerm('')
+                setSelectedStand('all')
+              }}
+              className={`px-4 py-3 rounded-lg transition-colors text-sm whitespace-nowrap ${
+                darkMode
+                  ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              title="Limpar filtros"
             >
               🧹 Limpar
             </button>
@@ -473,10 +579,10 @@ export default function AdminPage() {
         </div>
 
         {/* Results Summary */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div className={`rounded-lg shadow-sm p-4 mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 w-full sm:w-auto">
-              <p className="text-sm text-gray-600">
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 Mostrando <strong>{filteredParticipants.length}</strong> registros
                 {loading && <span className="ml-2 text-blue-500">🔄 Carregando...</span>}
               </p>
@@ -503,26 +609,26 @@ export default function AdminPage() {
         </div>
 
         {/* Participants Table */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className={`rounded-lg shadow-sm overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto">
-              <thead className="bg-gray-50">
+              <thead className={darkMode ? 'bg-gray-700' : 'bg-gray-50'}>
                 <tr>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm">Face</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm">Nome</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm">CPF</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden sm:table-cell">Status</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden md:table-cell">Evento</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Email</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Telefone</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Qualidade</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm hidden lg:table-cell">Cadastrado em</th>
-                  <th className="text-left px-2 md:px-4 py-3 font-semibold text-gray-700 text-xs md:text-sm whitespace-nowrap">Ações</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Face</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Nome</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>CPF</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden sm:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Evento</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Telefone</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Qualidade</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Cadastrado em</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
                 {filteredParticipants.map((participant) => (
-                  <tr key={participant.id} className="hover:bg-gray-50">
+                  <tr key={participant.id} className={darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}>
                     <td className="px-2 md:px-4 py-3">
                       <div className="flex items-center">
                         {participantImages[participant.id] ? (
@@ -546,8 +652,8 @@ export default function AdminPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-2 md:px-4 py-3 text-gray-900 text-xs md:text-sm">{participant.name}</td>
-                    <td className="px-2 md:px-4 py-3 text-gray-600 font-mono text-xs md:text-sm">{participant.cpf}</td>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{participant.name}</td>
+                    <td className={`px-2 md:px-4 py-3 font-mono text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.cpf}</td>
                     <td className="px-2 md:px-4 py-3 hidden sm:table-cell">
                       {participant.approvalStatus === 'approved' ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -568,15 +674,15 @@ export default function AdminPage() {
                         {formatEventName(participant.eventCode)}
                       </span>
                     </td>
-                    <td className="px-2 md:px-4 py-3 text-gray-600 text-sm hidden lg:table-cell">{participant.email || '-'}</td>
-                    <td className="px-2 md:px-4 py-3 text-gray-600 font-mono text-sm hidden lg:table-cell">{participant.phone || '-'}</td>
-                    <td className="px-2 md:px-4 py-3 text-gray-600 text-sm hidden lg:table-cell">
+                    <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.email || '-'}</td>
+                    <td className={`px-2 md:px-4 py-3 font-mono text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.phone || '-'}</td>
+                    <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {participant.captureQuality ?
                         `${Math.round(participant.captureQuality * 100)}%` :
                         '-'
                       }
                     </td>
-                    <td className="px-2 md:px-4 py-3 text-gray-600 text-xs md:text-sm hidden lg:table-cell">
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
                     </td>
                     <td className="px-2 md:px-4 py-3">
@@ -628,7 +734,7 @@ export default function AdminPage() {
           {filteredParticipants.length === 0 && (
             <div className="text-center py-12">
               <div className="text-4xl mb-4">😔</div>
-              <p className="text-gray-500">Nenhum registro encontrado</p>
+              <p className={darkMode ? 'text-gray-300' : 'text-gray-500'}>Nenhum registro encontrado</p>
             </div>
           )}
         </div>
@@ -751,7 +857,7 @@ export default function AdminPage() {
                               <span className="font-medium text-gray-600 capitalize">
                                 {key.replace(/_/g, ' ')}:
                               </span>
-                              <a 
+                              <a
                                 href={`/api${value}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -774,6 +880,203 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
+
+                {/* WhatsApp Communication Section */}
+                <div className="border-t pt-4 mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    💬 Comunicação via WhatsApp
+                  </label>
+
+                  {/* Production URL Toggle */}
+                  <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(editingParticipant as any).useProductionUrl || false}
+                        onChange={(e) => {
+                          setEditingParticipant({
+                            ...editingParticipant,
+                            useProductionUrl: e.target.checked
+                          } as any)
+                        }}
+                        className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+                      />
+                      <span className="text-xs font-medium text-gray-700">
+                        🌐 Usar domínio de produção (WhatsApp)
+                      </span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1 ml-6">
+                      {(editingParticipant as any).useProductionUrl
+                        ? '✅ Links serão clicáveis no WhatsApp'
+                        : '⚠️ localhost não é clicável no WhatsApp'}
+                    </p>
+                  </div>
+
+                  {/* Quick Message Templates */}
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-2">Templates rápidos:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseUrl = (editingParticipant as any).useProductionUrl
+                            ? 'https://cadastramento-mega-feira.vercel.app'
+                            : window.location.origin
+                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, detectamos um problema com a foto do seu cadastro.\n\n📸 Por favor, acesse o link abaixo para enviar uma nova foto:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
+                          setEditingParticipant({...editingParticipant, whatsappMessage: message})
+                        }}
+                        className="px-3 py-2 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition-colors"
+                      >
+                        📸 Nova Foto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseUrl = (editingParticipant as any).useProductionUrl
+                            ? 'https://cadastramento-mega-feira.vercel.app'
+                            : window.location.origin
+                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos de um novo documento para completar seu cadastro.\n\n📄 Por favor, acesse o link abaixo para enviar:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
+                          setEditingParticipant({...editingParticipant, whatsappMessage: message})
+                        }}
+                        className="px-3 py-2 bg-green-50 text-green-700 rounded text-xs hover:bg-green-100 transition-colors"
+                      >
+                        📄 Novo Documento
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, seu cadastro foi aprovado com sucesso! ✅\n\nAguardamos você no evento.`
+                          setEditingParticipant({...editingParticipant, whatsappMessage: message})
+                        }}
+                        className="px-3 py-2 bg-green-50 text-green-700 rounded text-xs hover:bg-green-100 transition-colors"
+                      >
+                        ✅ Aprovado
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseUrl = (editingParticipant as any).useProductionUrl
+                            ? 'https://cadastramento-mega-feira.vercel.app'
+                            : window.location.origin
+                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos que você atualize alguns dados do seu cadastro.\n\n📝 Acesse o link abaixo:\n\n${updateUrl}\n\nObrigado!`
+                          setEditingParticipant({...editingParticipant, whatsappMessage: message})
+                        }}
+                        className="px-3 py-2 bg-yellow-50 text-yellow-700 rounded text-xs hover:bg-yellow-100 transition-colors"
+                      >
+                        ⚠️ Atualizar Dados
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseUrl = (editingParticipant as any).useProductionUrl
+                            ? 'https://cadastramento-mega-feira.vercel.app'
+                            : window.location.origin
+                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          setEditingParticipant({...editingParticipant, whatsappMessage: updateUrl})
+                        }}
+                        className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded text-xs hover:bg-indigo-100 transition-colors"
+                      >
+                        🔗 Apenas Link
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Custom Message Input */}
+                  <div className="mb-3">
+                    <label className="block text-xs text-gray-600 mb-1">
+                      Mensagem personalizada:
+                    </label>
+                    <textarea
+                      value={(editingParticipant as any).whatsappMessage || ''}
+                      onChange={(e) => setEditingParticipant({
+                        ...editingParticipant,
+                        whatsappMessage: e.target.value
+                      } as any)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                      rows={4}
+                      placeholder="Digite sua mensagem aqui..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {(editingParticipant as any).whatsappMessage?.length || 0} caracteres
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    {/* Send WhatsApp Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const phone = editingParticipant.phone?.replace(/\D/g, '') || ''
+                        const message = (editingParticipant as any).whatsappMessage || `Olá ${editingParticipant.name}!`
+
+                        if (!phone) {
+                          alert('Telefone não cadastrado para este participante!')
+                          return
+                        }
+
+                        // Format phone: add 55 (Brazil) if not present
+                        const formattedPhone = phone.startsWith('55') ? phone : `55${phone}`
+
+                        // Encode message for URL
+                        const encodedMessage = encodeURIComponent(message)
+
+                        // Open WhatsApp Web
+                        window.open(
+                          `https://wa.me/${formattedPhone}?text=${encodedMessage}`,
+                          '_blank'
+                        )
+                      }}
+                      disabled={!editingParticipant.phone || !(editingParticipant as any).whatsappMessage}
+                      className="w-full py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <span>📱 Enviar via WhatsApp</span>
+                    </button>
+
+                    {/* Direct Link Actions */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseUrl = (editingParticipant as any).useProductionUrl
+                            ? 'https://cadastramento-mega-feira.vercel.app'
+                            : window.location.origin
+                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          navigator.clipboard.writeText(updateUrl).then(() => {
+                            alert('✅ Link copiado! Cole no WhatsApp ou onde desejar.')
+                          }).catch(() => {
+                            alert('❌ Erro ao copiar. Tente novamente.')
+                          })
+                        }}
+                        className="py-2 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-1"
+                      >
+                        <span>📋 Copiar Link</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseUrl = (editingParticipant as any).useProductionUrl
+                            ? 'https://cadastramento-mega-feira.vercel.app'
+                            : window.location.origin
+                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          window.open(updateUrl, '_blank')
+                        }}
+                        className="py-2 bg-purple-500 text-white rounded-lg text-xs font-semibold hover:bg-purple-600 transition-colors flex items-center justify-center gap-1"
+                      >
+                        <span>🔗 Abrir Link</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {!editingParticipant.phone && (
+                    <p className="text-xs text-red-500 mt-2 text-center">
+                      ⚠️ Telefone não cadastrado
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex space-x-3 mt-6">
