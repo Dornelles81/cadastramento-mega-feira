@@ -1,319 +1,607 @@
-// Prisma schema for NEON database - Optimized for 4000 participants, 800 stands
+// ============================================================================
+// PRISMA SCHEMA - MULTI-EVENT FACIAL REGISTRATION SYSTEM
+// ============================================================================
+// Multi-tenant architecture supporting multiple events with isolated data
+// Enhanced with authentication, authorization, and comprehensive audit trails
+// ============================================================================
+
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearch"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-model Participant {
-  id        String   @id @default(uuid())
-  name      String
-  cpf       String   @unique
-  email     String?
-  phone     String?
-  eventCode String?
+// ============================================================================
+// CORE MULTI-EVENT TABLES
+// ============================================================================
 
-  // Stand assignment
-  standId   String?
-  stand     Stand?   @relation(fields: [standId], references: [id])
+// Event Model - Central entity for multi-tenant isolation
+model Event {
+  id String @id @default(uuid())
 
-  // Facial data stored directly in NEON
-  faceImageUrl    String?  // NEON blob storage URL
-  faceData        Bytes?   // Encrypted biometric template
-  captureQuality  Float?   // Face detection quality score
+  // Identification
+  slug        String  @unique // URL-friendly: mega-feira-2025
+  name        String // Display name: "Mega Feira 2025"
+  code        String  @unique // System code: MEGA-FEIRA-2025
+  description String? // Event description
 
-  // Consent and compliance
-  consentAccepted Boolean  @default(false)
-  consentIp       String?
-  consentDate     DateTime?
+  // Schedule
+  startDate DateTime
+  endDate   DateTime
+  timezone  String   @default("America/Sao_Paulo")
 
-  // Mobile capture metadata
-  deviceInfo      String?  // User agent + device details
-  captureLocation String?  // Optional location data
+  // Capacity
+  maxCapacity  Int @default(2000)
+  currentCount Int @default(0)
 
-  // Dynamic custom fields data
-  customData      Json?    // Stores all custom field values as JSON
+  // Status
+  status   String  @default("draft") // draft, published, active, completed, cancelled
+  isActive Boolean @default(true)
+  isPublic Boolean @default(true) // Public registration or invitation only
 
-  // Document uploads
-  documents       Json?    // Stores document URLs and metadata
+  // Customization
+  theme    Json? // { primaryColor, secondaryColor, logo, banner }
+  settings Json? // { requireDocuments, autoApprove, notifyParticipants }
 
-  // Approval status
-  approvalStatus       String?  @default("pending") // pending, approved, rejected
-  approvedAt           DateTime? // Data da aprovação
-  approvedBy           String?  // Admin que aprovou
-  rejectionReason      String?  // Motivo da rejeição
+  // Features enabled for this event
+  features Json? // { facialRecognition, documentUpload, hikCentralSync }
 
-  // HikCentral sync status
-  hikCentralSyncStatus String?  @default("pending") // pending, syncing, synced, failed
-  hikCentralPersonId   String?  // ID no sistema HikCentral
-  hikCentralSyncedAt   DateTime? // Data da última sincronização
-  hikCentralErrorMsg   String?  // Mensagem de erro se houver falha
+  // Contact
+  organizerName  String?
+  organizerEmail String?
+  organizerPhone String?
+
+  // Location
+  venueName    String?
+  venueAddress String?
+  venueCity    String?
+  venueState   String?
+
+  // Registration URLs
+  registrationUrl String? // Custom URL for this event
+
+  // Metadata
+  metadata Json? // Additional custom fields
+  tags     String[] // Tags for categorization
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+  completedAt DateTime?
+
+  // Relations
+  participants    Participant[]
+  stands          Stand[]
+  admins          EventAdminAccess[]
+  customFields    CustomField[]
+  documentConfigs DocumentConfig[]
+  eventConfigs    EventConfig?
+  auditLogs       AuditLog[]
+
+  @@index([slug])
+  @@index([code])
+  @@index([status])
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status, isActive])
+  @@index([createdAt(sort: Desc)])
+  @@map("events")
+}
+
+// EventAdmin - Authentication and Authorization
+model EventAdmin {
+  id String @id @default(uuid())
+
+  // Personal info
+  name     String
+  email    String  @unique
+  password String // bcrypt hashed
+  phone    String?
+  avatar   String? // Profile picture URL
+
+  // Role and permissions
+  role String @default("EVENT_ADMIN") // SUPER_ADMIN | EVENT_ADMIN | VIEWER
+
+  // Status
+  isActive      Boolean @default(true)
+  emailVerified Boolean @default(false)
+
+  // Security
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  loginAttempts Int       @default(0)
+  lockedUntil   DateTime?
+
+  // Password reset
+  resetToken    String?
+  resetTokenExp DateTime?
+
+  // Email verification
+  verifyToken    String?
+  verifyTokenExp DateTime?
+
+  // Preferences
+  preferences Json? // UI preferences, notifications settings
 
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  syncLogs HikCentralSyncLog[]
+  events       EventAdminAccess[]
+  auditLogs    AuditLog[]
   approvalLogs ApprovalLog[]
 
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([lastLoginAt])
+  @@map("event_admins")
+}
+
+// EventAdminAccess - Junction table for admin-event permissions
+model EventAdminAccess {
+  id String @id @default(uuid())
+
+  // Relations
+  adminId String
+  admin   EventAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Permissions for this event
+  canView         Boolean @default(true)
+  canEdit         Boolean @default(false)
+  canApprove      Boolean @default(false)
+  canDelete       Boolean @default(false)
+  canExport       Boolean @default(false)
+  canManageStands Boolean @default(false)
+  canManageAdmins Boolean @default(false)
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Timestamps
+  grantedAt DateTime @default(now())
+  grantedBy String? // Admin who granted access
+  updatedAt DateTime @updatedAt
+
+  @@unique([adminId, eventId])
+  @@index([adminId])
+  @@index([eventId])
+  @@index([isActive])
+  @@map("event_admin_access")
+}
+
+// ============================================================================
+// PARTICIPANT AND REGISTRATION
+// ============================================================================
+
+model Participant {
+  id String @id @default(uuid())
+
+  // Event association (REQUIRED for multi-tenant)
+  eventId   String? // Temporarily optional for migration
+  event     Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventCode String? // Kept for backward compatibility
+
+  // Personal info
+  name  String
+  cpf   String
+  email String?
+  phone String?
+
+  // Stand assignment
+  standId String?
+  stand   Stand?  @relation(fields: [standId], references: [id])
+
+  // Facial data
+  faceImageUrl   String? // NEON blob storage URL
+  faceData       Bytes? // Encrypted biometric template
+  captureQuality Float? // Face detection quality score (0-1)
+
+  // Consent and compliance (LGPD)
+  consentAccepted Boolean   @default(false)
+  consentIp       String?
+  consentDate     DateTime?
+  consentText     String? // Version of consent accepted
+
+  // Mobile capture metadata
+  deviceInfo      String? // User agent + device details
+  captureLocation String? // Optional location data
+  browserInfo     String?
+
+  // Dynamic custom fields data
+  customData Json? // Stores all custom field values as JSON
+
+  // Document uploads
+  documents Json? // Stores document URLs and metadata
+
+  // Approval workflow
+  approvalStatus  String?   @default("pending") // pending, approved, rejected, review
+  approvedAt      DateTime?
+  approvedBy      String? // AdminId
+  rejectionReason String?
+  requiresReview  Boolean   @default(false)
+  reviewNotes     String?
+
+  // HikCentral integration
+  hikCentralSyncStatus String?   @default("pending") // pending, syncing, synced, failed
+  hikCentralPersonId   String?
+  hikCentralSyncedAt   DateTime?
+  hikCentralErrorMsg   String?
+
+  // Check-in tracking
+  checkedIn       Boolean   @default(false)
+  checkedInAt     DateTime?
+  checkedInBy     String?
+  checkInLocation String?
+
+  // Status flags
+  isActive  Boolean   @default(true)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
+
+  // Data retention (LGPD)
+  retentionDate DateTime? // Auto-delete after this date
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  syncLogs     HikCentralSyncLog[]
+  approvalLogs ApprovalLog[]
+
+  // @@unique([eventId, cpf]) // CPF must be unique per event - DISABLED FOR MIGRATION
+  @@index([eventId])
   @@index([standId])
+  @@index([eventCode])
+  @@index([cpf])
   @@index([approvalStatus])
   @@index([hikCentralSyncStatus])
-  @@index([eventCode])
+  @@index([checkedIn])
+  @@index([isActive])
+  @@index([isDeleted])
   @@index([createdAt(sort: Desc)])
-  @@index([cpf])
+  @@index([eventId, isActive])
+  @@index([eventId, approvalStatus])
   @@map("participants")
 }
 
-model Event {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  eventCode   String   @unique
-  startDate   DateTime
-  endDate     DateTime
-  maxCapacity Int      @default(2000)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+// ============================================================================
+// STAND MANAGEMENT
+// ============================================================================
 
-  @@map("events")
-}
-
-// Stand Management (Booth/Kiosk registration limits)
 model Stand {
-  id              String   @id @default(uuid())
-  name            String   // Nome do estande (ex: "Estande 1", "Samsung", "Apple")
-  code            String   @unique // Código único (ex: "STAND001", "SAMSUNG")
-  description     String?  // Descrição opcional
-
-  // Registration limits
-  maxRegistrations Int     @default(3) // Limite máximo de registros faciais
-  currentCount     Int     @default(0) // Contador atual de registros
+  id String @id @default(uuid())
 
   // Event association
-  eventCode        String? // Associar a um evento específico
+  eventId   String? // Temporarily optional for migration
+  event     Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventCode String? // Kept for backward compatibility during migration
 
-  // Contact and metadata
-  responsibleName  String? // Nome do responsável
-  responsibleEmail String? // Email do responsável
-  responsiblePhone String? // Telefone do responsável
-  location         String? // Localização física do estande
-  notes            Json?   // Notas adicionais em JSON
+  // Stand info
+  name        String
+  code        String
+  description String?
+  category    String? // Type of stand: sponsor, exhibitor, booth
+
+  // Registration limits
+  maxRegistrations Int @default(3)
+  currentCount     Int @default(0)
+
+  // Contact info
+  responsibleName  String?
+  responsibleEmail String?
+  responsiblePhone String?
+
+  // Location
+  location String?
+  hall     String?
+  area     String?
+  position String?
+
+  // Metadata
+  notes    Json?
+  metadata Json?
 
   // Status
-  isActive         Boolean @default(true)
+  isActive Boolean @default(true)
 
   // Timestamps
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  participants     Participant[]
+  participants Participant[]
 
+  // @@unique([eventId, code]) // DISABLED FOR MIGRATION
+  @@index([eventId])
   @@index([code])
-  @@index([eventCode])
   @@index([isActive])
-  @@index([eventCode, isActive])
-  @@index([name])
+  @@index([eventId, isActive])
   @@map("stands")
 }
 
+// ============================================================================
+// CONFIGURATION TABLES
+// ============================================================================
+
 // Custom Field Management
 model CustomField {
-  id          String   @id @default(uuid())
-  fieldName   String   @unique // Internal field name (e.g., "company", "role")
-  label       String   // Display label (e.g., "Empresa", "Cargo")
-  type        String   // text, number, select, date, email, tel, checkbox
-  required    Boolean  @default(false)
+  id String @id @default(uuid())
+
+  // Event association
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Field definition
+  fieldName String // Internal name: company, role
+  label     String // Display label: Empresa, Cargo
+  type      String // text, number, select, date, email, tel, checkbox
+
+  // Validation
+  required    Boolean @default(false)
   placeholder String?
-  options     Json?    // For select/radio fields: ["Option1", "Option2"]
-  validation  Json?    // Validation rules: { minLength: 3, maxLength: 100, pattern: "regex" }
-  order       Int      @default(0) // Display order
-  active      Boolean  @default(true)
-  eventCode   String?  // Optional: field specific to an event
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  options     Json? // For select/radio
+  validation  Json? // Validation rules
 
+  // Display
+  order    Int     @default(0)
+  group    String? // Group fields together
+  helpText String?
+
+  // Status
+  active Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fieldName, eventId]) // Prevent duplicates per event
+  @@index([eventId])
   @@index([active])
-  @@index([eventCode])
   @@index([order])
-  @@index([active, order])
+  @@index([eventId, active, order])
   @@map("custom_fields")
-}
-
-// Event Configuration
-model EventConfig {
-  id              String   @id @default(uuid())
-  eventName       String
-  eventCode       String   @unique
-  logoUrl         String?
-  primaryColor    String?  // Hex color
-  secondaryColor  String?  // Hex color
-  requireConsent  Boolean  @default(true)
-  requireFace     Boolean  @default(true)
-  customMessage   String?  // Custom welcome message
-  defaultFields   Json?    // Which default fields to show/hide
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@map("event_configs")
 }
 
 // Document Requirements Configuration
 model DocumentConfig {
-  id            String   @id @default(uuid())
-  documentType  String   @unique // rg, cnh, cpf_doc, foto_3x4, comprovante_residencia, etc
-  label         String   // "RG", "CNH", "Foto 3x4", etc
-  description   String?  // Instructions for the document
-  required      Boolean  @default(false)
-  enableOCR     Boolean  @default(false) // Enable OCR extraction
-  acceptedFormats Json?  // ["jpg", "png", "pdf"]
-  maxSizeMB     Int      @default(5)
-  order         Int      @default(0)
-  active        Boolean  @default(true)
-  eventCode     String?  // Optional: specific to an event
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  id String @id @default(uuid())
+
+  // Event association
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Document definition
+  documentType String // rg, cnh, cpf_doc, foto_3x4
+  label        String
+  description  String?
+
+  // Requirements
+  required        Boolean @default(false)
+  enableOCR       Boolean @default(false)
+  acceptedFormats Json? // ["jpg", "png", "pdf"]
+  maxSizeMB       Int     @default(5)
+
+  // Display
+  order    Int     @default(0)
+  icon     String?
+  helpText String?
+
+  // Status
+  active Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([active])
   @@map("document_configs")
 }
 
-// Audit Log for tracking changes
+// Event Configuration (UI/UX customization)
+model EventConfig {
+  id String @id @default(uuid())
+
+  // Event association
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Branding
+  logoUrl        String?
+  bannerUrl      String?
+  faviconUrl     String?
+  primaryColor   String? // Hex color
+  secondaryColor String?
+  accentColor    String?
+
+  // Registration settings
+  requireConsent   Boolean @default(true)
+  requireFace      Boolean @default(true)
+  requireDocuments Boolean @default(false)
+  autoApprove      Boolean @default(false)
+
+  // Messages
+  welcomeMessage String?
+  successMessage String?
+  consentText    String?
+
+  // Features
+  enableCheckIn Boolean @default(false)
+  enableQRCode  Boolean @default(false)
+  enableExport  Boolean @default(true)
+
+  // Notifications
+  notifyOnRegister Boolean @default(false)
+  notifyOnApprove  Boolean @default(false)
+  adminEmail       String?
+
+  // UI Settings
+  defaultFields Json? // Which fields to show/hide
+  customCSS     String? // Custom CSS overrides
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("event_configs")
+}
+
+// ============================================================================
+// AUDIT AND LOGGING
+// ============================================================================
+
+// Comprehensive Audit Log
 model AuditLog {
-  id            String   @id @default(uuid())
-  action        String   // "CREATE", "UPDATE", "DELETE"
-  entityType    String   // "participant", "event", "custom_field", etc
-  entityId      String   // ID of the affected entity
-  
-  // User who performed the action
-  adminUser     String   @default("admin") // Can be extended for multi-admin
-  adminIp       String?  // IP address of admin
-  
-  // Change details
-  previousData  Json?    // Previous state (for updates/deletes)
-  newData       Json?    // New state (for creates/updates)
-  changes       Json?    // Specific fields that changed
-  
-  // Additional context
-  description   String?  // Human-readable description
-  metadata      Json?    // Any additional metadata
-  
-  createdAt     DateTime @default(now())
-  
-  @@index([entityType, entityId])
+  id String @id @default(uuid())
+
+  // Event context
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // Action details
+  action     String // CREATE, UPDATE, DELETE, LOGIN, EXPORT, APPROVE, etc
+  entityType String // participant, event, admin, stand, etc
+  entityId   String?
+
+  // Admin who performed action
+  adminId    String?
+  admin      EventAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  adminUser  String? // Legacy field - kept for migration
+  adminEmail String? // Denormalized for retention
+  adminIp    String?
+  userAgent  String?
+
+  // Change tracking
+  previousData Json?
+  newData      Json?
+  changes      Json? // Diff of what changed
+
+  // Context
+  description String?
+  metadata    Json?
+
+  // Severity
+  severity String @default("INFO") // DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+  // Timestamp
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([adminId])
   @@index([action])
-  @@index([createdAt])
+  @@index([entityType])
+  @@index([entityType, entityId])
+  @@index([createdAt(sort: Desc)])
+  @@index([eventId, action])
   @@map("audit_logs")
 }
 
 // Approval/Rejection Log
 model ApprovalLog {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
+
+  // Participant
   participantId String
-  participant   Participant @relation(fields: [participantId], references: [id])
-  
-  action        String   // "approved" or "rejected"
-  previousStatus String  // Status before the action
-  newStatus     String   // Status after the action
-  
-  reason        String?  // Reason for approval/rejection
-  notes         String?  // Additional notes from admin
-  
-  // Admin who performed the action
-  adminUser     String   @default("admin")
-  adminIp       String?
-  
-  // Timestamps
-  createdAt     DateTime @default(now())
-  
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Action
+  action         String // approved, rejected, review_requested
+  previousStatus String
+  newStatus      String
+
+  // Reason
+  reason String?
+  notes  String?
+
+  // Admin
+  adminId    String?
+  admin      EventAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  adminUser  String? // Legacy field - kept for migration
+  adminEmail String?
+  adminIp    String?
+
+  // Timestamp
+  createdAt DateTime @default(now())
+
   @@index([participantId])
+  @@index([adminId])
   @@index([action])
   @@index([createdAt])
   @@map("approval_logs")
 }
 
-// HikCentral Integration Tables
+// ============================================================================
+// HIKCENTAL INTEGRATION (kept for compatibility)
+// ============================================================================
+
 model HikCentralConfig {
-  id                String   @id @default(uuid())
-  name              String   @default("default")
-  baseUrl           String
-  apiVersion        String   @default("/api/acs/v1")
-  authType          String   @default("apikey") // apikey or digest
-  username          String?
-  password          String?  // Encrypted
-  apiKey            String?  // Encrypted
-  apiSecret         String?  // Encrypted
-  
-  // Library configuration
-  libraryId         String   @default("1")
-  libraryType       String   @default("blackFD")
-  
-  // Limits and settings
-  batchSize         Int      @default(100)
-  maxRetries        Int      @default(3)
-  retryDelay        Int      @default(5000) // milliseconds
-  requestTimeout    Int      @default(30000) // milliseconds
-  rateLimit         Int      @default(10) // requests per second
-  
-  // Access control
+  id                 String   @id @default(uuid())
+  name               String   @default("default")
+  baseUrl            String
+  apiVersion         String   @default("/api/acs/v1")
+  authType           String   @default("apikey")
+  username           String?
+  password           String?
+  apiKey             String?
+  apiSecret          String?
+  libraryId          String   @default("1")
+  libraryType        String   @default("blackFD")
+  batchSize          Int      @default(100)
+  maxRetries         Int      @default(3)
+  retryDelay         Int      @default(5000)
+  requestTimeout     Int      @default(30000)
+  rateLimit          Int      @default(10)
   defaultAccessLevel String   @default("1")
-  validityDays      Int      @default(90)
-  
-  // Features
-  autoSync          Boolean  @default(false)
-  syncInterval      Int      @default(300) // seconds
-  webhookEnabled    Boolean  @default(false)
-  webhookUrl        String?
-  
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  validityDays       Int      @default(90)
+  autoSync           Boolean  @default(false)
+  syncInterval       Int      @default(300)
+  webhookEnabled     Boolean  @default(false)
+  webhookUrl         String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
   @@map("hikcental_configs")
 }
 
 model HikCentralSyncLog {
-  id                String   @id @default(uuid())
-  participantId     String
-  participant       Participant @relation(fields: [participantId], references: [id])
-  
-  syncType          String   // batch, individual, update, delete
-  syncStatus        String   // pending, processing, success, failed
-  syncDirection     String   @default("upload") // upload or download
-  
-  // Request/Response data
-  requestData       Json?    // Request sent to HikCentral
-  responseData      Json?    // Response from HikCentral
-  httpStatus        Int?     // HTTP status code
-  
-  // HikCentral data
-  hikCentralPersonId String?  // Person ID in HikCentral
-  hikCentralCardNo   String?  // Card number assigned
-  accessLevelIds     Json?    // Access levels assigned
-  
-  // Error tracking
-  errorCode         String?
-  errorMessage      String?
-  errorDetails      Json?
-  retryCount        Int      @default(0)
-  
-  // Timing
-  startedAt         DateTime @default(now())
-  completedAt       DateTime?
-  duration          Int?     // milliseconds
-  
-  // Batch information
-  batchId           String?
-  batchPosition     Int?     // Position in batch
-  
-  createdAt         DateTime @default(now())
-  
+  id                 String      @id @default(uuid())
+  participantId      String
+  participant        Participant @relation(fields: [participantId], references: [id])
+  syncType           String
+  syncStatus         String
+  syncDirection      String      @default("upload")
+  requestData        Json?
+  responseData       Json?
+  httpStatus         Int?
+  hikCentralPersonId String?
+  hikCentralCardNo   String?
+  accessLevelIds     Json?
+  errorCode          String?
+  errorMessage       String?
+  errorDetails       Json?
+  retryCount         Int         @default(0)
+  startedAt          DateTime    @default(now())
+  completedAt        DateTime?
+  duration           Int?
+  batchId            String?
+  batchPosition      Int?
+  createdAt          DateTime    @default(now())
+
   @@index([participantId])
   @@index([syncStatus])
   @@index([batchId])
@@ -322,61 +610,44 @@ model HikCentralSyncLog {
 }
 
 model HikCentralSyncBatch {
-  id                String   @id @default(uuid())
-  batchNumber       String   @unique // Format: BATCH-YYYYMMDD-NNNN
-  
-  syncType          String   // manual, scheduled, auto
-  syncStatus        String   // pending, processing, completed, failed, partial
-  
-  totalParticipants Int      @default(0)
-  successCount      Int      @default(0)
-  failedCount       Int      @default(0)
-  skippedCount      Int      @default(0)
-  
-  // Batch configuration
-  configUsed        Json?    // Config snapshot at time of sync
-  filterCriteria    Json?    // Filters applied for selection
-  
-  // Timing
+  id                String    @id @default(uuid())
+  batchNumber       String    @unique
+  syncType          String
+  syncStatus        String
+  totalParticipants Int       @default(0)
+  successCount      Int       @default(0)
+  failedCount       Int       @default(0)
+  skippedCount      Int       @default(0)
+  configUsed        Json?
+  filterCriteria    Json?
   scheduledAt       DateTime?
   startedAt         DateTime?
   completedAt       DateTime?
-  duration          Int?     // milliseconds
-  
-  // Admin tracking
-  triggeredBy       String?  // admin user or system
-  notes             String?  // Admin notes
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
+  duration          Int?
+  triggeredBy       String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
   @@index([syncStatus])
   @@index([createdAt])
   @@map("hikcental_sync_batches")
 }
 
 model HikCentralWebhookLog {
-  id                String   @id @default(uuid())
-  
-  eventType         String   // AccessControllerEvent, FaceRecognitionEvent, etc
-  eventData         Json     // Raw event data from HikCentral
-  
-  // Processing status
-  processStatus     String   @default("pending") // pending, processed, failed, ignored
-  processedAt       DateTime?
-  processingError   String?
-  
-  // Related data
-  participantId     String?  // If event relates to a participant
-  hikCentralPersonId String? // Person ID from event
-  
-  // Request metadata
-  sourceIp          String?
-  headers           Json?
-  signature         String?  // HMAC signature if used
-  
-  createdAt         DateTime @default(now())
-  
+  id                 String    @id @default(uuid())
+  eventType          String
+  eventData          Json
+  processStatus      String    @default("pending")
+  processedAt        DateTime?
+  processingError    String?
+  participantId      String?
+  hikCentralPersonId String?
+  sourceIp           String?
+  headers            Json?
+  signature          String?
+  createdAt          DateTime  @default(now())
+
   @@index([eventType])
   @@index([processStatus])
   @@index([participantId])

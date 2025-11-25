@@ -1,48 +1,95 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../lib/prisma'
 
+// Updated to support event-specific fields
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    const { eventCode } = req.query
+    const { eventId: eventIdParam, eventCode } = req.query
 
-    // Get all active custom fields
+    console.log('📋 form-fields request:', { eventIdParam, eventCode })
+
+    // If eventCode is provided, get the event to find its ID
+    // Suporta tanto slug (expofest-2026) quanto code (EXPOFEST-2026)
+    let eventId = eventIdParam as string | undefined
+
+    if (eventCode && !eventId) {
+      const eventCodeStr = eventCode as string;
+
+      // Primeiro tentar pelo slug (exato, minúsculas)
+      let event = await prisma.event.findUnique({
+        where: { slug: eventCodeStr.toLowerCase() },
+        select: { id: true, name: true, code: true, slug: true }
+      })
+
+      // Se não encontrar pelo slug, tentar pelo code (maiúsculas)
+      if (!event) {
+        event = await prisma.event.findUnique({
+          where: { code: eventCodeStr.toUpperCase() },
+          select: { id: true, name: true, code: true, slug: true }
+        })
+      }
+
+      console.log('🔍 Found event:', event)
+      eventId = event?.id
+    }
+
+    console.log('🎯 Using eventId:', eventId)
+
+    // Get all active custom fields for this event
+    // IMPORTANT: If eventId is provided, ONLY include event-specific fields (NOT global ones)
+    // Global fields (eventId: null) should only be included when no event is specified
     const customFields = await prisma.customField.findMany({
       where: {
         active: true,
-        ...(eventCode ? { 
-          OR: [
-            { eventCode: eventCode as string },
-            { eventCode: null }
-          ]
-        } : {}),
-        NOT: {
-          fieldName: {
-            startsWith: '_system_'
-          }
-        }
+        eventId: eventId || null, // Event-specific OR global (but not both)
+        NOT: [
+          { fieldName: { startsWith: '_system_' } },
+          { fieldName: { startsWith: '_text_' } }
+        ]
       },
       orderBy: { order: 'asc' }
     })
 
-    // Get system field configurations
+    console.log('📦 Found custom fields:', customFields.length, customFields.map(f => ({ name: f.fieldName, eventId: f.eventId })))
+
+    // Get system field configurations - ONLY for the specific event or global (but not both)
+    // Each event is completely isolated - if event has no configs, use code defaults
     const systemFieldConfigs = await prisma.customField.findMany({
       where: {
         fieldName: {
           startsWith: '_system_'
-        }
+        },
+        eventId: eventId || null // ONLY event-specific OR global (NOT both)
       }
     })
 
+    console.log('🔧 System field configs found:', systemFieldConfigs.map(c => ({
+      field: c.fieldName,
+      eventId: c.eventId,
+      required: c.required,
+      active: c.active
+    })))
+
     // Create a map of system field configurations
+    // ONLY use configs from the specified event (or global if no event)
+    // If event has no configs, defaults from code will be used (email=false, phone=false)
     const systemConfigMap = new Map()
+
     systemFieldConfigs.forEach(config => {
       const fieldName = config.fieldName.replace('_system_', '')
       systemConfigMap.set(fieldName, config)
     })
+
+    console.log('📊 Final system config map:', Array.from(systemConfigMap.entries()).map(([k, v]) => ({
+      field: k,
+      required: v.required,
+      active: v.active,
+      eventId: v.eventId
+    })))
 
     // Default system fields configuration with overrides from database
     const systemFields = [
@@ -88,9 +135,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const activeSystemFields = systemFields.filter(field => field.active)
     const allFields = [...activeSystemFields, ...customFields].sort((a, b) => a.order - b.order)
 
-    return res.status(200).json({ 
+    // Add cache control headers to prevent browser caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+
+    return res.status(200).json({
       fields: allFields,
-      customFieldsCount: customFields.length
+      customFieldsCount: customFields.length,
+      eventId: eventId || null
     })
   } catch (error) {
     console.error('Error fetching form fields:', error)
