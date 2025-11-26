@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 
 interface DocumentFieldProps {
   documentType: string
@@ -37,6 +37,7 @@ export default function DocumentField({
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [cameraRequested, setCameraRequested] = useState(false)
 
   // Normalize acceptedFormats to always be an array
   const normalizedFormats = Array.isArray(acceptedFormats)
@@ -45,27 +46,65 @@ export default function DocumentField({
       ? [acceptedFormats]
       : ['jpg', 'jpeg', 'png'])
 
-  // Start camera
-  const startCamera = async () => {
+  // Initialize camera stream when mode changes to 'camera'
+  const initializeCameraStream = async () => {
     try {
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Seu navegador não suporta acesso à câmera')
+      }
+
+      console.log('📷 Solicitando acesso à câmera...')
+      setError(null)
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
+        video: {
           facingMode: 'environment',
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
       })
-      
+
+      console.log('✅ Câmera acessada com sucesso')
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream
         setStream(mediaStream)
-        setMode('camera')
-        setError(null)
+        console.log('✅ Stream conectado ao vídeo')
+      } else {
+        console.error('❌ videoRef.current is null')
+        throw new Error('Erro ao inicializar visualização da câmera')
       }
-    } catch (err) {
-      console.error('Camera error:', err)
-      setError('Não foi possível acessar a câmera')
+    } catch (err: any) {
+      console.error('❌ Camera error:', err)
+      const errorMessage = err.name === 'NotAllowedError'
+        ? 'Permissão para acessar a câmera foi negada. Por favor, permita o acesso à câmera nas configurações do navegador.'
+        : err.name === 'NotFoundError'
+        ? 'Nenhuma câmera foi encontrada neste dispositivo.'
+        : err.message || 'Não foi possível acessar a câmera'
+
+      setError(errorMessage)
+      alert(errorMessage) // Show immediate feedback
+      setMode('idle') // Return to idle on error
     }
+  }
+
+  // Effect to initialize camera when mode changes to 'camera'
+  useEffect(() => {
+    if (mode === 'camera' && !stream) {
+      // Small delay to ensure videoRef is mounted
+      const timer = setTimeout(() => {
+        initializeCameraStream()
+      }, 100)
+
+      return () => clearTimeout(timer)
+    }
+  }, [mode])
+
+  // Start camera - just change mode
+  const startCamera = () => {
+    console.log('🎬 Iniciando modo câmera...')
+    setMode('camera')
   }
 
   // Stop camera

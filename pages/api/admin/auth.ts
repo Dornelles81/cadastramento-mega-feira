@@ -37,23 +37,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     const { password, action } = req.body
 
+    console.log('🔐 Auth request:', { action, hasPassword: !!password })
+
     if (action === 'login') {
       // Hash the provided password and compare
       const providedHash = crypto.createHash('sha256').update(password).digest('hex')
-      
+
+      console.log('🔑 Password check:', {
+        providedPassword: password,
+        expectedPassword: ADMIN_PASSWORD,
+        providedHash: providedHash.substring(0, 10) + '...',
+        expectedHash: ADMIN_PASSWORD_HASH.substring(0, 10) + '...',
+        match: providedHash === ADMIN_PASSWORD_HASH
+      })
+
       if (providedHash === ADMIN_PASSWORD_HASH) {
         // Generate session token
         const timestamp = Math.floor(Date.now() / (60 * 60 * 1000))
         const token = generateToken(timestamp)
-        
-        return res.status(200).json({ 
-          success: true, 
+
+        console.log('✅ Login successful')
+        return res.status(200).json({
+          success: true,
           token,
           message: 'Login realizado com sucesso'
         })
       } else {
-        return res.status(401).json({ 
-          success: false, 
+        console.log('❌ Login failed - password mismatch')
+        return res.status(401).json({
+          success: false,
           error: 'Senha incorreta'
         })
       }

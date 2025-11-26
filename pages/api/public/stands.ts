@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Build where clause
         const where: any = {
           isActive: true,
-          // Excluir estandes auto-criados por campos personalizados
+          // Excluir stands auto-criados por campos personalizados
           NOT: {
             description: {
               contains: 'Auto-criado pelo campo:'
@@ -32,8 +32,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         };
 
+        // Se eventCode foi fornecido, buscar o eventId correspondente
+        // Suporta tanto slug (expofest-2026) quanto code (EXPOFEST-2026)
         if (eventCode) {
-          where.eventCode = eventCode;
+          const eventCodeStr = eventCode as string;
+          console.log('🔍 Buscando evento com código/slug:', eventCodeStr);
+
+          // Primeiro tentar pelo slug (exato, minúsculas)
+          let event = await prisma.event.findUnique({
+            where: { slug: eventCodeStr.toLowerCase() },
+            select: { id: true, name: true, code: true, slug: true }
+          });
+
+          // Se não encontrar pelo slug, tentar pelo code (maiúsculas)
+          if (!event) {
+            event = await prisma.event.findUnique({
+              where: { code: eventCodeStr.toUpperCase() },
+              select: { id: true, name: true, code: true, slug: true }
+            });
+          }
+
+          console.log('📅 Evento encontrado:', event);
+
+          if (event) {
+            where.eventId = event.id;
+            console.log('✅ Filtrando stands por eventId:', event.id);
+          } else {
+            console.log('❌ Evento não encontrado, nenhum stand será retornado');
+            // Se o evento não existe, não retornar nenhum stand
+            where.eventId = 'non-existent';
+          }
         }
 
         // Get all active stands with participant count
@@ -56,12 +84,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         });
 
+        console.log('🏪 Stands encontrados:', stands.length);
         return stands;
       },
       CacheTTL.MEDIUM // 5 minutos
     );
 
     const stands = result;
+    console.log('📦 Retornando stands (incluindo cache):', stands.length);
 
     // Calculate availability - Return ALL active stands (including full ones)
     const availableStands = stands.map(stand => ({
@@ -92,7 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Public stands API error:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Erro ao carregar estandes'
+      message: 'Erro ao carregar stands'
     });
   } finally {
     await prisma.$disconnect();

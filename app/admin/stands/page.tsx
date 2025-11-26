@@ -87,11 +87,11 @@ export default function StandsManagementPage() {
         setStats(data);
         setStands(data.stands || []);
       } else {
-        alert('Erro ao carregar estandes');
+        alert('Erro ao carregar stands');
       }
     } catch (error) {
       console.error('Error loading stands:', error);
-      alert('Erro ao carregar estandes');
+      alert('Erro ao carregar stands');
     } finally {
       setLoading(false);
     }
@@ -118,18 +118,18 @@ export default function StandsManagementPage() {
       });
 
       if (response.ok) {
-        alert(editingStand ? 'Estande atualizado!' : 'Estande criado!');
+        alert(editingStand ? 'Stand atualizado!' : 'Stand criado!');
         setShowForm(false);
         setEditingStand(null);
         resetForm();
         loadStands();
       } else {
         const error = await response.json();
-        alert(error.error || 'Erro ao salvar estande');
+        alert(error.error || 'Erro ao salvar stand');
       }
     } catch (error) {
       console.error('Error saving stand:', error);
-      alert('Erro ao salvar estande');
+      alert('Erro ao salvar stand');
     }
   };
 
@@ -137,7 +137,7 @@ export default function StandsManagementPage() {
     const password = localStorage.getItem('adminPassword') || 'admin123';
 
     try {
-      // Buscar detalhes completos do estande incluindo participantes
+      // Buscar detalhes completos do stand incluindo participantes
       const response = await fetch(`/api/admin/stands?id=${stand.id}`, {
         headers: {
           'Authorization': `Bearer ${password}`
@@ -161,16 +161,16 @@ export default function StandsManagementPage() {
         });
         setShowForm(true);
       } else {
-        alert('Erro ao carregar detalhes do estande');
+        alert('Erro ao carregar detalhes do stand');
       }
     } catch (error) {
       console.error('Error loading stand details:', error);
-      alert('Erro ao carregar detalhes do estande');
+      alert('Erro ao carregar detalhes do stand');
     }
   };
 
   const handleDelete = async (standId: string) => {
-    if (!confirm('Tem certeza que deseja deletar este estande?')) return;
+    if (!confirm('Tem certeza que deseja deletar este stand?')) return;
 
     const password = localStorage.getItem('adminPassword') || 'admin123';
 
@@ -183,20 +183,20 @@ export default function StandsManagementPage() {
       });
 
       if (response.ok) {
-        alert('Estande deletado!');
+        alert('Stand deletado!');
         loadStands();
       } else {
         const error = await response.json();
-        alert(error.error || 'Erro ao deletar estande');
+        alert(error.error || 'Erro ao deletar stand');
       }
     } catch (error) {
       console.error('Error deleting stand:', error);
-      alert('Erro ao deletar estande');
+      alert('Erro ao deletar stand');
     }
   };
 
   const handleRemoveParticipant = async (participantId: string) => {
-    if (!confirm('Tem certeza que deseja remover este participante do estande?')) return;
+    if (!confirm('Tem certeza que deseja remover este participante do stand?')) return;
 
     const password = localStorage.getItem('adminPassword') || 'admin123';
 
@@ -211,8 +211,8 @@ export default function StandsManagementPage() {
       });
 
       if (response.ok) {
-        alert('Participante removido do estande!');
-        // Recarregar detalhes do estande
+        alert('Participante removido do stand!');
+        // Recarregar detalhes do stand
         if (editingStand) {
           handleEdit(editingStand);
         }
@@ -279,8 +279,8 @@ export default function StandsManagementPage() {
   const downloadExcelTemplate = () => {
     // Download the Excel template file from public folder
     const link = document.createElement('a');
-    link.href = '/modelo-importacao-estandes.xlsx';
-    link.download = 'modelo-importacao-estandes.xlsx';
+    link.href = '/modelo-importacao-stands.xlsx';
+    link.download = 'modelo-importacao-stands.xlsx';
     link.click();
   };
 
@@ -314,8 +314,8 @@ export default function StandsManagementPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Gerenciar Estandes</h1>
-              <p className="text-gray-600 mt-1">Configure limites de registros faciais por estande</p>
+              <h1 className="text-3xl font-bold text-gray-900">Gerenciar Stands</h1>
+              <p className="text-gray-600 mt-1">Configure limites de registros faciais por stand</p>
             </div>
             <button
               onClick={() => router.push('/admin')}
@@ -329,15 +329,15 @@ export default function StandsManagementPage() {
           {stats && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
               <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-blue-600 font-medium">Total de Estandes</p>
+                <p className="text-sm text-blue-600 font-medium">Total de Stands</p>
                 <p className="text-3xl font-bold text-blue-900">{stats.total}</p>
               </div>
               <div className="bg-green-50 p-4 rounded-lg">
-                <p className="text-sm text-green-600 font-medium">Estandes Ativos</p>
+                <p className="text-sm text-green-600 font-medium">Stands Ativos</p>
                 <p className="text-3xl font-bold text-green-900">{stats.active}</p>
               </div>
               <div className="bg-red-50 p-4 rounded-lg">
-                <p className="text-sm text-red-600 font-medium">Estandes Cheios</p>
+                <p className="text-sm text-red-600 font-medium">Stands Cheios</p>
                 <p className="text-3xl font-bold text-red-900">{stats.full}</p>
               </div>
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -360,7 +360,7 @@ export default function StandsManagementPage() {
             }}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
           >
-            {showForm ? 'Cancelar' : '+ Novo Estande'}
+            {showForm ? 'Cancelar' : '+ Novo Stand'}
           </button>
           <button
             onClick={() => setShowImportModal(true)}
@@ -374,7 +374,7 @@ export default function StandsManagementPage() {
         {showImportModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
-              <h3 className="text-xl font-bold mb-4">Importar Estandes via Excel</h3>
+              <h3 className="text-xl font-bold mb-4">Importar Stands via Excel</h3>
 
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -437,13 +437,13 @@ export default function StandsManagementPage() {
         {showForm && (
           <div className="bg-white rounded-lg shadow p-6 mb-6">
             <h2 className="text-xl font-bold mb-4">
-              {editingStand ? 'Editar Estande' : 'Novo Estande'}
+              {editingStand ? 'Editar Stand' : 'Novo Stand'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nome do Estande *
+                    Nome do Stand *
                   </label>
                   <input
                     type="text"
@@ -451,13 +451,13 @@ export default function StandsManagementPage() {
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ex: Samsung, Apple, Estande 1"
+                    placeholder="Ex: Samsung, Apple, Stand 1"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Código do Estande *
+                    Código do Stand *
                   </label>
                   <input
                     type="text"
@@ -566,7 +566,7 @@ export default function StandsManagementPage() {
                     className="h-4 w-4 text-blue-600"
                   />
                   <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
-                    Estande Ativo
+                    Stand Ativo
                   </label>
                 </div>
               </div>
@@ -634,7 +634,7 @@ export default function StandsManagementPage() {
                   type="submit"
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                 >
-                  {editingStand ? 'Atualizar' : 'Criar'} Estande
+                  {editingStand ? 'Atualizar' : 'Criar'} Stand
                 </button>
                 <button
                   type="button"
@@ -655,7 +655,7 @@ export default function StandsManagementPage() {
         {/* Stands List */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="p-6">
-            <h2 className="text-xl font-bold mb-4">Lista de Estandes</h2>
+            <h2 className="text-xl font-bold mb-4">Lista de Stands</h2>
 
             {loading ? (
               <div className="text-center py-8">
@@ -663,7 +663,7 @@ export default function StandsManagementPage() {
               </div>
             ) : stands.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500">Nenhum estande cadastrado</p>
+                <p className="text-gray-500">Nenhum stand cadastrado</p>
               </div>
             ) : (
               <div className="overflow-x-auto">

@@ -4,7 +4,7 @@ import { invalidateStandCache } from '../../../lib/cache';
 
 const prisma = new PrismaClient();
 
-// API para gerenciamento de Estandes (CRUD)
+// API para gerenciamento de Stands (CRUD)
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   // Basic authentication check
   const authHeader = req.headers.authorization;
@@ -47,11 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-// GET - Listar estandes ou buscar por ID
+// GET - Listar stands ou buscar por ID
 async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   const { id, code, eventCode, active } = req.query;
 
-  // Buscar estande específico por ID
+  // Buscar stand específico por ID
   if (id) {
     const stand = await prisma.stand.findUnique({
       where: { id: id as string },
@@ -81,7 +81,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
     return;
   }
 
-  // Buscar estande por código
+  // Buscar stand por código
   if (code) {
     const stand = await prisma.stand.findUnique({
       where: { code: code as string },
@@ -101,9 +101,9 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
     return;
   }
 
-  // Listar todos os estandes com filtros opcionais
+  // Listar todos os stands com filtros opcionais
   const where: any = {
-    // Excluir estandes auto-criados por campos personalizados
+    // Excluir stands auto-criados por campos personalizados
     NOT: {
       description: {
         contains: 'Auto-criado pelo campo:'
@@ -149,7 +149,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
   });
 }
 
-// POST - Criar novo estande
+// POST - Criar novo stand
 async function handlePost(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   const {
     name,
@@ -185,7 +185,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse): Promise<vo
     return;
   }
 
-  // Criar estande
+  // Criar stand
   const stand = await prisma.stand.create({
     data: {
       name,
@@ -201,7 +201,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse): Promise<vo
     }
   });
 
-  // Invalidar cache de estandes
+  // Invalidar cache de stands
   invalidateStandCache();
 
   res.status(201).json({
@@ -210,7 +210,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse): Promise<vo
   });
 }
 
-// PUT - Atualizar estande
+// PUT - Atualizar stand
 async function handlePut(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   const { id } = req.query;
 
@@ -232,7 +232,7 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse): Promise<voi
     isActive
   } = req.body;
 
-  // Verificar se estande existe
+  // Verificar se stand existe
   const existingStand = await prisma.stand.findUnique({
     where: { id: id as string },
     include: {
@@ -257,7 +257,7 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse): Promise<voi
     return;
   }
 
-  // Atualizar estande
+  // Atualizar stand
   const updateData: any = {};
 
   if (name !== undefined) updateData.name = name;
@@ -281,7 +281,7 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse): Promise<voi
     }
   });
 
-  // Invalidar cache de estandes
+  // Invalidar cache de stands
   invalidateStandCache(id as string);
 
   res.status(200).json({
@@ -290,7 +290,7 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse): Promise<voi
   });
 }
 
-// DELETE - Deletar estande
+// DELETE - Deletar stand
 async function handleDelete(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   const { id } = req.query;
 
@@ -299,7 +299,7 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse): Promise<
     return;
   }
 
-  // Verificar se estande existe e se tem participantes
+  // Verificar se stand existe e se tem participantes
   const existingStand = await prisma.stand.findUnique({
     where: { id: id as string },
     include: {
@@ -323,12 +323,12 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse): Promise<
     return;
   }
 
-  // Deletar estande
+  // Deletar stand
   await prisma.stand.delete({
     where: { id: id as string }
   });
 
-  // Invalidar cache de estandes
+  // Invalidar cache de stands
   invalidateStandCache(id as string);
 
   res.status(200).json({

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
 import dynamic from 'next/dynamic'
 
 // Import RichTextEditor dynamically to avoid SSR issues
@@ -49,7 +50,6 @@ export default function FieldsManagerPage() {
   const [editingField, setEditingField] = useState<CustomField | null>(null)
   const [showNewField, setShowNewField] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   const [showTextConfig, setShowTextConfig] = useState(false)
   const [textConfig, setTextConfig] = useState({
@@ -57,62 +57,32 @@ export default function FieldsManagerPage() {
     instructionsText: ''
   })
   const router = useRouter()
+  const { data: session, status } = useSession()
 
-  // Check authentication
+  // Check authentication with NextAuth
   useEffect(() => {
-    checkAuth()
-  }, [])
+    if (status === 'unauthenticated') {
+      router.push('/admin/login')
+    } else if (status === 'authenticated') {
+      const user = session?.user as any
+      if (user?.role !== 'SUPER_ADMIN') {
+        router.push('/admin/dashboard')
+      }
+    }
+  }, [status, session, router])
 
   // Load custom fields
   useEffect(() => {
-    if (isAuthenticated) {
+    if (status === 'authenticated') {
       loadFields()
       loadTextConfig()
     }
-  }, [isAuthenticated])
-
-  const checkAuth = async () => {
-    const token = sessionStorage.getItem('adminFieldsAuth')
-    
-    if (!token) {
-      router.push('/admin/fields/login')
-      return
-    }
-
-    try {
-      const response = await fetch('/api/admin/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, action: 'verify' })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.valid) {
-          setIsAuthenticated(true)
-        } else {
-          sessionStorage.removeItem('adminFieldsAuth')
-          router.push('/admin/fields/login')
-        }
-      } else {
-        sessionStorage.removeItem('adminFieldsAuth')
-        router.push('/admin/fields/login')
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error)
-      router.push('/admin/fields/login')
-    }
-  }
+  }, [status])
 
   const loadFields = async () => {
     setLoading(true)
     try {
-      const token = sessionStorage.getItem('adminFieldsAuth')
-      const response = await fetch('/api/admin/fields', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await fetch('/api/admin/fields')
       if (response.ok) {
         const data = await response.json()
         
@@ -167,12 +137,10 @@ export default function FieldsManagerPage() {
       }
       
       const method = field.id ? 'PUT' : 'POST'
-      const token = sessionStorage.getItem('adminFieldsAuth')
       const response = await fetch('/api/admin/fields', {
         method,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+        headers: {
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(field)
       })
@@ -187,8 +155,7 @@ export default function FieldsManagerPage() {
             const syncResponse = await fetch('/api/admin/sync-field-stands', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
               },
               body: JSON.stringify({
                 fieldName: field.fieldName,
@@ -203,19 +170,19 @@ export default function FieldsManagerPage() {
               console.log('Stand sync results:', syncData);
               setNotification({
                 type: 'success',
-                message: `Campo salvo e ${syncData.synced} estandes sincronizados!`
+                message: `Campo salvo e ${syncData.synced} stands sincronizados!`
               });
             } else {
               setNotification({
                 type: 'success',
-                message: 'Campo salvo, mas houve erro na sincronização dos estandes'
+                message: 'Campo salvo, mas houve erro na sincronização dos stands'
               });
             }
           } catch (syncError) {
             console.error('Sync error:', syncError);
             setNotification({
               type: 'success',
-              message: 'Campo salvo, mas houve erro na sincronização dos estandes'
+              message: 'Campo salvo, mas houve erro na sincronização dos stands'
             });
           }
         } else {
@@ -241,12 +208,8 @@ export default function FieldsManagerPage() {
     if (!confirm('Tem certeza que deseja excluir este campo?')) return
 
     try {
-      const token = sessionStorage.getItem('adminFieldsAuth')
       const response = await fetch(`/api/admin/fields?id=${fieldId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        method: 'DELETE'
       })
 
       if (response.ok) {
@@ -255,6 +218,37 @@ export default function FieldsManagerPage() {
     } catch (error) {
       console.error('Failed to delete field:', error)
       alert('Erro ao excluir campo')
+    }
+  }
+
+  const handleToggleActive = async (field: CustomField) => {
+    try {
+      const response = await fetch('/api/admin/fields', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...field,
+          active: !field.active
+        })
+      })
+
+      if (response.ok) {
+        await loadFields()
+        setNotification({
+          type: 'success',
+          message: field.active ? 'Campo desativado' : 'Campo ativado'
+        })
+        setTimeout(() => setNotification(null), 3000)
+      }
+    } catch (error) {
+      console.error('Failed to toggle field:', error)
+      setNotification({
+        type: 'error',
+        message: 'Erro ao alterar status do campo'
+      })
+      setTimeout(() => setNotification(null), 5000)
     }
   }
 
@@ -290,12 +284,7 @@ export default function FieldsManagerPage() {
 
   const loadTextConfig = async () => {
     try {
-      const token = sessionStorage.getItem('adminFieldsAuth')
-      const response = await fetch('/api/admin/text-config', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await fetch('/api/admin/text-config')
       if (response.ok) {
         const data = await response.json()
         setTextConfig(data)
@@ -307,12 +296,10 @@ export default function FieldsManagerPage() {
 
   const saveTextConfig = async () => {
     try {
-      const token = sessionStorage.getItem('adminFieldsAuth')
       const response = await fetch('/api/admin/text-config', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(textConfig)
       })
@@ -561,7 +548,7 @@ export default function FieldsManagerPage() {
                     className="rounded"
                   />
                   <span className="text-sm font-medium text-gray-700">
-                    🔢 Controlar limite de registros por opção (para estandes)
+                    🔢 Controlar limite de registros por opção (para stands)
                   </span>
                 </label>
                 <p className="text-xs text-gray-500 mt-1 ml-6">
@@ -716,7 +703,7 @@ export default function FieldsManagerPage() {
             </div>
           )}
 
-          <div className="col-span-2">
+          <div className="col-span-2 space-y-2">
             <label className="flex items-center space-x-2">
               <input
                 type="checkbox"
@@ -725,6 +712,16 @@ export default function FieldsManagerPage() {
                 className="rounded"
               />
               <span className="text-sm font-medium text-gray-700">Campo Obrigatório</span>
+            </label>
+
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={localField.active !== false}
+                onChange={(e) => setLocalField({ ...localField, active: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium text-gray-700">Campo Ativo</span>
             </label>
           </div>
         </div>
@@ -754,7 +751,7 @@ export default function FieldsManagerPage() {
   }
 
   // Show loading screen while checking auth
-  if (!isAuthenticated) {
+  if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -801,19 +798,15 @@ export default function FieldsManagerPage() {
               </button>
               <button
                 onClick={async () => {
-                  const token = sessionStorage.getItem('adminFieldsAuth')
                   try {
                     const response = await fetch('/api/admin/update-required', {
-                      method: 'POST',
-                      headers: { 
-                        'Authorization': `Bearer ${token}`
-                      }
+                      method: 'POST'
                     })
                     if (response.ok) {
                       const data = await response.json()
-                      setNotification({ 
-                        type: 'success', 
-                        message: `${data.count} campos marcados como obrigatórios!` 
+                      setNotification({
+                        type: 'success',
+                        message: `${data.count} campos marcados como obrigatórios!`
                       })
                       setTimeout(() => setNotification(null), 3000)
                       await loadFields()
@@ -834,10 +827,7 @@ export default function FieldsManagerPage() {
                 ➕ Adicionar Campo
               </button>
               <button
-                onClick={() => {
-                  sessionStorage.removeItem('adminFieldsAuth')
-                  router.push('/admin/fields/login')
-                }}
+                onClick={() => signOut({ callbackUrl: '/admin/login' })}
                 className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
               >
                 🚪 Sair
@@ -943,6 +933,17 @@ export default function FieldsManagerPage() {
                       </span>
                     )}
                     <button
+                      onClick={() => handleToggleActive(field)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                        field.active
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                      title={field.active ? 'Clique para desativar' : 'Clique para ativar'}
+                    >
+                      {field.active ? '✓ Ativo' : '✕ Inativo'}
+                    </button>
+                    <button
                       onClick={() => setEditingField(field)}
                       className="text-blue-600 hover:text-blue-800"
                     >
@@ -954,11 +955,6 @@ export default function FieldsManagerPage() {
                     >
                       🗑️ Excluir
                     </button>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      field.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {field.active ? 'Ativo' : 'Inativo'}
-                    </span>
                   </div>
                 </div>
               ))}

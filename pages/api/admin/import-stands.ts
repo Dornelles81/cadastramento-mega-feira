@@ -94,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         // Get stand name and limit from Excel columns
         // Support multiple column name variations
-        const standName = row['Nome do Estande'] || row['Nome'] || row['Estande'] || row['name'] || row['Name'];
+        const standName = row['Nome do Stand'] || row['Nome do Estande'] || row['Nome'] || row['Stand'] || row['Estande'] || row['name'] || row['Name'];
         const maxRegistrations = parseInt(row['Número de Credenciais'] || row['Credenciais'] || row['Limite'] || row['limit'] || row['Limit'] || '3');
         const eventCode = row['Código do Evento'] || row['Evento'] || row['Event'] || 'MEGA-FEIRA-2025';
         const location = row['Localização'] || row['Local'] || row['Location'] || '';
@@ -103,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!standName) {
           results.errors.push({
             row: i + 2, // Excel row number (starts at 2 because of header)
-            error: 'Nome do estande não fornecido'
+            error: 'Nome do stand não fornecido'
           });
           continue;
         }

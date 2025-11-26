@@ -1,30 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
-import crypto from 'crypto';
+import { requireAuth, isSuperAdmin } from '../../../lib/auth';
 
 const prisma = new PrismaClient();
-
-// Verify auth token
-function verifyToken(token: string): boolean {
-  try {
-    const SECRET_KEY = process.env.SECRET_KEY || 'mega-feira-secret-key-2025';
-    const now = Date.now();
-
-    // Check last 24 hours of possible tokens
-    for (let i = 0; i < 24; i++) {
-      const timestamp = Math.floor((now - (i * 60 * 60 * 1000)) / (60 * 60 * 1000));
-      const data = `${timestamp}-${SECRET_KEY}`;
-      const validToken = crypto.createHash('sha256').update(data).digest('hex');
-      if (token === validToken) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    return false;
-  }
-}
 
 // API to sync field options with Stand table when limits are enabled
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
@@ -33,16 +11,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  // Check authentication
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!token || !verifyToken(token)) {
-    res.status(401).json({ error: 'Não autorizado' });
-    return;
-  }
-
   try {
+    // Check authentication using NextAuth
+    const session = await requireAuth(req, res);
+
+    // Only Super Admins can sync field stands
+    if (!isSuperAdmin(session)) {
+      res.status(403).json({ error: 'Acesso negado. Apenas Super Admin.' });
+      return;
+    }
     const { fieldName, options, validation, eventCode } = req.body;
 
     // Check if this field has limits enabled
@@ -173,10 +150,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
   } catch (error: any) {
-    console.error('Stand sync error:', error);
+    console.error('Error in /api/admin/sync-field-stands:', error);
+
+    if (error.message === 'Não autenticado') {
+      res.status(401).json({ error: 'Não autenticado' });
+      return;
+    }
+
     res.status(500).json({
-      error: 'Internal server error',
-      details: error.message
+      error: 'Erro ao processar requisição',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
     await prisma.$disconnect();

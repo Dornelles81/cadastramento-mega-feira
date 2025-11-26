@@ -77,8 +77,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { name, cpf, email, phone, standCode, faceImage, faceData, consent, customData } = value
 
     // Get eventCode from customData if it exists, otherwise use default
-    const eventCode = customData?.eventCode || customData?.evento || value.eventCode || 'MEGA-FEIRA-2025'
-    console.log('🎯 Event code:', eventCode)
+    const eventCodeOrSlug = customData?.eventCode || customData?.evento || value.eventCode || 'MEGA-FEIRA-2025'
+    console.log('🎯 Event code/slug:', eventCodeOrSlug)
+
+    // Find event - try by slug first (lowercase), then by code (uppercase)
+    // This supports both formats: 'expofest-2026' (slug) and 'EXPOFEST-2026' (code)
+    let event = await prisma.event.findUnique({
+      where: { slug: eventCodeOrSlug.toLowerCase() }
+    })
+
+    // If not found by slug, try by code (backward compatibility)
+    if (!event) {
+      event = await prisma.event.findUnique({
+        where: { code: eventCodeOrSlug.toUpperCase() }
+      })
+    }
+
+    if (!event) {
+      console.log('❌ Event not found:', eventCodeOrSlug)
+      return res.status(400).json({
+        error: 'Event not found',
+        message: 'Evento não encontrado'
+      })
+    }
+
+    console.log('✅ Event found:', event.name, '(ID:', event.id, ')')
 
     // Get standCode from customData if it exists
     let finalStandCode = standCode || customData?.standCode || customData?.estande
@@ -148,16 +171,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // Check for duplicate CPF
-    const existingUser = await prisma.participant.findUnique({
-      where: { cpf: cleanCPF }
+    // Check for duplicate CPF in this event (multi-tenant support)
+    const existingUser = await prisma.participant.findFirst({
+      where: {
+        cpf: cleanCPF,
+        eventId: event.id
+      }
     })
 
     if (existingUser) {
-      console.log('❌ CPF already exists')
+      console.log('❌ CPF already exists in this event')
       return res.status(409).json({
         error: 'CPF already registered',
-        message: 'Este CPF já está cadastrado'
+        message: 'Este CPF já está cadastrado neste evento'
       })
     }
 
@@ -166,8 +192,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (finalStandCode) {
       console.log('🔍 Checking stand limits for:', finalStandCode)
 
-      const stand = await prisma.stand.findUnique({
-        where: { code: finalStandCode },
+      const stand = await prisma.stand.findFirst({
+        where: {
+          code: finalStandCode,
+          eventId: event.id // Also filter by event for multi-tenant support
+        },
         include: {
           _count: {
             select: { participants: true }
@@ -181,7 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.log('❌ Stand not found but field requires limits')
           return res.status(400).json({
             error: 'Configuration error',
-            message: 'Estande não configurado. Entre em contato com o administrador.'
+            message: 'Stand não configurado. Entre em contato com o administrador.'
           })
         }
 
@@ -193,7 +222,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('❌ Stand is inactive')
         return res.status(400).json({
           error: 'Stand inactive',
-          message: 'Este estande está inativo'
+          message: 'Este stand está inativo'
         })
       }
 
@@ -204,7 +233,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('❌ Stand limit reached')
         return res.status(400).json({
           error: 'Stand limit reached',
-          message: `O limite de credenciais para este estande foi excedido. Entre em contato com o responsável.`,
+          message: `O limite de credenciais para este stand foi excedido. Entre em contato com o responsável.`,
           standName: stand.name,
           currentCount: currentCount,
           maxRegistrations: stand.maxRegistrations
@@ -285,7 +314,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cpf: cleanCPF,
         email: email || null,
         phone: phone ? phone.replace(/\D/g, '') : '',
-        eventCode: eventCode,
+        eventId: event.id, // Use eventId from found event
+        eventCode: event.code, // Keep eventCode for backward compatibility
         standId: standId, // Associate with stand if provided
         faceImageUrl: faceImageUrl, // Store complete face image
         faceData: encryptedFaceData,

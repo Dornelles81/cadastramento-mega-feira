@@ -38,10 +38,20 @@ export default function HomePage() {
     instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação'
   })
 
-  // Check for update mode on mount
+  // Check for update mode and event parameter on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const updateId = params.get('update')
+    const eventParam = params.get('event')
+
+    // Set event code from URL parameter
+    if (eventParam) {
+      console.log('🎯 Event parameter detected:', eventParam)
+      setRegistrationData(prev => ({
+        ...prev,
+        event: eventParam
+      }))
+    }
 
     if (updateId) {
       console.log('🔄 Update mode detected for ID:', updateId)
@@ -162,22 +172,21 @@ export default function HomePage() {
     // Debug registration data
     console.log('📸 Current registration data:', registrationData)
     
-    // Ensure eventCode has a value - handle various formats
-    let eventCode = registrationData.event || 'MEGA-FEIRA-2025'
-    
-    // If it's one of the event names, keep it, otherwise use default
-    const validEvents = ['MEGA-FEIRA-2025', 'Expointer', 'Freio de Ouro', 'Morfologia', 'Leilão']
-    if (!validEvents.includes(eventCode)) {
-      console.warn('⚠️ Invalid event code:', eventCode, '- using default')
-      eventCode = 'MEGA-FEIRA-2025'
-    }
-    
+    // Ensure eventCode has a value
+    // If we have an event slug, convert it to uppercase code format
+    // If not provided, use default for backward compatibility
+    let eventCode = registrationData.event
+      ? registrationData.event.toUpperCase().replace(/-/g, '-') // Convert slug to CODE format
+      : 'MEGA-FEIRA-2025' // Default fallback
+
+    console.log('🎯 Using eventCode:', eventCode, 'from slug:', registrationData.event)
+
     const payload = {
       name: registrationData.name || '',
       cpf: registrationData.cpf && registrationData.cpf.includes('.') ? registrationData.cpf : (registrationData.cpf || '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
       email: registrationData.email || '',
       phone: registrationData.phone || '',
-      eventCode: eventCode, // Always send a valid value
+      eventCode: eventCode, // Event code from slug
       faceImage: imageData,
       faceData: faceData, // Azure Face API data
       consent: registrationData.consent,
@@ -230,19 +239,33 @@ export default function HomePage() {
           errorMessage = `Erro no servidor (${response.status})`
         }
 
+        // Show user-friendly error message
         alert(`Erro no cadastro: ${errorMessage}`)
+
+        // Check if error is about CPF duplicate
+        if (errorData.error === 'CPF already registered' || errorMessage.includes('CPF já está cadastrado') || errorMessage.includes('CPF já')) {
+          // Reset submitting state and go back to personal data step
+          setIsSubmitting(false)
+          setCurrentStep('personal')
+          return
+        }
 
         // Check if error is about stand limit exceeded
         if (errorData.error === 'Stand limit reached' || errorMessage.includes('limite de credenciais') || errorMessage.includes('limite')) {
           // Reload page to start over
           window.location.reload()
+          return
         }
+
+        // For other errors, reset submitting state and go back to personal data
+        setIsSubmitting(false)
+        setCurrentStep('personal')
       }
     } catch (error) {
       console.error('💥 Registration error:', error)
       alert('Erro de conexão. Verifique sua internet e tente novamente.')
-    } finally {
       setIsSubmitting(false)
+      setCurrentStep('personal')
     }
   }
 

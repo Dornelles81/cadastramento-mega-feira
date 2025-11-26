@@ -22,8 +22,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get all participants with full data including documents
+    // ========================================================================
+    // EVENT FILTER: Support optional eventCode or eventId query parameter
+    // ========================================================================
+    const { eventCode, eventId } = req.query
+
+    let whereClause: any = {}
+
+    if (eventCode && typeof eventCode === 'string') {
+      // Filter by event code
+      whereClause.eventCode = eventCode
+      console.log('🔍 Filtering by eventCode:', eventCode)
+    } else if (eventId && typeof eventId === 'string') {
+      // Filter by event ID
+      whereClause.eventId = eventId
+      console.log('🔍 Filtering by eventId:', eventId)
+    } else {
+      // No filter - return all (for backward compatibility)
+      console.log('⚠️  No event filter - returning all participants')
+    }
+
+    // ========================================================================
+    // QUERY: Get participants with optional event filter
+    // ========================================================================
     const participants = await prisma.participant.findMany({
+      where: whereClause,
       select: {
         id: true,
         name: true,
@@ -31,6 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         email: true,
         phone: true,
         eventCode: true,
+        eventId: true,
         createdAt: true,
         consentAccepted: true,
         captureQuality: true,
@@ -48,6 +72,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             code: true,
             name: true
           }
+        },
+        event: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            slug: true
+          }
         }
       },
       orderBy: {
@@ -55,6 +87,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       take: 100 // Limit to last 100 participants
     })
+
+    console.log(`✅ Returning ${participants.length} participants`)
 
     // Format response
     const formattedParticipants = participants.map(participant => ({
@@ -64,6 +98,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email: participant.email || '',
       phone: participant.phone || '',
       eventCode: participant.eventCode || 'MEGA-FEIRA-2025',
+      eventId: participant.eventId,
+      eventName: participant.event?.name || '',
+      eventSlug: participant.event?.slug || '',
       createdAt: participant.createdAt.toISOString(),
       consentAccepted: participant.consentAccepted,
       captureQuality: participant.captureQuality || 0,
@@ -79,15 +116,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       standName: participant.stand?.name || null
     }))
 
-    res.status(200).json({ 
+    res.status(200).json({
       participants: formattedParticipants,
-      total: formattedParticipants.length 
+      total: formattedParticipants.length
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Admin participants query error:', error)
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: 'Internal server error',
       message: 'Erro ao consultar participantes'
     })

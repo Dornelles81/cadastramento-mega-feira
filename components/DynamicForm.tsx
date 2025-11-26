@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import DocumentField from './DocumentField'
+import FileField from './FileField'
 
 interface FormField {
   fieldName: string
@@ -263,7 +264,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
 
     // Validate stand selection if stands are available
     if (stands.length > 0 && !formData.standCode && !formData.estande) {
-      newErrors.standCode = 'Seleção de estande é obrigatória'
+      newErrors.standCode = 'Seleção de stand é obrigatória'
       isValid = false
     }
 
@@ -395,59 +396,56 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
         )
 
       case 'file':
+        // Use DocumentField if OCR is enabled, otherwise use FileField
+        if (field.validation?.enableOCR) {
+          return (
+            <DocumentField
+              documentType={field.fieldName}
+              label={field.label}
+              description={field.placeholder}
+              required={field.required}
+              enableOCR={true}
+              acceptedFormats={field.options || ['jpg', 'jpeg', 'png', 'pdf']}
+              maxSizeMB={field.validation?.maxSize || 5}
+              value={documentData[field.fieldName]}
+              onChange={(data) => handleDocumentChange(field.fieldName, data)}
+              onOCRExtract={handleOCRExtract}
+            />
+          )
+        }
         return (
-          <div>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-mega-500 transition-colors">
-              <input
-                type="file"
-                id={field.fieldName}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    handleFileUpload(field.fieldName, file, field)
+          <FileField
+            fieldName={field.fieldName}
+            label={field.label}
+            placeholder={field.placeholder}
+            required={field.required}
+            accept={field.options || []}
+            maxSizeMB={field.validation?.maxSize || 5}
+            value={uploadedFiles[field.fieldName]}
+            onChange={(data) => {
+              if (data) {
+                // Store file data in uploadedFiles state
+                setUploadedFiles(prev => ({
+                  ...prev,
+                  [field.fieldName]: {
+                    ...data,
+                    originalName: data.fileName,
+                    size: data.fileSize || 0
                   }
-                }}
-                accept={field.options?.join(',')}
-                className="hidden"
-              />
-              <label 
-                htmlFor={field.fieldName}
-                className="cursor-pointer block text-center"
-              >
-                {uploadedFiles[field.fieldName] ? (
-                  <div className="space-y-2">
-                    <div className="text-green-600 text-2xl">✅</div>
-                    <p className="text-sm font-medium text-gray-700">
-                      {uploadedFiles[field.fieldName].originalName}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {(uploadedFiles[field.fieldName].size / 1024).toFixed(2)} KB
-                    </p>
-                    <p className="text-xs text-mega-600 font-medium">
-                      Clique para trocar o arquivo
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-gray-400 text-3xl">📎</div>
-                    <p className="text-sm font-medium text-gray-700">
-                      Clique para anexar arquivo
-                    </p>
-                    {field.options && field.options.length > 0 && (
-                      <p className="text-xs text-gray-500">
-                        Aceitos: {field.options.join(', ')}
-                      </p>
-                    )}
-                    {field.validation?.maxSize && (
-                      <p className="text-xs text-gray-500">
-                        Máximo: {field.validation.maxSize}MB
-                      </p>
-                    )}
-                  </div>
-                )}
-              </label>
-            </div>
-          </div>
+                }))
+                // Also update form data
+                handleFieldChange(field.fieldName, data.fileName)
+              } else {
+                // Remove file
+                setUploadedFiles(prev => {
+                  const newFiles = { ...prev }
+                  delete newFiles[field.fieldName]
+                  return newFiles
+                })
+                handleFieldChange(field.fieldName, '')
+              }
+            }}
+          />
         )
 
       case 'text':
@@ -476,7 +474,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
           <input
             type={field.type}
             name={field.fieldName}
-            value={formData[field.fieldName]}
+            value={formData[field.fieldName] || ''}
             onChange={(e) => handleFieldChange(field.fieldName, e.target.value)}
             required={field.required}
             placeholder={field.placeholder}
@@ -512,7 +510,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
           {stands.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                🏪 Estande <span className="text-red-500">*</span>
+                🏪 Stand <span className="text-red-500">*</span>
               </label>
               <select
                 name="standCode"
@@ -527,7 +525,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
                   errors.standCode ? 'border-red-300' : 'border-gray-300'
                 }`}
               >
-                <option value="">Nenhum estande selecionado</option>
+                <option value="">Nenhum stand selecionado</option>
                 {stands.map(stand => (
                   <option key={stand.code} value={stand.code}>
                     {stand.name}
@@ -540,9 +538,9 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
               ) : (
                 <p className="text-xs text-gray-500 mt-2">
                   {formData.standCode ? (
-                    <>✓ Seu registro será associado ao estande selecionado</>
+                    <>✓ Seu registro será associado ao stand selecionado</>
                   ) : (
-                    <>Selecione o estande para o qual você foi convidado</>
+                    <>Selecione o stand para o qual você foi convidado</>
                   )}
                 </p>
               )}

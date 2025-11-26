@@ -1,12 +1,16 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { requireAuth, isSuperAdmin } from '../../../lib/auth'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Check for authorization
-  const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Não autorizado' })
-  }
+  try {
+    // Check authentication using NextAuth
+    const session = await requireAuth(req, res)
+
+    // Only Super Admins can manage text config
+    if (!isSuperAdmin(session)) {
+      return res.status(403).json({ error: 'Acesso negado. Apenas Super Admin.' })
+    }
 
   if (req.method === 'GET') {
     try {
@@ -104,5 +108,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  return res.status(405).json({ error: 'Method not allowed' })
+    return res.status(405).json({ error: 'Method not allowed' })
+  } catch (error: any) {
+    console.error('Error in /api/admin/text-config:', error)
+
+    if (error.message === 'Não autenticado') {
+      return res.status(401).json({ error: 'Não autenticado' })
+    }
+
+    return res.status(500).json({
+      error: 'Erro ao processar requisição',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    })
+  }
 }

@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { Providers } from './providers'
 // import './mega-feira-theme.css' // Temporarily disabled to avoid style conflicts
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter'
@@ -45,9 +46,11 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body className={`${inter.className} antialiased bg-gray-50 text-gray-900`}>
-        <div className="min-h-screen">
-          {children}
-        </div>
+        <Providers>
+          <div className="min-h-screen">
+            {children}
+          </div>
+        </Providers>
         
         {/* PWA Install Prompt */}
         <div id="install-prompt" className="hidden fixed bottom-4 left-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg">

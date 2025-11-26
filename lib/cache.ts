@@ -168,13 +168,35 @@ export function invalidateParticipantCache(participantId?: string) {
   cache.deletePattern('^stats:');
 }
 
-// Helper para invalidar cache relacionado a estandes
+// Helper para invalidar cache relacionado a stands
 export function invalidateStandCache(standId?: string) {
   if (standId) {
     cache.delete(`stand:${standId}`);
   }
   cache.deletePattern('^stands:');
   cache.deletePattern('^stats:');
+}
+
+// Helper para invalidar cache relacionado a campos personalizados
+export function invalidateFieldsCache(eventId?: string) {
+  if (eventId) {
+    cache.delete(`fields:${eventId}`);
+    cache.delete(`document-fields:${eventId}`);
+  }
+  cache.deletePattern('^fields:');
+  cache.deletePattern('^document-fields:');
+  console.log('🔄 Cache de campos invalidado');
+}
+
+// Helper para invalidar cache relacionado a eventos
+export function invalidateEventCache(eventId?: string) {
+  if (eventId) {
+    cache.delete(`event:${eventId}`);
+  }
+  cache.deletePattern('^events:');
+  cache.deletePattern('^event:');
+  invalidateFieldsCache(eventId);
+  console.log('🔄 Cache de eventos invalidado');
 }
 
 // TTLs pré-definidos

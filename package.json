@@ -11,8 +11,12 @@
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
     "vercel-build": "prisma generate && next build",
     "generate-excel-template": "node scripts/create-excel-template.js"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@azure/cognitiveservices-face": "^5.0.0",
@@ -21,10 +25,12 @@
     "@mediapipe/camera_utils": "^0.3.1640029074",
     "@mediapipe/face_detection": "^0.4.1646425229",
     "@prisma/client": "^5.7.0",
+    "@types/bcryptjs": "^2.4.6",
     "@types/formidable": "^3.4.5",
     "@types/jszip": "^3.4.0",
     "axios": "^1.11.0",
     "bcrypt": "^5.1.0",
+    "bcryptjs": "^3.0.3",
     "digest-fetch": "^3.1.1",
     "formidable": "^3.5.4",
     "framer-motion": "^10.16.0",
@@ -33,6 +39,7 @@
     "jspdf-autotable": "^5.0.2",
     "jszip": "^3.10.1",
     "next": "^15.5.2",
+    "next-auth": "^4.24.13",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^3.0.0",
@@ -45,6 +52,7 @@
     "autoprefixer": "^10.0.0",
     "postcss": "^8.0.0",
     "prisma": "^5.7.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.0.0"
   },
   "repository": {

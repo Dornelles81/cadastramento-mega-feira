@@ -6,18 +6,20 @@ const prisma = new PrismaClient()
 
 /**
  * Export API for external systems integration
- * 
+ *
  * Endpoints:
  * GET /api/export/participants - List all participants with images
  * GET /api/export/participants?format=excel - Export as Excel file
  * GET /api/export/participants?format=pdf - Export as PDF file
  * GET /api/export/participants?format=ultrathink - Format for Ultrathink system
  * GET /api/export/participants?format=hikcenter - Format for HikCenter system
- * 
+ *
  * Query Parameters:
  * - format: 'standard' | 'excel' | 'pdf' | 'ultrathink' | 'hikcenter' (default: 'standard')
  * - include_images: 'true' | 'false' (default: 'true')
  * - event: filter by event
+ * - stand: filter by single stand/estande code
+ * - stands: filter by multiple stand codes (comma-separated, e.g., "BASF,BAYER,SYNGENTA")
  * - date_from, date_to: filter by registration date
  * - page, limit: pagination (not used for Excel/PDF)
  */
@@ -46,6 +48,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       format = 'standard',
       include_images = 'true',
       event,
+      stand,
+      stands,
       date_from,
       date_to,
       page = '1',
@@ -54,30 +58,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get participants from database
     let where: any = {}
-    
+
     if (event && typeof event === 'string') {
       where.eventCode = event
     }
-    
+
     if (date_from && typeof date_from === 'string') {
       where.createdAt = { ...where.createdAt, gte: new Date(date_from) }
     }
-    
+
     if (date_to && typeof date_to === 'string') {
       where.createdAt = { ...where.createdAt, lte: new Date(date_to) }
     }
 
     // For Excel and PDF, get all records (no pagination)
     const isPaginatedFormat = !['excel', 'pdf'].includes(format as string)
-    
-    const participants = await prisma.participant.findMany({
+
+    let participants = await prisma.participant.findMany({
       where,
       skip: isPaginatedFormat ? (parseInt(page as string) - 1) * parseInt(limit as string) : undefined,
       take: isPaginatedFormat ? parseInt(limit as string) : undefined,
       orderBy: { createdAt: 'desc' }
     })
 
-    const totalCount = await prisma.participant.count({ where })
+    // Filter by stand(s) if provided (client-side filtering since it's in customData JSON field)
+    // Support both 'stand' (single) and 'stands' (comma-separated list)
+    const standFilter = stands || stand
+    if (standFilter && typeof standFilter === 'string') {
+      const standCodes = standFilter.split(',').map(s => s.trim())
+      participants = participants.filter(p => {
+        const customData = p.customData as any
+        const standCode = customData?.standCode || customData?.estande
+        return standCodes.includes(standCode)
+      })
+    }
+
+    // Get total count - use filtered participants length if stand filter is applied
+    const totalCount = standFilter ? participants.length : await prisma.participant.count({ where })
 
     // Format response based on requested format
     switch (format) {
@@ -115,19 +132,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 // Export as Excel file
 function exportAsExcel(participants: any[], res: NextApiResponse) {
   // Prepare data for Excel
-  const excelData = participants.map((p, index) => ({
-    'ID': p.id,
-    'Nome': p.name,
-    'CPF': p.cpf,
-    'Email': p.email || '-',
-    'Telefone': p.phone || '-',
-    'Evento': formatEventName(p.eventCode),
-    'Qualidade da Captura': p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-',
-    'Data de Cadastro': new Date(p.createdAt).toLocaleString('pt-BR'),
-    'Consentimento': p.consentAccepted ? 'Sim' : 'Não',
-    'Dispositivo': p.deviceInfo || '-',
-    'IP': p.consentIp || '-'
-  }))
+  const excelData = participants.map((p, index) => {
+    const customData = p.customData as any
+    const standCode = customData?.standCode || customData?.estande || '-'
+
+    return {
+      'ID': p.id,
+      'Nome': p.name,
+      'CPF': p.cpf,
+      'Email': p.email || '-',
+      'Telefone': p.phone || '-',
+      'Stand': standCode,
+      'Evento': formatEventName(p.eventCode),
+      'Qualidade da Captura': p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-',
+      'Data de Cadastro': new Date(p.createdAt).toLocaleString('pt-BR'),
+      'Consentimento': p.consentAccepted ? 'Sim' : 'Não',
+      'Dispositivo': p.deviceInfo || '-',
+      'IP': p.consentIp || '-'
+    }
+  })
 
   // Create workbook and worksheet
   const ws = XLSX.utils.json_to_sheet(excelData)
@@ -157,18 +180,24 @@ function exportAsExcel(participants: any[], res: NextApiResponse) {
 // Export as PDF file - Simplified HTML version
 function exportAsPDF(participants: any[], res: NextApiResponse) {
   // Generate HTML table
-  const tableRows = participants.map((p, index) => `
+  const tableRows = participants.map((p, index) => {
+    const customData = p.customData as any
+    const standCode = customData?.standCode || customData?.estande || '-'
+
+    return `
     <tr>
       <td>${index + 1}</td>
       <td>${p.name}</td>
       <td>${p.cpf}</td>
       <td>${p.email || '-'}</td>
       <td>${p.phone || '-'}</td>
+      <td>${standCode}</td>
       <td>${formatEventName(p.eventCode)}</td>
       <td>${p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-'}</td>
       <td>${new Date(p.createdAt).toLocaleDateString('pt-BR')}</td>
     </tr>
-  `).join('')
+    `
+  }).join('')
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -204,6 +233,7 @@ function exportAsPDF(participants: any[], res: NextApiResponse) {
             <th>CPF</th>
             <th>Email</th>
             <th>Telefone</th>
+            <th>Stand</th>
             <th>Evento</th>
             <th>Qualidade</th>
             <th>Data</th>
