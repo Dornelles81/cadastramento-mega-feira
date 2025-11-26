@@ -340,7 +340,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
             value={formData[field.fieldName]}
             onChange={(e) => handleFieldChange(field.fieldName, e.target.value)}
             required={field.required}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500 bg-white"
+            className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900"
           >
             <option value="">Selecione...</option>
             {field.options?.map(option => (
@@ -358,7 +358,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
             required={field.required}
             placeholder={field.placeholder}
             rows={4}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
+            className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-500"
           />
         )
 
@@ -370,9 +370,9 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
               name={field.fieldName}
               checked={formData[field.fieldName]}
               onChange={(e) => handleFieldChange(field.fieldName, e.target.checked)}
-              className="h-5 w-5 text-mega-600 rounded"
+              className="h-5 w-5 text-primary accent-primary rounded"
             />
-            <span className="text-gray-700">{field.placeholder || 'Marcar'}</span>
+            <span className="text-gray-200">{field.placeholder || 'Marcar'}</span>
           </label>
         )
 
@@ -391,7 +391,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
             }}
             required={field.required}
             placeholder={field.placeholder}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
+            className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-500"
           />
         )
 
@@ -463,7 +463,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
               required={field.required}
               placeholder={field.placeholder}
               maxLength={14}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
+              className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-500"
             />
           )
         }
@@ -478,7 +478,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
             onChange={(e) => handleFieldChange(field.fieldName, e.target.value)}
             required={field.required}
             placeholder={field.placeholder}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-mega-500 focus:border-mega-500"
+            className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-500"
           />
         )
     }
@@ -486,10 +486,10 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg p-6 shadow-sm">
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
         <div className="text-center py-8">
           <div className="spinner mx-auto mb-4"></div>
-          <p className="text-gray-500">Carregando formulário...</p>
+          <p className="text-gray-300">Carregando formulário...</p>
         </div>
       </div>
     )
@@ -498,19 +498,19 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
   console.log('🎨 Rendering form with fields:', fields.length, 'fields')
   
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-lg p-6 shadow-sm space-y-4">
+    <form onSubmit={handleSubmit} className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 space-y-4">
       {fields.length === 0 && documentFields.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-gray-500">Nenhum campo disponível no momento.</p>
+          <p className="text-gray-300">Nenhum campo disponível no momento.</p>
           <p className="text-sm text-gray-400 mt-2">Verifique a configuração dos campos no painel administrativo.</p>
         </div>
       ) : (
         <>
           {/* Stand Selection - Required */}
           {stands.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                🏪 Stand <span className="text-red-500">*</span>
+            <div className="bg-purple/20 border border-purple-light/30 rounded-lg p-4 mb-4">
+              <label className="block text-sm font-medium text-white mb-2">
+                Stand <span className="text-red-400">*</span>
               </label>
               <select
                 name="standCode"
@@ -521,8 +521,8 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
                   handleFieldChange('estande', e.target.value)
                 }}
                 required
-                className={`w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white ${
-                  errors.standCode ? 'border-red-300' : 'border-gray-300'
+                className={`w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 ${
+                  errors.standCode ? 'border-red-400' : 'border-white/30'
                 }`}
               >
                 <option value="">Nenhum stand selecionado</option>
@@ -534,11 +534,11 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
                 ))}
               </select>
               {errors.standCode ? (
-                <p className="text-red-500 text-sm mt-2">{errors.standCode}</p>
+                <p className="text-red-400 text-sm mt-2">{errors.standCode}</p>
               ) : (
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-400 mt-2">
                   {formData.standCode ? (
-                    <>✓ Seu registro será associado ao stand selecionado</>
+                    <span className="text-neon">✓ Seu registro será associado ao stand selecionado</span>
                   ) : (
                     <>Selecione o stand para o qual você foi convidado</>
                   )}
@@ -561,13 +561,13 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
               return (
                 <div key={field.fieldName}>
                   {field.type !== 'checkbox' && (
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {field.label} {field.required && '*'}
+                    <label className="block text-sm font-medium text-white mb-2">
+                      {field.label} {field.required && <span className="text-red-400">*</span>}
                     </label>
                   )}
                   {renderField(field)}
                   {errors[field.fieldName] && (
-                    <p className="text-red-500 text-sm mt-1">{errors[field.fieldName]}</p>
+                    <p className="text-red-400 text-sm mt-1">{errors[field.fieldName]}</p>
                   )}
                 </div>
               )
@@ -577,9 +577,9 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
           {documentFields.length > 0 && (
             <>
               {documentFields.length > 0 && fields.length > 0 && (
-                <div className="border-t pt-4 mt-4">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                    📄 Documentos
+                <div className="border-t border-white/20 pt-4 mt-4">
+                  <h3 className="text-sm font-semibold text-neon mb-3">
+                    Documentos
                   </h3>
                 </div>
               )}
@@ -608,18 +608,18 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
       <div className="pt-4 space-y-3">
         <button
           type="submit"
-          className="w-full py-4 bg-mega-500 text-white rounded-lg font-semibold hover:bg-mega-600 transition-colors"
+          className="w-full py-4 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-all duration-200 glow-primary"
         >
-          Continuar →
+          Continuar
         </button>
 
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="w-full py-4 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            className="w-full py-4 bg-white/10 text-white border border-white/20 rounded-lg font-semibold hover:bg-white/20 transition-all duration-200"
           >
-            ← Voltar
+            Voltar
           </button>
         )}
       </div>

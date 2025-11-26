@@ -14,14 +14,6 @@ export const metadata: Metadata = {
   title: 'Cadastro Mega Feira - Reconhecimento Facial',
   description: 'Sistema de cadastro com reconhecimento facial para eventos da Mega Feira',
   manifest: '/manifest.json',
-  themeColor: '#7CC69B',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover'
-  },
   icons: {
     icon: '/mega-feira-logo.svg',
     apple: '/mega-feira-logo.svg',
@@ -32,6 +24,15 @@ export const metadata: Metadata = {
     'apple-mobile-web-app-status-bar-style': 'default',
     'apple-mobile-web-app-title': 'Mega Feira',
   }
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#2DD4BF',
 }
 
 export default function RootLayout({
@@ -45,21 +46,21 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
-      <body className={`${inter.className} antialiased bg-gray-50 text-gray-900`}>
+      <body className={`${inter.className} antialiased bg-feira-900 text-white`}>
         <Providers>
           <div className="min-h-screen">
             {children}
           </div>
         </Providers>
-        
+
         {/* PWA Install Prompt */}
-        <div id="install-prompt" className="hidden fixed bottom-4 left-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg">
+        <div id="install-prompt" className="hidden fixed bottom-4 left-4 right-4 bg-primary text-white p-4 rounded-lg shadow-lg glow-primary">
           <p className="text-sm mb-2">Instale este app para melhor experiência</p>
           <div className="flex gap-2">
-            <button id="install-btn" className="bg-white text-green-600 px-3 py-1 rounded text-sm font-medium">
+            <button id="install-btn" className="bg-white text-primary-dark px-3 py-1 rounded text-sm font-medium">
               Instalar
             </button>
-            <button id="dismiss-btn" className="bg-green-700 px-3 py-1 rounded text-sm">
+            <button id="dismiss-btn" className="bg-primary-dark px-3 py-1 rounded text-sm">
               Agora não
             </button>
           </div>

@@ -2,6 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== MEGA FEIRA - CSS Variables ===== */
+:root {
+  /* Primary - Verde-água */
+  --primary: 162 63% 56%;        /* #47d7ac */
+  --primary-light: 162 63% 65%;  /* #6ee5c0 */
+  --primary-dark: 162 63% 45%;   /* #2db88f */
+
+  /* Secondary - Roxo */
+  --secondary: 280 89% 25%;      /* #500778 */
+  --secondary-light: 280 63% 43%; /* #7b2bb3 */
+  --secondary-dark: 280 89% 18%; /* #3a0556 */
+
+  /* Ring/Focus */
+  --ring: 162 63% 39%;           /* #27a37a */
+
+  /* Neon highlight */
+  --neon: 168 73% 51%;           /* #2DD4BF */
+
+  /* Roxo variants */
+  --roxo: 285 69% 35%;           /* #6A1B9A */
+  --roxo-claro: 291 75% 42%;     /* #9C27B0 */
+
+  /* Verde alternativo */
+  --verde: 125 46% 33%;          /* #2E7D32 */
+
+  /* Dark mode colors */
+  --dark-bg: 222 47% 11%;        /* #0f172a */
+  --dark-text: 210 40% 98%;      /* #f8fafc */
+  --escuro: 240 33% 8%;          /* #0f0f1a */
+
+  /* WhatsApp */
+  --whatsapp: 142 70% 49%;       /* #25D366 */
+  --whatsapp-hover: 142 70% 43%; /* #20BA5C */
+}
+
 /* CSS Reset for consistency */
 * {
   margin: 0;
@@ -44,9 +79,51 @@ html, body {
 }
 
 @layer components {
+  /* ===== GRADIENTES ===== */
+  .gradient-hero {
+    background: linear-gradient(135deg, #0a001a, #0a1a1a);
+  }
+
+  .gradient-purple-green {
+    background: linear-gradient(135deg, #500778 0%, #47d7ac 100%);
+  }
+
+  .gradient-text {
+    background: linear-gradient(to right, #10B981, #a855f7, #7C3AED);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-neon {
+    background: linear-gradient(135deg, #2DD4BF 0%, #47d7ac 50%, #6ee5c0 100%);
+  }
+
+  /* ===== BUTTONS ===== */
   /* Universal button styles */
   .btn-mega {
-    @apply py-4 bg-mega-500 text-white rounded-lg font-semibold hover:bg-mega-600 transition-colors;
+    @apply py-4 bg-primary text-white rounded-lg font-semibold transition-all duration-200;
+    @apply hover:bg-primary-dark hover:shadow-lg;
+  }
+
+  .btn-mega-outline {
+    @apply py-4 border-2 border-primary text-primary rounded-lg font-semibold transition-all duration-200;
+    @apply hover:bg-primary hover:text-white;
+  }
+
+  .btn-purple {
+    @apply py-4 bg-purple text-white rounded-lg font-semibold transition-all duration-200;
+    @apply hover:bg-purple-dark hover:shadow-lg;
+  }
+
+  .btn-neon {
+    @apply py-4 bg-neon text-white rounded-lg font-semibold transition-all duration-200;
+    @apply hover:bg-neon-600 hover:shadow-lg hover:shadow-neon/30;
+  }
+
+  .btn-whatsapp {
+    @apply py-4 bg-whatsapp text-white rounded-lg font-semibold transition-all duration-200;
+    @apply hover:bg-whatsapp-hover hover:shadow-lg;
   }
 
   .card-mega {
@@ -72,38 +149,38 @@ html, body {
   .desktop-hero {
     @apply lg:text-left lg:space-y-8;
   }
-  
+
   .desktop-form {
     @apply lg:max-w-md lg:mx-0 lg:bg-white lg:rounded-2xl lg:shadow-xl lg:p-8;
   }
-  
+
   .desktop-feature-card {
     @apply lg:flex lg:items-start lg:space-x-4 lg:p-6 lg:bg-white lg:rounded-xl lg:shadow-sm hover:lg:shadow-md lg:transition-shadow;
   }
-  
+
   .desktop-progress-step {
     @apply lg:flex lg:items-center lg:space-x-3;
   }
-  
+
   .desktop-form-grid {
     @apply lg:grid lg:grid-cols-2 lg:gap-4;
   }
-  
+
   .btn-primary {
-    @apply btn-mobile bg-blue-600 text-white;
-    @apply hover:bg-blue-700;
+    @apply btn-mobile bg-primary text-white;
+    @apply hover:bg-primary-dark;
   }
-  
+
   .btn-secondary {
-    @apply btn-mobile bg-gray-200 text-gray-800;
-    @apply hover:bg-gray-300;
+    @apply btn-mobile bg-purple text-white;
+    @apply hover:bg-purple-dark;
   }
 
   /* Mobile-optimized input */
   .input-mobile {
     @apply w-full px-4 py-3 rounded-lg border border-gray-300;
     @apply text-base bg-white; /* Prevent zoom on iOS */
-    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary;
     @apply min-h-[48px]; /* Accessibility */
   }
 
@@ -113,20 +190,20 @@ html, body {
     @apply shadow-2xl border-4 border-white;
     aspect-ratio: 3/4; /* Mobile camera ratio */
   }
-  
+
   .camera-overlay {
     @apply absolute inset-0 flex items-center justify-center;
     @apply bg-black bg-opacity-20 pointer-events-none;
   }
-  
+
   .face-detection-circle {
     @apply w-64 h-64 rounded-full border-4;
     @apply border-dashed border-white opacity-80;
     animation: pulse 2s ease-in-out infinite;
   }
-  
+
   .face-detected {
-    @apply border-green-500 border-solid;
+    @apply border-primary border-solid;
     animation: none;
   }
 
@@ -134,10 +211,23 @@ html, body {
   .skeleton {
     @apply animate-pulse bg-gray-200 rounded;
   }
-  
+
   .spinner {
     @apply animate-spin rounded-full border-4 border-gray-200;
-    @apply border-t-blue-600 w-8 h-8;
+    @apply border-t-primary w-8 h-8;
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(71, 215, 172, 0.4);
+  }
+
+  .glow-neon {
+    box-shadow: 0 0 20px rgba(45, 212, 191, 0.5);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(80, 7, 120, 0.4);
   }
 }
 
@@ -174,8 +264,14 @@ video {
 /* PWA optimizations */
 @media (display-mode: standalone) {
   body {
-    background: #3b82f6; /* Match theme color */
+    background: #0f172a; /* Dark theme */
   }
+}
+
+/* Dark mode body */
+.dark-mode {
+  background: #0f172a;
+  color: #f8fafc;
 }
 
 /* Animations */

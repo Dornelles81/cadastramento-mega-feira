@@ -15,22 +15,68 @@ module.exports = {
         'safe-right': 'env(safe-area-inset-right)',
       },
       
-      // Mega Feira brand colors
+      // Mega Feira brand colors - Nova Paleta
       colors: {
-        // Primary brand color - Mega Feira green
-        'mega': {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#7CC69B',  // Main brand green
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
+        // Primary - Verde-água principal
+        'primary': {
+          DEFAULT: '#47d7ac',
+          light: '#6ee5c0',
+          dark: '#2db88f',
+          50: '#ecfdf8',
+          100: '#d1fae8',
+          200: '#a7f3d5',
+          300: '#6ee5c0',
+          400: '#47d7ac',
+          500: '#2db88f',
+          600: '#27a37a',
+          700: '#208265',
+          800: '#1a6650',
+          900: '#155340',
         },
-        // Secondary brand color - Mega Feira dark
+        // Purple - Roxo Escuro secundário
+        'purple': {
+          DEFAULT: '#500778',
+          light: '#7b2bb3',
+          dark: '#3a0556',
+          50: '#faf5ff',
+          100: '#f3e8ff',
+          200: '#e9d5ff',
+          300: '#d8b4fe',
+          400: '#9C27B0',  // Roxo claro
+          500: '#6A1B9A',  // Roxo médio
+          600: '#7b2bb3',  // Purple Light
+          700: '#500778',  // Purple principal
+          800: '#3a0556',  // Purple Dark
+          900: '#2a0340',
+        },
+        // Verde Neon - Destaque
+        'neon': {
+          DEFAULT: '#2DD4BF',
+          50: '#ecfdf8',
+          100: '#d1fae8',
+          200: '#a7f3d5',
+          300: '#6ee5c0',
+          400: '#47d7ac',
+          500: '#2DD4BF',
+          600: '#14b8a6',
+          700: '#0d9488',
+          800: '#0f766e',
+          900: '#115e59',
+        },
+        // Mega brand (alias para primary)
+        'mega': {
+          50: '#ecfdf8',
+          100: '#d1fae8',
+          200: '#a7f3d5',
+          300: '#6ee5c0',
+          400: '#47d7ac',
+          500: '#2DD4BF',  // Verde Neon
+          600: '#2db88f',
+          700: '#27a37a',
+          800: '#208265',
+          900: '#155340',
+        },
+        // Feira - Dark theme colors
         'feira': {
           50: '#f8fafc',
           100: '#f1f5f9',
@@ -40,49 +86,45 @@ module.exports = {
           500: '#64748b',
           600: '#475569',
           700: '#334155',
-          800: '#2D3436',  // Main brand dark
-          900: '#0f172a',
+          800: '#0f0f1a',  // Escuro principal
+          900: '#0f172a',  // Fundo body dark
         },
-        // Green color palette
-        green: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
+        // Verde alternativo
+        'green': {
+          DEFAULT: '#2E7D32',
+          50: '#ecfdf5',
+          100: '#d1fae5',
+          200: '#a7f3cf',
+          300: '#6ee7b7',
+          400: '#34d399',
+          500: '#10B981',
+          600: '#059669',
+          700: '#2E7D32',
           800: '#166534',
           900: '#14532d',
         },
-        // Purple color palette
-        purple: {
-          50: '#faf5ff',
-          100: '#f3e8ff',
-          200: '#e9d5ff',
-          300: '#d8b4fe',
-          400: '#c084fc',
-          500: '#a855f7',
-          600: '#9333ea',
-          700: '#7e22ce',
-          800: '#6b21a8',
-          900: '#581c87',
+        // Semantic colors
+        'success': {
+          DEFAULT: '#47d7ac',
+          light: '#6ee5c0',
+          dark: '#2db88f',
+          50: '#ecfdf8',
+          500: '#47d7ac',
+          600: '#2db88f',
+          700: '#27a37a',
+          800: '#208265',
         },
-        // Keep existing semantic colors but updated
-        primary: {
-          50: '#f0fdf4',
-          500: '#7CC69B',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
+        // WhatsApp colors
+        'whatsapp': {
+          DEFAULT: '#25D366',
+          hover: '#20BA5C',
         },
-        success: {
-          50: '#f0fdf4',
-          500: '#7CC69B',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
+        // Dark mode colors
+        'dark': {
+          bg: '#0f172a',
+          text: '#f8fafc',
+          muted: '#ccc',
+          subtle: '#666',
         },
       },
       

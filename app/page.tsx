@@ -271,12 +271,12 @@ export default function HomePage() {
 
   if (currentStep === 'consent') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50">
+      <div className="min-h-screen gradient-hero">
         {/* Admin Access Icon */}
         <div className="absolute top-4 right-4 z-10">
           <a
             href="/admin"
-            className="inline-flex items-center justify-center w-10 h-10 bg-gray-700 text-white rounded-full hover:bg-gray-600 transition-colors shadow-lg"
+            className="inline-flex items-center justify-center w-10 h-10 bg-purple text-white rounded-full hover:bg-purple-light transition-colors shadow-lg"
             title="Admin"
           >
             <span className="text-lg">⚙️</span>
@@ -290,23 +290,23 @@ export default function HomePage() {
               <div className="mb-4">
                 <MegaFeiraLogo className="text-4xl" />
               </div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">
-                Bem-vindo ao APP Mega Feira! 🎯
+              <h1 className="text-xl font-bold text-white mb-2">
+                Bem-vindo ao APP Mega Feira!
               </h1>
-              <p className="text-sm text-gray-600 mb-3">
+              <p className="text-sm text-gray-300 mb-3">
                 Sua experiência em feiras e eventos começa aqui.
               </p>
-              <div className="text-xs text-gray-500 text-left bg-gray-50 rounded-lg p-3 mb-3">
+              <div className="text-xs text-gray-300 text-left bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 border border-white/20">
                 <p className="mb-2">
-                  Com nosso aplicativo, você tem acesso rápido e seguro aos melhores eventos do setor. 
+                  Com nosso aplicativo, você tem acesso rápido e seguro aos melhores eventos do setor.
                   Através do reconhecimento facial e cadastro simplificado, garantimos:
                 </p>
                 <div className="space-y-1">
-                  <p>✓ <strong>Entrada ágil</strong> - Sem filas, sem papel</p>
-                  <p>✓ <strong>Segurança</strong> - Seus dados protegidos pela LGPD</p>
-                  <p>✓ <strong>Praticidade</strong> - Tudo na palma da sua mão</p>
+                  <p><span className="text-neon">✓</span> <strong className="text-white">Entrada ágil</strong> - Sem filas, sem papel</p>
+                  <p><span className="text-neon">✓</span> <strong className="text-white">Segurança</strong> - Seus dados protegidos pela LGPD</p>
+                  <p><span className="text-neon">✓</span> <strong className="text-white">Praticidade</strong> - Tudo na palma da sua mão</p>
                 </div>
-                <p className="mt-3 text-center font-semibold text-gray-700">
+                <p className="mt-3 text-center font-semibold text-neon">
                   Vamos começar?
                 </p>
               </div>
@@ -314,13 +314,13 @@ export default function HomePage() {
 
             {/* Update Mode Banner */}
             {isUpdateMode && (
-              <div className="bg-blue-100 border-2 border-blue-500 rounded-xl shadow-sm p-5 mb-6">
+              <div className="bg-purple/20 border-2 border-purple-light rounded-xl shadow-sm p-5 mb-6 backdrop-blur-sm">
                 <div className="text-center">
                   <div className="text-3xl mb-2">🔄</div>
-                  <h3 className="text-lg font-bold text-blue-900 mb-2">
+                  <h3 className="text-lg font-bold text-white mb-2">
                     Modo de Atualização
                   </h3>
-                  <p className="text-sm text-blue-800">
+                  <p className="text-sm text-gray-300">
                     Você está atualizando um cadastro existente.
                     <br />
                     Seus dados foram carregados automaticamente.
@@ -330,37 +330,37 @@ export default function HomePage() {
             )}
 
             {/* Steps Guide - Configurable */}
-            <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-5 mb-6 border border-white/20">
               <div
-                className="prose prose-sm max-w-none text-gray-700"
+                className="prose prose-sm max-w-none text-gray-300 prose-headings:text-white prose-strong:text-neon"
                 dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.instructionsText) }}
               />
             </div>
 
             {/* Consent Checkbox */}
             <div className="space-y-4">
-              <div className="bg-white p-4 rounded-lg shadow-sm">
+              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20">
                 <label className="flex items-start space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
                     id="consent-checkbox"
                     checked={consentChecked}
-                    className="mt-0.5 h-5 w-5 accent-green-600"
+                    className="mt-0.5 h-5 w-5 accent-primary"
                     onChange={(e) => {
                       setConsentChecked(e.target.checked)
                     }}
                   />
-                  <span className="text-sm text-gray-700 select-none">Li e aceito os termos de uso e política de privacidade</span>
+                  <span className="text-sm text-gray-200 select-none">Li e aceito os termos de uso e política de privacidade</span>
                 </label>
-                
+
                 {/* Terms Link */}
                 <div className="mt-3 text-center">
                   <button
                     type="button"
                     onClick={() => setShowTerms(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    className="text-xs text-neon hover:text-primary-light underline"
                   >
-                    📄 Ler termos completos
+                    Ler termos completos
                   </button>
                 </div>
               </div>
@@ -374,13 +374,13 @@ export default function HomePage() {
                   }
                 }}
                 disabled={!consentChecked}
-                className={`w-full py-4 rounded-lg font-semibold transition-colors shadow-md ${
-                  consentChecked 
-                    ? 'bg-green-600 text-white hover:bg-green-700 cursor-pointer' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                className={`w-full py-4 rounded-lg font-semibold transition-all duration-200 shadow-md ${
+                  consentChecked
+                    ? 'bg-primary text-white hover:bg-primary-dark cursor-pointer glow-primary'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-60'
                 }`}
               >
-                ✅ Aceitar e Continuar
+                Aceitar e Continuar
               </button>
             </div>
           </div>
@@ -388,18 +388,18 @@ export default function HomePage() {
 
         {/* Terms Modal */}
         {showTerms && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
-              <div className="p-6 border-b">
-                <h2 className="text-lg font-bold text-gray-800">
-                  📜 Termos de Uso e Política de Privacidade
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-feira-800 rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden border border-white/20">
+              <div className="p-6 border-b border-white/20">
+                <h2 className="text-lg font-bold text-white">
+                  Termos de Uso e Política de Privacidade
                 </h2>
               </div>
               
               <div className="p-6 overflow-y-auto max-h-[60vh]">
-                <div className="space-y-4 text-sm text-gray-700">
+                <div className="space-y-4 text-sm text-gray-300">
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">1. COLETA DE DADOS</h3>
+                    <h3 className="font-semibold text-neon mb-2">1. COLETA DE DADOS</h3>
                     <p className="mb-2">
                       Para garantir seu acesso rápido e seguro ao evento, coletamos:
                     </p>
@@ -412,7 +412,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">2. USO DOS DADOS</h3>
+                    <h3 className="font-semibold text-neon mb-2">2. USO DOS DADOS</h3>
                     <p>
                       Seus dados são utilizados exclusivamente para:
                     </p>
@@ -425,7 +425,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">3. PROTEÇÃO E SEGURANÇA</h3>
+                    <h3 className="font-semibold text-neon mb-2">3. PROTEÇÃO E SEGURANÇA</h3>
                     <p>
                       Implementamos medidas técnicas e organizacionais para proteger seus dados:
                     </p>
@@ -438,7 +438,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">4. COMPARTILHAMENTO</h3>
+                    <h3 className="font-semibold text-neon mb-2">4. COMPARTILHAMENTO</h3>
                     <p>
                       Seus dados NÃO são vendidos ou compartilhados com terceiros para fins comerciais.
                       Compartilhamos apenas quando:
@@ -451,7 +451,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">5. RETENÇÃO E EXCLUSÃO</h3>
+                    <h3 className="font-semibold text-neon mb-2">5. RETENÇÃO E EXCLUSÃO</h3>
                     <p>
                       Seus dados são mantidos apenas pelo tempo necessário:
                     </p>
@@ -463,7 +463,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">6. SEUS DIREITOS</h3>
+                    <h3 className="font-semibold text-neon mb-2">6. SEUS DIREITOS</h3>
                     <p>
                       Conforme a LGPD, você tem direito a:
                     </p>
@@ -477,7 +477,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">7. CONSENTIMENTO</h3>
+                    <h3 className="font-semibold text-neon mb-2">7. CONSENTIMENTO</h3>
                     <p>
                       Ao aceitar estes termos, você autoriza expressamente a coleta e o tratamento
                       dos seus dados pessoais e biométricos para as finalidades descritas.
@@ -486,7 +486,7 @@ export default function HomePage() {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-gray-800 mb-2">8. CONTATO</h3>
+                    <h3 className="font-semibold text-neon mb-2">8. CONTATO</h3>
                     <p>
                       Para dúvidas ou solicitações sobre seus dados:
                     </p>
@@ -496,18 +496,18 @@ export default function HomePage() {
                     </p>
                   </section>
 
-                  <div className="mt-6 pt-4 border-t">
+                  <div className="mt-6 pt-4 border-t border-white/20">
                     <p className="text-xs text-gray-500 text-center">
                       Última atualização: 18/08/2025
                     </p>
                   </div>
                 </div>
               </div>
-              
-              <div className="p-6 border-t bg-gray-50">
+
+              <div className="p-6 border-t border-white/20 bg-feira-900">
                 <button
                   onClick={() => setShowTerms(false)}
-                  className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-colors"
                 >
                   Entendi
                 </button>
@@ -521,16 +521,16 @@ export default function HomePage() {
 
   if (currentStep === 'personal') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50 p-4 safe-area">
+      <div className="min-h-screen gradient-hero p-4 safe-area">
         <div className="max-w-md mx-auto">
           <div className="text-center py-6">
             <div className="mb-4">
               <MegaFeiraLogo className="text-3xl" />
             </div>
-            <h1 className="text-xl font-bold text-gray-800 mb-2">
+            <h1 className="text-xl font-bold text-white mb-2">
               Dados Pessoais
             </h1>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-300">
               Preencha seus dados para o cadastro
             </p>
           </div>
@@ -556,22 +556,22 @@ export default function HomePage() {
 
   if (currentStep === 'capture') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50 p-4 safe-area">
+      <div className="min-h-screen gradient-hero p-4 safe-area">
         <div className="max-w-md mx-auto">
           <div className="text-center py-6">
             <div className="mb-4">
               <MegaFeiraLogo className="text-3xl" />
             </div>
-            <h1 className="text-xl font-bold text-gray-800 mb-2">
+            <h1 className="text-xl font-bold text-white mb-2">
               Captura Facial
             </h1>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-300">
               Tire sua foto para completar o cadastro
             </p>
           </div>
 
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <UniversalFaceCapture 
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+            <UniversalFaceCapture
               onCapture={handleFaceCaptured}
               onBack={() => setCurrentStep('personal')}
             />
@@ -583,18 +583,18 @@ export default function HomePage() {
 
   if (currentStep === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-gray-50 p-4 safe-area">
+      <div className="min-h-screen gradient-hero p-4 safe-area">
         <div className="max-w-md mx-auto">
           <div className="text-center py-6">
             <div className="mb-4">
               <MegaFeiraLogo className="text-3xl" />
             </div>
             <div className="text-5xl mb-3">{isUpdateMode ? '🔄' : '✅'}</div>
-            <h1 className="text-xl font-bold text-green-600 mb-2">
+            <h1 className="text-xl font-bold text-neon mb-2">
               {isUpdateMode ? 'Cadastro Atualizado!' : 'Cadastro Realizado!'}
             </h1>
-            <p className="text-sm text-gray-700">
-              Parabéns, <strong>{registrationData.name}</strong>!<br/>
+            <p className="text-sm text-gray-300">
+              Parabéns, <strong className="text-white">{registrationData.name}</strong>!<br/>
               {isUpdateMode
                 ? 'Seus dados foram atualizados com sucesso'
                 : 'Seu cadastro foi concluído com sucesso'}
@@ -602,9 +602,9 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-4">
-            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-              <div 
-                className="text-center text-green-800 text-sm font-medium prose prose-sm max-w-none"
+            <div className="bg-primary/20 backdrop-blur-sm rounded-lg p-4 border border-primary/40">
+              <div
+                className="text-center text-white text-sm font-medium prose prose-sm max-w-none prose-headings:text-neon"
                 dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.successText) }}
               />
             </div>
@@ -616,17 +616,17 @@ export default function HomePage() {
                   setConsentChecked(false)
                   setRegistrationData({ name: '', cpf: '', phone: '', event: '', mesa: '', consent: false })
                 }}
-                className="w-full py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
+                className="w-full py-4 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition-all duration-200 shadow-md glow-primary"
               >
-                ➕ Novo Cadastro
+                Novo Cadastro
               </button>
-              
+
               <div className="pt-2 text-center">
                 <a
                   href="/admin"
-                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
                 >
-                  🔧 Área Administrativa
+                  Área Administrativa
                 </a>
               </div>
             </div>
