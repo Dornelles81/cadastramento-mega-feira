@@ -216,10 +216,10 @@ export default function ManageAdminsPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-fundo-claro flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">⏳</div>
-          <p className="text-gray-600">Carregando...</p>
+          <p className="text-cinza">Carregando...</p>
         </div>
       </div>
     )
@@ -230,29 +230,29 @@ export default function ManageAdminsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-fundo-claro">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b border-cinza-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">
+              <h1 className="text-2xl font-bold text-azul-marinho">
                 👥 Gerenciar Administradores
               </h1>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-cinza">
                 Criar e configurar administradores de eventos
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                className="px-4 py-2 bg-verde-agua text-white rounded-lg hover:bg-verde-agua-dark transition-colors"
               >
                 ➕ Novo Admin
               </button>
               <button
                 onClick={() => router.push('/admin/dashboard')}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 bg-cinza-500 text-white rounded-lg hover:bg-cinza-600 transition-colors"
               >
                 ← Voltar
               </button>
@@ -264,17 +264,17 @@ export default function ManageAdminsPage() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {admins.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+          <div className="bg-white rounded-lg shadow-sm p-12 text-center border border-cinza-200">
             <div className="text-6xl mb-4">📭</div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">
+            <h3 className="text-xl font-semibold text-azul-marinho mb-2">
               Nenhum administrador cadastrado
             </h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-cinza mb-6">
               Crie o primeiro administrador para gerenciar eventos
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+              className="px-6 py-3 bg-verde-agua text-white rounded-lg hover:bg-verde-agua-dark transition-colors"
             >
               ➕ Criar Primeiro Admin
             </button>
@@ -284,32 +284,32 @@ export default function ManageAdminsPage() {
             {admins.map((admin) => (
               <div
                 key={admin.id}
-                className="bg-white rounded-lg shadow-sm p-6 border border-gray-200"
+                className="bg-white rounded-lg shadow-sm p-6 border border-cinza-200"
               >
                 {/* Admin Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-bold text-gray-800">
+                      <h3 className="text-lg font-bold text-azul-marinho">
                         {admin.name}
                       </h3>
                       {admin.role === 'SUPER_ADMIN' && (
-                        <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full font-semibold">
+                        <span className="px-2 py-0.5 bg-verde-agua/20 text-verde-agua-dark text-xs rounded-full font-semibold">
                           👑 SUPER ADMIN
                         </span>
                       )}
                       <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
                         admin.isActive
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-verde/10 text-verde'
                           : 'bg-red-100 text-red-800'
                       }`}>
                         {admin.isActive ? '✅ Ativo' : '❌ Inativo'}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-cinza">
                       📧 {admin.email}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-cinza-light mt-1">
                       Criado em: {new Date(admin.createdAt).toLocaleString('pt-BR')}
                     </p>
                   </div>
@@ -319,7 +319,7 @@ export default function ManageAdminsPage() {
                       className={`px-3 py-1 text-sm rounded ${
                         admin.isActive
                           ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-verde/10 text-verde hover:bg-verde/20'
                       }`}
                     >
                       {admin.isActive ? '🔒 Desativar' : '🔓 Ativar'}
@@ -329,9 +329,9 @@ export default function ManageAdminsPage() {
 
                 {/* Admin Events */}
                 {admin.role !== 'SUPER_ADMIN' && (
-                  <div className="border-t pt-4">
+                  <div className="border-t border-cinza-200 pt-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-700">
+                      <h4 className="font-semibold text-azul-marinho">
                         📅 Eventos Atribuídos ({admin.events.length})
                       </h4>
                       <button
@@ -339,14 +339,14 @@ export default function ManageAdminsPage() {
                           setEditingAdmin(admin)
                           setShowPermissionsModal(true)
                         }}
-                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
+                        className="px-3 py-1 bg-azul-medio/10 text-azul-medio rounded text-sm hover:bg-azul-medio/20"
                       >
                         ➕ Atribuir Evento
                       </button>
                     </div>
 
                     {admin.events.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">
+                      <p className="text-sm text-cinza italic">
                         Nenhum evento atribuído
                       </p>
                     ) : (
@@ -354,14 +354,14 @@ export default function ManageAdminsPage() {
                         {admin.events.map((access) => (
                           <div
                             key={access.id}
-                            className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                            className="bg-fundo-claro rounded-lg p-4 border border-cinza-200"
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div>
-                                <p className="font-semibold text-gray-800">
+                                <p className="font-semibold text-azul-marinho">
                                   {access.event.name}
                                 </p>
-                                <p className="text-xs text-gray-500 font-mono">
+                                <p className="text-xs text-cinza font-mono">
                                   {access.event.code}
                                 </p>
                               </div>
@@ -376,17 +376,17 @@ export default function ManageAdminsPage() {
                             {/* Permissions */}
                             <div className="flex flex-wrap gap-1 mb-2">
                               {access.canView && (
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                                <span className="px-2 py-0.5 bg-azul-medio/10 text-azul-medio text-xs rounded">
                                   👁️ Ver
                                 </span>
                               )}
                               {access.canEdit && (
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                                <span className="px-2 py-0.5 bg-verde/10 text-verde text-xs rounded">
                                   ✏️ Editar
                                 </span>
                               )}
                               {access.canApprove && (
-                                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">
+                                <span className="px-2 py-0.5 bg-verde-agua/10 text-verde-agua-dark text-xs rounded">
                                   ✅ Aprovar
                                 </span>
                               )}
@@ -401,7 +401,7 @@ export default function ManageAdminsPage() {
                                 </span>
                               )}
                               {access.canManageStands && (
-                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded">
+                                <span className="px-2 py-0.5 bg-azul-marinho/10 text-azul-marinho text-xs rounded">
                                   🏪 Stands
                                 </span>
                               )}
@@ -416,8 +416,8 @@ export default function ManageAdminsPage() {
                                 })}
                                 className={`px-2 py-1 text-xs rounded ${
                                   access.canView
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-200 text-gray-600'
+                                    ? 'bg-azul-medio text-white'
+                                    : 'bg-cinza-200 text-cinza-600'
                                 }`}
                               >
                                 Ver
@@ -429,8 +429,8 @@ export default function ManageAdminsPage() {
                                 })}
                                 className={`px-2 py-1 text-xs rounded ${
                                   access.canEdit
-                                    ? 'bg-green-500 text-white'
-                                    : 'bg-gray-200 text-gray-600'
+                                    ? 'bg-verde text-white'
+                                    : 'bg-cinza-200 text-cinza-600'
                                 }`}
                               >
                                 Editar
@@ -442,8 +442,8 @@ export default function ManageAdminsPage() {
                                 })}
                                 className={`px-2 py-1 text-xs rounded ${
                                   access.canApprove
-                                    ? 'bg-purple-500 text-white'
-                                    : 'bg-gray-200 text-gray-600'
+                                    ? 'bg-verde-agua text-white'
+                                    : 'bg-cinza-200 text-cinza-600'
                                 }`}
                               >
                                 Aprovar
@@ -456,7 +456,7 @@ export default function ManageAdminsPage() {
                                 className={`px-2 py-1 text-xs rounded ${
                                   access.canDelete
                                     ? 'bg-red-500 text-white'
-                                    : 'bg-gray-200 text-gray-600'
+                                    : 'bg-cinza-200 text-cinza-600'
                                 }`}
                               >
                                 Deletar
@@ -469,7 +469,7 @@ export default function ManageAdminsPage() {
                                 className={`px-2 py-1 text-xs rounded ${
                                   access.canExport
                                     ? 'bg-orange-500 text-white'
-                                    : 'bg-gray-200 text-gray-600'
+                                    : 'bg-cinza-200 text-cinza-600'
                                 }`}
                               >
                                 Exportar
@@ -481,8 +481,8 @@ export default function ManageAdminsPage() {
                                 })}
                                 className={`px-2 py-1 text-xs rounded ${
                                   access.canManageStands
-                                    ? 'bg-indigo-500 text-white'
-                                    : 'bg-gray-200 text-gray-600'
+                                    ? 'bg-azul-marinho text-white'
+                                    : 'bg-cinza-200 text-cinza-600'
                                 }`}
                               >
                                 Stands
@@ -504,48 +504,48 @@ export default function ManageAdminsPage() {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            <h3 className="text-lg font-semibold text-azul-marinho mb-4">
               ➕ Criar Novo Administrador
             </h3>
 
             <form onSubmit={handleCreateAdmin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-azul-marinho mb-2">
                   Nome Completo
                 </label>
                 <input
                   type="text"
                   value={newAdmin.name}
                   onChange={(e) => setNewAdmin({ ...newAdmin, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-cinza-300 rounded-lg text-cinza-900 focus:ring-2 focus:ring-verde-agua focus:border-verde-agua"
                   placeholder="João Silva"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-azul-marinho mb-2">
                   Email
                 </label>
                 <input
                   type="email"
                   value={newAdmin.email}
                   onChange={(e) => setNewAdmin({ ...newAdmin, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-cinza-300 rounded-lg text-cinza-900 focus:ring-2 focus:ring-verde-agua focus:border-verde-agua"
                   placeholder="admin@exemplo.com"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-azul-marinho mb-2">
                   Senha
                 </label>
                 <input
                   type="password"
                   value={newAdmin.password}
                   onChange={(e) => setNewAdmin({ ...newAdmin, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-cinza-300 rounded-lg text-cinza-900 focus:ring-2 focus:ring-verde-agua focus:border-verde-agua"
                   placeholder="Mínimo 8 caracteres"
                   required
                   minLength={8}
@@ -553,13 +553,13 @@ export default function ManageAdminsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-azul-marinho mb-2">
                   Tipo de Administrador
                 </label>
                 <select
                   value={newAdmin.role}
                   onChange={(e) => setNewAdmin({ ...newAdmin, role: e.target.value as 'ADMIN' | 'SUPER_ADMIN' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
+                  className="w-full px-3 py-2 border border-cinza-300 rounded-lg text-cinza-900 focus:ring-2 focus:ring-verde-agua focus:border-verde-agua bg-white"
                 >
                   <option value="ADMIN">Event Admin (acesso por evento)</option>
                   <option value="SUPER_ADMIN">Super Admin (acesso total)</option>
@@ -569,7 +569,7 @@ export default function ManageAdminsPage() {
               <div className="flex space-x-3 mt-6">
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-600"
+                  className="flex-1 py-2 bg-verde-agua text-white rounded-lg font-semibold hover:bg-verde-agua-dark"
                 >
                   ✅ Criar Admin
                 </button>
@@ -579,7 +579,7 @@ export default function ManageAdminsPage() {
                     setShowCreateModal(false)
                     setNewAdmin({ email: '', password: '', name: '', role: 'ADMIN' })
                   }}
-                  className="flex-1 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
+                  className="flex-1 py-2 bg-cinza-200 text-cinza-800 rounded-lg font-semibold hover:bg-cinza-300"
                 >
                   ❌ Cancelar
                 </button>
@@ -593,7 +593,7 @@ export default function ManageAdminsPage() {
       {showPermissionsModal && editingAdmin && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            <h3 className="text-lg font-semibold text-azul-marinho mb-4">
               📅 Atribuir Evento para {editingAdmin.name}
             </h3>
 
@@ -608,15 +608,15 @@ export default function ManageAdminsPage() {
                       setShowPermissionsModal(false)
                       setEditingAdmin(null)
                     }}
-                    className="w-full p-3 bg-gray-50 hover:bg-purple-50 border border-gray-200 hover:border-purple-300 rounded-lg text-left transition-colors"
+                    className="w-full p-3 bg-fundo-claro hover:bg-verde-agua/10 border border-cinza-200 hover:border-verde-agua rounded-lg text-left transition-colors"
                   >
-                    <p className="font-semibold text-gray-800">{event.name}</p>
-                    <p className="text-xs text-gray-500 font-mono">{event.code}</p>
+                    <p className="font-semibold text-azul-marinho">{event.name}</p>
+                    <p className="text-xs text-cinza font-mono">{event.code}</p>
                   </button>
                 ))}
 
               {events.filter(event => !editingAdmin.events.some(e => e.eventId === event.id)).length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-8">
+                <p className="text-sm text-cinza text-center py-8">
                   Todos os eventos já foram atribuídos a este admin
                 </p>
               )}
@@ -627,7 +627,7 @@ export default function ManageAdminsPage() {
                 setShowPermissionsModal(false)
                 setEditingAdmin(null)
               }}
-              className="w-full mt-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
+              className="w-full mt-4 py-2 bg-cinza-200 text-cinza-800 rounded-lg font-semibold hover:bg-cinza-300"
             >
               Fechar
             </button>

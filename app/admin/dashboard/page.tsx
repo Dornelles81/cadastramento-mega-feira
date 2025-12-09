@@ -61,10 +61,10 @@ export default function AdminDashboard() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-fundo-claro flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">⏳</div>
-          <p className="text-gray-600">Carregando...</p>
+          <p className="text-cinza">Carregando...</p>
         </div>
       </div>
     )
@@ -77,24 +77,23 @@ export default function AdminDashboard() {
   const isSuperAdmin = session.user.role === 'SUPER_ADMIN'
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-fundo-claro">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white shadow-sm border-b border-cinza-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <img
-                src="/mega-feira-logo.svg"
-                alt="Mega Feira"
-                className="h-12 w-auto"
-              />
+              <div className="flex items-center font-bold text-2xl">
+                <span className="text-verde-agua italic">MEGA</span>
+                <span className="text-azul-marinho ml-2">FEIRA</span>
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-800">
+                <h1 className="text-2xl font-bold text-azul-marinho">
                   {isSuperAdmin ? '👑 Super Admin Dashboard' : '📊 Dashboard Administrativo'}
                 </h1>
-                <p className="text-sm text-gray-600">
-                  Bem-vindo, <strong>{session.user.name}</strong>
-                  {isSuperAdmin && <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full">SUPER ADMIN</span>}
+                <p className="text-sm text-cinza">
+                  Bem-vindo, <strong className="text-azul-marinho">{session.user.name}</strong>
+                  {isSuperAdmin && <span className="ml-2 px-2 py-0.5 bg-verde-agua/20 text-verde-agua-dark text-xs rounded-full font-semibold">SUPER ADMIN</span>}
                 </p>
               </div>
             </div>
@@ -115,7 +114,7 @@ export default function AdminDashboard() {
           <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               onClick={() => router.push('/admin/super/eventos/novo')}
-              className="p-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all text-left"
+              className="p-6 bg-gradient-to-r from-verde-agua to-verde text-white rounded-lg hover:shadow-lg transition-all text-left"
             >
               <div className="text-3xl mb-2">➕</div>
               <div className="font-semibold text-lg">Criar Novo Evento</div>
@@ -124,7 +123,7 @@ export default function AdminDashboard() {
 
             <button
               onClick={() => router.push('/admin/super/admins')}
-              className="p-6 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:shadow-lg transition-all text-left"
+              className="p-6 bg-gradient-to-r from-azul-medio to-azul-marinho text-white rounded-lg hover:shadow-lg transition-all text-left"
             >
               <div className="text-3xl mb-2">👥</div>
               <div className="font-semibold text-lg">Gerenciar Admins</div>
@@ -133,7 +132,7 @@ export default function AdminDashboard() {
 
             <button
               onClick={() => router.push('/admin/super/logs')}
-              className="p-6 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg hover:shadow-lg transition-all text-left"
+              className="p-6 bg-gradient-to-r from-verde to-verde-agua text-white rounded-lg hover:shadow-lg transition-all text-left"
             >
               <div className="text-3xl mb-2">📋</div>
               <div className="font-semibold text-lg">Logs Globais</div>
@@ -144,17 +143,17 @@ export default function AdminDashboard() {
 
         {/* Events Grid */}
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
+          <h2 className="text-xl font-bold text-azul-marinho mb-4">
             {isSuperAdmin ? '🌍 Todos os Eventos' : '📅 Meus Eventos'}
           </h2>
 
           {events.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center border border-cinza-200">
               <div className="text-6xl mb-4">📭</div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">
+              <h3 className="text-xl font-semibold text-azul-marinho mb-2">
                 Nenhum evento disponível
               </h3>
-              <p className="text-gray-500 mb-6">
+              <p className="text-cinza mb-6">
                 {isSuperAdmin
                   ? 'Crie seu primeiro evento para começar'
                   : 'Você ainda não foi atribuído a nenhum evento'}
@@ -162,7 +161,7 @@ export default function AdminDashboard() {
               {isSuperAdmin && (
                 <button
                   onClick={() => router.push('/admin/super/eventos/novo')}
-                  className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                  className="px-6 py-3 bg-verde-agua text-white rounded-lg hover:bg-verde-agua-dark transition-colors"
                 >
                   ➕ Criar Primeiro Evento
                 </button>
@@ -173,44 +172,44 @@ export default function AdminDashboard() {
               {events.map((event) => (
                 <div
                   key={event.id}
-                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-200"
+                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 border border-cinza-200"
                 >
                   {/* Event Header */}
                   <div className="mb-4">
-                    <h3 className="text-lg font-bold text-gray-800 mb-1">
+                    <h3 className="text-lg font-bold text-azul-marinho mb-1">
                       {event.name}
                     </h3>
-                    <p className="text-sm text-gray-500 font-mono">
+                    <p className="text-sm text-cinza font-mono">
                       {event.code}
                     </p>
                   </div>
 
                   {/* Stats */}
-                  <div className="mb-4 pb-4 border-b">
-                    <div className="text-3xl font-bold text-purple-600 mb-1">
+                  <div className="mb-4 pb-4 border-b border-cinza-200">
+                    <div className="text-3xl font-bold text-verde-agua mb-1">
                       {event._count?.participants || 0}
                     </div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-cinza">
                       Participantes cadastrados
                     </div>
                   </div>
 
                   {/* Permissions */}
                   <div className="mb-4">
-                    <div className="text-xs text-gray-500 mb-2">Suas permissões:</div>
+                    <div className="text-xs text-cinza mb-2">Suas permissões:</div>
                     <div className="flex flex-wrap gap-1">
                       {event.permissions.canView && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                        <span className="px-2 py-0.5 bg-azul-medio/10 text-azul-medio text-xs rounded">
                           👁️ Ver
                         </span>
                       )}
                       {event.permissions.canEdit && (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                        <span className="px-2 py-0.5 bg-verde/10 text-verde text-xs rounded">
                           ✏️ Editar
                         </span>
                       )}
                       {event.permissions.canApprove && (
-                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">
+                        <span className="px-2 py-0.5 bg-verde-agua/10 text-verde-agua-dark text-xs rounded">
                           ✅ Aprovar
                         </span>
                       )}
@@ -231,7 +230,7 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     <button
                       onClick={() => router.push(`/admin/eventos/${event.slug}/participantes`)}
-                      className="w-full py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-semibold"
+                      className="w-full py-2 bg-verde-agua text-white rounded-lg hover:bg-verde-agua-dark transition-colors font-semibold"
                     >
                       📊 Abrir Dashboard
                     </button>
@@ -239,13 +238,13 @@ export default function AdminDashboard() {
                       <>
                         <button
                           onClick={() => router.push(`/admin/super/eventos/${event.slug}/editar`)}
-                          className="w-full py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold text-sm"
+                          className="w-full py-2 bg-azul-medio text-white rounded-lg hover:bg-azul-medio-dark transition-colors font-semibold text-sm"
                         >
                           ✏️ Editar Evento
                         </button>
                         <button
                           onClick={() => router.push(`/admin/eventos/${event.slug}/campos`)}
-                          className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold text-sm"
+                          className="w-full py-2 bg-azul-marinho text-white rounded-lg hover:bg-azul-marinho-dark transition-colors font-semibold text-sm"
                         >
                           🔧 Gerenciar Campos
                         </button>
@@ -254,7 +253,7 @@ export default function AdminDashboard() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => router.push(`/eventos/${event.slug}/cadastro`)}
-                        className="py-1.5 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200 transition-colors"
+                        className="py-1.5 bg-cinza-100 text-cinza-700 rounded text-sm hover:bg-cinza-200 transition-colors"
                         title="Ver formulário público de cadastro"
                       >
                         🔗 URL Pública
@@ -262,7 +261,7 @@ export default function AdminDashboard() {
                       {event.permissions.canExport && (
                         <button
                           onClick={() => window.open(`/api/export/participants?format=excel&event=${event.code}`)}
-                          className="py-1.5 bg-green-100 text-green-700 rounded text-sm hover:bg-green-200 transition-colors"
+                          className="py-1.5 bg-verde/10 text-verde rounded text-sm hover:bg-verde/20 transition-colors"
                         >
                           📊 Excel
                         </button>

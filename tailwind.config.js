@@ -15,104 +15,147 @@ module.exports = {
         'safe-right': 'env(safe-area-inset-right)',
       },
       
-      // Mega Feira brand colors - Nova Paleta
+      // Mega Feira brand colors - Identidade Visual Oficial
       colors: {
-        // Primary - Verde-água principal
-        'primary': {
-          DEFAULT: '#47d7ac',
-          light: '#6ee5c0',
-          dark: '#2db88f',
-          50: '#ecfdf8',
-          100: '#d1fae8',
-          200: '#a7f3d5',
-          300: '#6ee5c0',
-          400: '#47d7ac',
-          500: '#2db88f',
-          600: '#27a37a',
-          700: '#208265',
-          800: '#1a6650',
-          900: '#155340',
-        },
-        // Purple - Roxo Escuro secundário
-        'purple': {
-          DEFAULT: '#500778',
-          light: '#7b2bb3',
-          dark: '#3a0556',
-          50: '#faf5ff',
-          100: '#f3e8ff',
-          200: '#e9d5ff',
-          300: '#d8b4fe',
-          400: '#9C27B0',  // Roxo claro
-          500: '#6A1B9A',  // Roxo médio
-          600: '#7b2bb3',  // Purple Light
-          700: '#500778',  // Purple principal
-          800: '#3a0556',  // Purple Dark
-          900: '#2a0340',
-        },
-        // Verde Neon - Destaque
-        'neon': {
+        // CORES PRINCIPAIS
+        // Verde-água - Logo "MEGA", destaques, CTAs, acentos
+        'verde-agua': {
           DEFAULT: '#2DD4BF',
-          50: '#ecfdf8',
-          100: '#d1fae8',
-          200: '#a7f3d5',
-          300: '#6ee5c0',
-          400: '#47d7ac',
-          500: '#2DD4BF',
-          600: '#14b8a6',
-          700: '#0d9488',
-          800: '#0f766e',
-          900: '#115e59',
+          light: '#5eead4',
+          dark: '#14b8a6',
+          50: '#f0fdfa',
+          100: '#ccfbf1',
+          200: '#99f6e4',
+          300: '#5eead4',
+          400: '#2DD4BF',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
+          800: '#115e59',
+          900: '#134e4a',
         },
-        // Mega brand (alias para primary)
-        'mega': {
-          50: '#ecfdf8',
-          100: '#d1fae8',
-          200: '#a7f3d5',
-          300: '#6ee5c0',
-          400: '#47d7ac',
-          500: '#2DD4BF',  // Verde Neon
-          600: '#2db88f',
-          700: '#27a37a',
-          800: '#208265',
-          900: '#155340',
+        // Azul marinho - Logo "FEIRA", títulos, fundos escuros
+        'azul-marinho': {
+          DEFAULT: '#1E3A5F',
+          light: '#2c5282',
+          dark: '#1a365d',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1E3A5F',
+          800: '#1a365d',
+          900: '#1e3a8a',
         },
-        // Feira - Dark theme colors
-        'feira': {
+        // Primary alias para verde-água
+        'primary': {
+          DEFAULT: '#2DD4BF',
+          light: '#5eead4',
+          dark: '#14b8a6',
+          50: '#f0fdfa',
+          100: '#ccfbf1',
+          200: '#99f6e4',
+          300: '#5eead4',
+          400: '#2DD4BF',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
+          800: '#115e59',
+          900: '#134e4a',
+        },
+        // CORES SECUNDÁRIAS
+        // Azul médio - Gradientes, botões secundários
+        'azul-medio': {
+          DEFAULT: '#2563EB',
+          light: '#3b82f6',
+          dark: '#1d4ed8',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#2563EB',
+          600: '#1d4ed8',
+          700: '#1e40af',
+          800: '#1e3a8a',
+          900: '#172554',
+        },
+        // Verde - Credenciamento, sucesso
+        'verde': {
+          DEFAULT: '#10B981',
+          light: '#34d399',
+          dark: '#059669',
+          50: '#ecfdf5',
+          100: '#d1fae5',
+          200: '#a7f3d0',
+          300: '#6ee7b7',
+          400: '#34d399',
+          500: '#10B981',
+          600: '#059669',
+          700: '#047857',
+          800: '#065f46',
+          900: '#064e3b',
+        },
+        // Cinza - Tagline, textos secundários
+        'cinza': {
+          DEFAULT: '#64748B',
+          light: '#94a3b8',
+          dark: '#475569',
           50: '#f8fafc',
           100: '#f1f5f9',
           200: '#e2e8f0',
           300: '#cbd5e1',
           400: '#94a3b8',
-          500: '#64748b',
+          500: '#64748B',
           600: '#475569',
           700: '#334155',
-          800: '#0f0f1a',  // Escuro principal
-          900: '#0f172a',  // Fundo body dark
+          800: '#1e293b',
+          900: '#0f172a',
         },
-        // Verde alternativo
-        'green': {
-          DEFAULT: '#2E7D32',
-          50: '#ecfdf5',
-          100: '#d1fae5',
-          200: '#a7f3cf',
-          300: '#6ee7b7',
-          400: '#34d399',
-          500: '#10B981',
-          600: '#059669',
-          700: '#2E7D32',
-          800: '#166534',
-          900: '#14532d',
+        // FUNDOS
+        'fundo': {
+          claro: '#F8FAFC',      // Fundo principal (light mode)
+          medio: '#E2E8F0',      // Gradiente de fundo
+        },
+        // Mega brand (verde-água)
+        'mega': {
+          50: '#f0fdfa',
+          100: '#ccfbf1',
+          200: '#99f6e4',
+          300: '#5eead4',
+          400: '#2DD4BF',
+          500: '#14b8a6',
+          600: '#0d9488',
+          700: '#0f766e',
+          800: '#115e59',
+          900: '#134e4a',
+        },
+        // Feira (azul marinho)
+        'feira': {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1E3A5F',
+          800: '#1a365d',
+          900: '#1e3a8a',
         },
         // Semantic colors
         'success': {
-          DEFAULT: '#47d7ac',
-          light: '#6ee5c0',
-          dark: '#2db88f',
-          50: '#ecfdf8',
-          500: '#47d7ac',
-          600: '#2db88f',
-          700: '#27a37a',
-          800: '#208265',
+          DEFAULT: '#10B981',
+          light: '#34d399',
+          dark: '#059669',
+          50: '#ecfdf5',
+          500: '#10B981',
+          600: '#059669',
+          700: '#047857',
+          800: '#065f46',
         },
         // WhatsApp colors
         'whatsapp': {
@@ -121,10 +164,10 @@ module.exports = {
         },
         // Dark mode colors
         'dark': {
-          bg: '#0f172a',
+          bg: '#1E3A5F',
           text: '#f8fafc',
-          muted: '#ccc',
-          subtle: '#666',
+          muted: '#94a3b8',
+          subtle: '#64748b',
         },
       },
       

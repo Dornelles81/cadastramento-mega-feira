@@ -42,19 +42,18 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-azul-marinho via-azul-medio to-verde-agua flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img
-            src="/mega-feira-logo.svg"
-            alt="Mega Feira"
-            className="h-16 w-auto mx-auto mb-4"
-          />
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+          <div className="flex items-center justify-center font-bold text-3xl mb-4">
+            <span className="text-verde-agua italic">MEGA</span>
+            <span className="text-azul-marinho ml-2">FEIRA</span>
+          </div>
+          <h1 className="text-2xl font-bold text-azul-marinho mb-2">
             Painel Administrativo
           </h1>
-          <p className="text-gray-600">
+          <p className="text-cinza">
             Sistema Multi-Evento
           </p>
         </div>
@@ -72,14 +71,14 @@ export default function AdminLoginPage() {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-azul-marinho mb-2">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+              className="w-full px-4 py-3 border border-cinza-300 rounded-lg text-cinza-900 bg-white focus:ring-2 focus:ring-verde-agua focus:border-verde-agua transition-colors placeholder:text-cinza-400"
               placeholder="seu@email.com"
               required
               disabled={loading}
@@ -87,14 +86,14 @@ export default function AdminLoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-azul-marinho mb-2">
               Senha
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+              className="w-full px-4 py-3 border border-cinza-300 rounded-lg text-cinza-900 bg-white focus:ring-2 focus:ring-verde-agua focus:border-verde-agua transition-colors placeholder:text-cinza-400"
               placeholder="••••••••"
               required
               disabled={loading}
@@ -104,28 +103,28 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+            className="w-full py-3 bg-verde-agua text-white rounded-lg font-semibold hover:bg-verde-agua-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
           >
             {loading ? '🔄 Entrando...' : '🔓 Entrar'}
           </button>
         </form>
 
         {/* Demo Credentials */}
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-xs font-semibold text-gray-700 mb-2">
+        <div className="mt-8 p-4 bg-fundo-claro rounded-lg border border-cinza-200">
+          <p className="text-xs font-semibold text-azul-marinho mb-2">
             💡 Credenciais de Demonstração:
           </p>
-          <div className="space-y-2 text-xs text-gray-600">
+          <div className="space-y-2 text-xs text-cinza-700">
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-purple-100 p-2 rounded">
-                <strong className="block text-purple-800">Super Admin:</strong>
-                <code className="text-purple-700">admin@megafeira.com.br</code>
-                <code className="block text-purple-700">SuperAdmin@2025</code>
+              <div className="bg-verde-agua/10 p-2 rounded border border-verde-agua/20">
+                <strong className="block text-azul-marinho">Super Admin:</strong>
+                <code className="text-cinza-700">admin@megafeira.com.br</code>
+                <code className="block text-cinza-700">SuperAdmin@2025</code>
               </div>
-              <div className="bg-blue-100 p-2 rounded">
-                <strong className="block text-blue-800">Event Admin:</strong>
-                <code className="text-blue-700">evento@megafeira.com.br</code>
-                <code className="block text-blue-700">EventAdmin@2025</code>
+              <div className="bg-azul-medio/10 p-2 rounded border border-azul-medio/20">
+                <strong className="block text-azul-marinho">Event Admin:</strong>
+                <code className="text-cinza-700">evento@megafeira.com.br</code>
+                <code className="block text-cinza-700">EventAdmin@2025</code>
               </div>
             </div>
           </div>
@@ -135,7 +134,7 @@ export default function AdminLoginPage() {
         <div className="mt-6 text-center">
           <a
             href="/"
-            className="text-sm text-purple-600 hover:text-purple-700 underline"
+            className="text-sm text-verde-agua hover:text-verde-agua-dark underline"
           >
             ← Voltar para o site
           </a>
