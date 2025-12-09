@@ -3,13 +3,13 @@ const nextConfig = {
   // Development optimization
   reactStrictMode: true,
 
-  // Skip linting and type checking during build (for Vercel)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Skip type checking during build (for Vercel)
   typescript: {
     ignoreBuildErrors: true,
   },
+
+  // Enable Turbopack (Next.js 16 default)
+  turbopack: {},
 
   // PWA for mobile experience
   async headers() {
@@ -22,7 +22,7 @@ const nextConfig = {
             value: 'DENY',
           },
           {
-            key: 'X-Content-Type-Options', 
+            key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
           {
@@ -39,23 +39,15 @@ const nextConfig = {
     ]
   },
 
-  // Image optimization for mobile
+  // Image optimization for mobile (using remotePatterns instead of deprecated domains)
   images: {
-    domains: ['your-domain.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
     formats: ['image/webp', 'image/avif'],
-  },
-
-  // Webpack config for MediaPipe
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-      }
-    }
-    return config
   },
 }
 
