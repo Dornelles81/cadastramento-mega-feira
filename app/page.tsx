@@ -293,10 +293,10 @@ export default function HomePage() {
               <h1 className="text-xl font-bold text-white mb-2">
                 Bem-vindo ao APP Mega Feira!
               </h1>
-              <p className="text-sm text-cinza-light mb-3">
+              <p className="text-sm text-white/80 mb-3">
                 Sua experiência em feiras e eventos começa aqui.
               </p>
-              <div className="text-xs text-cinza-light text-left bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 border border-white/20">
+              <div className="text-xs text-white/90 text-left bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 border border-white/20">
                 <p className="mb-2">
                   Com nosso aplicativo, você tem acesso rápido e seguro aos melhores eventos do setor.
                   Através do reconhecimento facial e cadastro simplificado, garantimos:
@@ -320,7 +320,7 @@ export default function HomePage() {
                   <h3 className="text-lg font-bold text-white mb-2">
                     Modo de Atualização
                   </h3>
-                  <p className="text-sm text-cinza-light">
+                  <p className="text-sm text-white/80">
                     Você está atualizando um cadastro existente.
                     <br />
                     Seus dados foram carregados automaticamente.
@@ -332,7 +332,7 @@ export default function HomePage() {
             {/* Steps Guide - Configurable */}
             <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-5 mb-6 border border-white/20">
               <div
-                className="prose prose-sm max-w-none text-cinza-light prose-headings:text-white prose-strong:text-verde-agua"
+                className="prose prose-sm max-w-none text-white/90 prose-headings:text-white prose-strong:text-verde-agua prose-p:text-white/80"
                 dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.instructionsText) }}
               />
             </div>
@@ -350,7 +350,7 @@ export default function HomePage() {
                       setConsentChecked(e.target.checked)
                     }}
                   />
-                  <span className="text-sm text-cinza-200 select-none">Li e aceito os termos de uso e política de privacidade</span>
+                  <span className="text-sm text-white/90 select-none">Li e aceito os termos de uso e política de privacidade</span>
                 </label>
 
                 {/* Terms Link */}
@@ -397,7 +397,7 @@ export default function HomePage() {
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[60vh]">
-                <div className="space-y-4 text-sm text-cinza-light">
+                <div className="space-y-4 text-sm text-white/90">
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">1. COLETA DE DADOS</h3>
                     <p className="mb-2">
@@ -497,7 +497,7 @@ export default function HomePage() {
                   </section>
 
                   <div className="mt-6 pt-4 border-t border-white/20">
-                    <p className="text-xs text-cinza text-center">
+                    <p className="text-xs text-white/60 text-center">
                       Última atualização: 18/08/2025
                     </p>
                   </div>
@@ -530,7 +530,7 @@ export default function HomePage() {
             <h1 className="text-xl font-bold text-white mb-2">
               Dados Pessoais
             </h1>
-            <p className="text-sm text-cinza-light">
+            <p className="text-sm text-white/80">
               Preencha seus dados para o cadastro
             </p>
           </div>
@@ -565,7 +565,7 @@ export default function HomePage() {
             <h1 className="text-xl font-bold text-white mb-2">
               Captura Facial
             </h1>
-            <p className="text-sm text-cinza-light">
+            <p className="text-sm text-white/80">
               Tire sua foto para completar o cadastro
             </p>
           </div>
@@ -593,7 +593,7 @@ export default function HomePage() {
             <h1 className="text-xl font-bold text-verde-agua mb-2">
               {isUpdateMode ? 'Cadastro Atualizado!' : 'Cadastro Realizado!'}
             </h1>
-            <p className="text-sm text-cinza-light">
+            <p className="text-sm text-white/80">
               Parabéns, <strong className="text-white">{registrationData.name}</strong>!<br/>
               {isUpdateMode
                 ? 'Seus dados foram atualizados com sucesso'
@@ -624,7 +624,7 @@ export default function HomePage() {
               <div className="pt-2 text-center">
                 <a
                   href="/admin"
-                  className="text-xs text-cinza hover:text-cinza-light transition-colors"
+                  className="text-xs text-white/60 hover:text-white/80 transition-colors"
                 >
                   Área Administrativa
                 </a>

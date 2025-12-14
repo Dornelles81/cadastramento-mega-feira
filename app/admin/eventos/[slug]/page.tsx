@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
 
 interface Participant {
   id: string
@@ -406,7 +407,38 @@ export default function EventAdminPage() {
   }
 
   const handleEdit = (participant: Participant) => {
-    setEditingParticipant({...participant})
+    console.log('📝 Editing participant - FIELDS:', {
+      id: participant.id,
+      name: participant.name,
+      cpf: participant.cpf,
+      email: participant.email,
+      phone: participant.phone,
+      eventCode: participant.eventCode,
+      hasImage: !!participant.faceImageUrl
+    })
+    // Create explicit copy to avoid reference issues
+    const copy: Participant = {
+      id: participant.id,
+      name: participant.name || '',
+      cpf: participant.cpf || '',
+      email: participant.email || '',
+      phone: participant.phone || '',
+      eventCode: participant.eventCode || '',
+      createdAt: participant.createdAt,
+      consentAccepted: participant.consentAccepted,
+      captureQuality: participant.captureQuality,
+      hasValidFace: participant.hasValidFace,
+      faceImageUrl: participant.faceImageUrl,
+      faceImage: participant.faceImage,
+      customData: participant.customData,
+      documents: participant.documents,
+      approvalStatus: participant.approvalStatus,
+      approvedAt: participant.approvedAt,
+      approvedBy: participant.approvedBy,
+      rejectionReason: participant.rejectionReason
+    }
+    console.log('📝 Copy created:', copy.name, copy.cpf)
+    setEditingParticipant(copy)
   }
 
   const handleSave = async () => {
@@ -507,7 +539,7 @@ export default function EventAdminPage() {
         const response = await fetch(`/api/admin/participants/${id}`, {
           method: 'DELETE'
         })
-        
+
         if (response.ok) {
           // Update local state
           setParticipants(prev => prev.filter(p => p.id !== id))
@@ -522,6 +554,120 @@ export default function EventAdminPage() {
     }
   }
 
+  // Print credential - 50mm x 25mm
+  const handlePrintCredential = (participant: Participant) => {
+    const standCode = participant.customData?.standCode || participant.customData?.estande || 'N/A'
+    const eventName = event?.name || 'Evento'
+
+    // Create print window with credential
+    const printWindow = window.open('', '_blank', 'width=400,height=300')
+    if (!printWindow) {
+      alert('Por favor, permita popups para imprimir a credencial')
+      return
+    }
+
+    // 50mm x 25mm at 96 DPI = ~189px x 94px, but we'll use mm for print
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Credencial - ${participant.name}</title>
+        <style>
+          @page {
+            size: 50mm 25mm;
+            margin: 0;
+          }
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          body {
+            font-family: Arial, sans-serif;
+            width: 50mm;
+            height: 25mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1mm;
+            background: linear-gradient(135deg, #1E3A5F 0%, #2c5282 100%);
+            color: white;
+          }
+          .credential {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 2mm;
+            padding: 1mm;
+          }
+          .event-name {
+            font-size: 6pt;
+            font-weight: bold;
+            color: #2DD4BF;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .name {
+            font-size: 7pt;
+            font-weight: bold;
+            line-height: 1.1;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .stand-container {
+            display: flex;
+            align-items: center;
+            gap: 1mm;
+          }
+          .stand-label {
+            font-size: 5pt;
+            color: rgba(255,255,255,0.7);
+            text-transform: uppercase;
+          }
+          .stand {
+            font-size: 8pt;
+            font-weight: bold;
+            color: #2DD4BF;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="credential">
+          <div class="event-name">${eventName}</div>
+          <div class="name">${participant.name}</div>
+          <div class="stand-container">
+            <span class="stand-label">Stand:</span>
+            <span class="stand">${standCode}</span>
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            window.print();
+            window.onafterprint = function() {
+              window.close();
+            };
+          };
+        </script>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }
+
   return (
     <div className={`min-h-screen p-4 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
       <div className="max-w-7xl mx-auto">
@@ -529,11 +675,7 @@ export default function EventAdminPage() {
         <div className={`rounded-lg shadow-sm p-4 md:p-6 mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
-              <img
-                src="/mega-feira-logo.svg"
-                alt="Mega Feira"
-                className="h-10 md:h-12 w-auto"
-              />
+              <MegaFeiraLogo className="text-2xl md:text-3xl" darkMode={darkMode} />
               <div>
                 <h1 className={`text-xl md:text-2xl font-bold mb-1 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                   📊 {event ? event.name : 'Painel Administrativo'}
@@ -809,6 +951,14 @@ export default function EventAdminPage() {
                           <span className="sm:hidden">🗑️</span>
                           <span className="hidden sm:inline">🗑️ Excluir</span>
                         </button>
+                        <button
+                          onClick={() => handlePrintCredential(participant)}
+                          className="px-2 md:px-3 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
+                          title="Imprimir credencial 50x25mm"
+                        >
+                          <span className="sm:hidden">🏷️</span>
+                          <span className="hidden sm:inline">🏷️ Credencial</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -852,12 +1002,12 @@ export default function EventAdminPage() {
                   </label>
                   <input
                     type="text"
-                    value={editingParticipant.name}
+                    value={editingParticipant.name || ''}
                     onChange={(e) => setEditingParticipant({
                       ...editingParticipant,
                       name: e.target.value
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -867,12 +1017,12 @@ export default function EventAdminPage() {
                   </label>
                   <input
                     type="text"
-                    value={editingParticipant.cpf}
+                    value={editingParticipant.cpf || ''}
                     onChange={(e) => setEditingParticipant({
                       ...editingParticipant,
                       cpf: e.target.value
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -880,19 +1030,16 @@ export default function EventAdminPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Evento
                   </label>
-                  <select
-                    value={editingParticipant.eventCode}
+                  <input
+                    type="text"
+                    value={editingParticipant.eventCode || event?.code || ''}
                     onChange={(e) => setEditingParticipant({
                       ...editingParticipant,
                       eventCode: e.target.value
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white"
-                  >
-                    <option value="MEGA-FEIRA-2025">Mega Feira 2025</option>
-                    <option value="expointer">Expointer</option>
-                    <option value="freio-de-ouro">Freio de Ouro</option>
-                    <option value="morfologia">Morfologia</option>
-                  </select>
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-gray-100"
+                    readOnly
+                  />
                 </div>
 
 
@@ -907,7 +1054,7 @@ export default function EventAdminPage() {
                       ...editingParticipant,
                       email: e.target.value
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -922,8 +1069,8 @@ export default function EventAdminPage() {
                       ...editingParticipant,
                       phone: e.target.value
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
                     placeholder="(11) 99999-9999"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -1005,11 +1152,12 @@ export default function EventAdminPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          const eventName = event?.name || 'evento'
                           const baseUrl = (editingParticipant as any).useProductionUrl
                             ? 'https://cadastramento-mega-feira.vercel.app'
                             : window.location.origin
                           const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
-                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, detectamos um problema com a foto do seu cadastro.\n\n📸 Por favor, acesse o link abaixo para enviar uma nova foto:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, detectamos um problema com a foto do seu cadastro na *${eventName}*.\n\n📸 Por favor, acesse o link abaixo para enviar uma nova foto:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
                         className="px-3 py-2 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition-colors"
@@ -1019,11 +1167,12 @@ export default function EventAdminPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          const eventName = event?.name || 'evento'
                           const baseUrl = (editingParticipant as any).useProductionUrl
                             ? 'https://cadastramento-mega-feira.vercel.app'
                             : window.location.origin
                           const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
-                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos de um novo documento para completar seu cadastro.\n\n📄 Por favor, acesse o link abaixo para enviar:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos de um novo documento para completar seu cadastro na *${eventName}*.\n\n📄 Por favor, acesse o link abaixo para enviar:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
                         className="px-3 py-2 bg-green-50 text-green-700 rounded text-xs hover:bg-green-100 transition-colors"
@@ -1033,7 +1182,8 @@ export default function EventAdminPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, seu cadastro foi aprovado com sucesso! ✅\n\nAguardamos você no evento.`
+                          const eventName = event?.name || 'evento'
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, seu cadastro na *${eventName}* foi aprovado com sucesso! ✅\n\nAguardamos você na ${eventName}!`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
                         className="px-3 py-2 bg-green-50 text-green-700 rounded text-xs hover:bg-green-100 transition-colors"
@@ -1043,11 +1193,12 @@ export default function EventAdminPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          const eventName = event?.name || 'evento'
                           const baseUrl = (editingParticipant as any).useProductionUrl
                             ? 'https://cadastramento-mega-feira.vercel.app'
                             : window.location.origin
                           const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
-                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos que você atualize alguns dados do seu cadastro.\n\n📝 Acesse o link abaixo:\n\n${updateUrl}\n\nObrigado!`
+                          const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos que você atualize alguns dados do seu cadastro na *${eventName}*.\n\n📝 Acesse o link abaixo:\n\n${updateUrl}\n\nObrigado!`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
                         className="px-3 py-2 bg-yellow-50 text-yellow-700 rounded text-xs hover:bg-yellow-100 transition-colors"
@@ -1081,7 +1232,7 @@ export default function EventAdminPage() {
                         ...editingParticipant,
                         whatsappMessage: e.target.value
                       } as any)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm bg-white text-gray-900"
                       rows={4}
                       placeholder="Digite sua mensagem aqui..."
                     />

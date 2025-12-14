@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 interface Participant {
   id: string;
@@ -250,6 +251,207 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
     return 'bg-green-500';
   };
 
+  // File input ref for import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Download Excel template
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        'Código*': 'STAND001',
+        'Nome*': 'Stand Exemplo',
+        'Limite de Registros*': 5,
+        'Descrição': 'Descrição do stand',
+        'Localização': 'Pavilhão A - Setor 1',
+        'Nome do Responsável': 'João Silva',
+        'Email do Responsável': 'joao@email.com',
+        'Telefone do Responsável': '(51) 99999-9999',
+        'Ativo (S/N)': 'S'
+      },
+      {
+        'Código*': 'STAND002',
+        'Nome*': 'Outro Stand',
+        'Limite de Registros*': 3,
+        'Descrição': '',
+        'Localização': 'Pavilhão B',
+        'Nome do Responsável': '',
+        'Email do Responsável': '',
+        'Telefone do Responsável': '',
+        'Ativo (S/N)': 'S'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 }, // Código
+      { wch: 25 }, // Nome
+      { wch: 20 }, // Limite
+      { wch: 30 }, // Descrição
+      { wch: 25 }, // Localização
+      { wch: 25 }, // Nome Responsável
+      { wch: 30 }, // Email
+      { wch: 20 }, // Telefone
+      { wch: 12 }, // Ativo
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stands');
+
+    // Add instructions sheet
+    const instructions = [
+      { 'Instruções de Preenchimento': '' },
+      { 'Instruções de Preenchimento': '1. Campos com * são obrigatórios' },
+      { 'Instruções de Preenchimento': '2. Código deve ser único e em MAIÚSCULAS (ex: STAND001)' },
+      { 'Instruções de Preenchimento': '3. Limite de Registros deve ser um número maior que 0' },
+      { 'Instruções de Preenchimento': '4. Ativo: use S para Sim ou N para Não' },
+      { 'Instruções de Preenchimento': '5. Não altere os cabeçalhos da primeira linha' },
+      { 'Instruções de Preenchimento': '6. Apague as linhas de exemplo antes de importar' },
+      { 'Instruções de Preenchimento': '' },
+      { 'Instruções de Preenchimento': `Evento: ${event?.name}` },
+    ];
+    const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+    wsInstructions['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, wsInstructions, 'Instruções');
+
+    XLSX.writeFile(wb, `template_stands_${event?.slug || 'evento'}.xlsx`);
+  };
+
+  // Import stands from Excel
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        alert('Arquivo vazio ou formato inválido');
+        return;
+      }
+
+      // Validate and transform data
+      const standsToImport: any[] = [];
+      const errors: string[] = [];
+
+      jsonData.forEach((row: any, index: number) => {
+        const rowNum = index + 2; // +2 because of header and 0-index
+
+        const code = row['Código*']?.toString().toUpperCase().trim();
+        const name = row['Nome*']?.toString().trim();
+        const maxRegistrations = parseInt(row['Limite de Registros*']);
+
+        if (!code) {
+          errors.push(`Linha ${rowNum}: Código é obrigatório`);
+          return;
+        }
+        if (!name) {
+          errors.push(`Linha ${rowNum}: Nome é obrigatório`);
+          return;
+        }
+        if (!maxRegistrations || maxRegistrations < 1) {
+          errors.push(`Linha ${rowNum}: Limite de Registros deve ser maior que 0`);
+          return;
+        }
+
+        standsToImport.push({
+          code,
+          name,
+          maxRegistrations,
+          description: row['Descrição']?.toString().trim() || '',
+          location: row['Localização']?.toString().trim() || '',
+          responsibleName: row['Nome do Responsável']?.toString().trim() || '',
+          responsibleEmail: row['Email do Responsável']?.toString().trim() || '',
+          responsiblePhone: row['Telefone do Responsável']?.toString().trim() || '',
+          isActive: row['Ativo (S/N)']?.toString().toUpperCase() !== 'N'
+        });
+      });
+
+      if (errors.length > 0) {
+        alert(`Erros encontrados:\n\n${errors.join('\n')}`);
+        return;
+      }
+
+      if (standsToImport.length === 0) {
+        alert('Nenhum stand válido para importar');
+        return;
+      }
+
+      // Confirm import
+      if (!confirm(`Importar ${standsToImport.length} stands?\n\nStands existentes com mesmo código serão atualizados.`)) {
+        return;
+      }
+
+      // Send to API
+      const password = localStorage.getItem('adminPassword') || 'admin123';
+      const response = await fetch(`/api/admin/eventos/${slug}/stands/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${password}`
+        },
+        body: JSON.stringify({ stands: standsToImport })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`✅ Importação concluída!\n\n${result.created} stands criados\n${result.updated} stands atualizados`);
+        loadStands();
+      } else {
+        const error = await response.json();
+        alert(`Erro na importação: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error importing:', error);
+      alert('Erro ao processar arquivo Excel');
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Export current stands to Excel
+  const exportStands = () => {
+    if (stands.length === 0) {
+      alert('Nenhum stand para exportar');
+      return;
+    }
+
+    const exportData = stands.map(stand => ({
+      'Código': stand.code,
+      'Nome': stand.name,
+      'Limite de Registros': stand.maxRegistrations,
+      'Registros Atuais': stand.currentCount || 0,
+      'Vagas Disponíveis': stand.availableSlots || 0,
+      'Uso (%)': Math.round(stand.usagePercentage || 0),
+      'Descrição': stand.description || '',
+      'Localização': stand.location || '',
+      'Nome do Responsável': stand.responsibleName || '',
+      'Email do Responsável': stand.responsibleEmail || '',
+      'Telefone do Responsável': stand.responsiblePhone || '',
+      'Ativo': stand.isActive ? 'Sim' : 'Não',
+      'Criado em': new Date(stand.createdAt).toLocaleDateString('pt-BR')
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    ws['!cols'] = [
+      { wch: 15 }, { wch: 25 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+      { wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 30 },
+      { wch: 20 }, { wch: 10 }, { wch: 15 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stands');
+    XLSX.writeFile(wb, `stands_${event?.slug || 'evento'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   if (!event) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -309,7 +511,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
         </div>
 
         {/* Action Buttons */}
-        <div className="mb-6 flex gap-3">
+        <div className="mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => {
               resetForm();
@@ -320,6 +522,33 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
           >
             {showForm ? 'Cancelar' : '+ Novo Stand'}
           </button>
+
+          <button
+            onClick={downloadTemplate}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+          >
+            📥 Baixar Template Excel
+          </button>
+
+          <label className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium cursor-pointer">
+            📤 Importar Excel
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleImport}
+              className="hidden"
+            />
+          </label>
+
+          {stands.length > 0 && (
+            <button
+              onClick={exportStands}
+              className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
+            >
+              📊 Exportar Stands
+            </button>
+          )}
         </div>
 
         {/* Form */}
@@ -339,7 +568,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     placeholder="Ex: Samsung, Apple, Stand 1"
                   />
                 </div>
@@ -353,7 +582,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     required
                     value={formData.code}
                     onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     placeholder="Ex: SAMSUNG, STAND001"
                     disabled={!!editingStand}
                   />
@@ -369,7 +598,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     min="1"
                     value={formData.maxRegistrations}
                     onChange={(e) => setFormData({...formData, maxRegistrations: parseInt(e.target.value)})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -381,7 +610,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     type="text"
                     value={formData.location}
                     onChange={(e) => setFormData({...formData, location: e.target.value})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     placeholder="Ex: Pavilhao A - Setor 3"
                   />
                 </div>
@@ -393,7 +622,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                     rows={2}
                   />
                 </div>
@@ -406,7 +635,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     type="text"
                     value={formData.responsibleName}
                     onChange={(e) => setFormData({...formData, responsibleName: e.target.value})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -418,7 +647,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     type="email"
                     value={formData.responsibleEmail}
                     onChange={(e) => setFormData({...formData, responsibleEmail: e.target.value})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                   />
                 </div>
 
@@ -430,7 +659,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     type="tel"
                     value={formData.responsiblePhone}
                     onChange={(e) => setFormData({...formData, responsiblePhone: e.target.value})}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                   />
                 </div>
 

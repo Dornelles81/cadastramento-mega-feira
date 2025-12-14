@@ -163,7 +163,7 @@ export default function NovoEventoPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="Ex: Mega Feira 2026"
                   required
                 />
@@ -177,7 +177,7 @@ export default function NovoEventoPage() {
                   type="text"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm bg-white text-gray-900"
                   placeholder="mega-feira-2026"
                   pattern="[a-z0-9-]+"
                   required
@@ -196,7 +196,7 @@ export default function NovoEventoPage() {
                     type="text"
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm bg-white text-gray-900"
                     placeholder="MEGA-FEIRA-2026"
                     pattern="[A-Z0-9-]+"
                     required
@@ -219,7 +219,7 @@ export default function NovoEventoPage() {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   rows={3}
                   placeholder="Descrição do evento..."
                 />
@@ -233,7 +233,7 @@ export default function NovoEventoPage() {
                   type="date"
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   required
                 />
               </div>
@@ -246,7 +246,7 @@ export default function NovoEventoPage() {
                   type="date"
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   required
                 />
               </div>
@@ -259,7 +259,7 @@ export default function NovoEventoPage() {
                   type="number"
                   value={formData.maxCapacity}
                   onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   min="1"
                 />
               </div>
@@ -280,7 +280,7 @@ export default function NovoEventoPage() {
                   type="text"
                   value={formData.organizerName}
                   onChange={(e) => setFormData({ ...formData, organizerName: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="Equipe Mega Feira"
                 />
               </div>
@@ -293,7 +293,7 @@ export default function NovoEventoPage() {
                   type="email"
                   value={formData.organizerEmail}
                   onChange={(e) => setFormData({ ...formData, organizerEmail: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="contato@megafeira.com.br"
                 />
               </div>
@@ -306,7 +306,7 @@ export default function NovoEventoPage() {
                   type="tel"
                   value={formData.organizerPhone}
                   onChange={(e) => setFormData({ ...formData, organizerPhone: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="(51) 99999-9999"
                 />
               </div>
@@ -327,7 +327,7 @@ export default function NovoEventoPage() {
                   type="text"
                   value={formData.venueName}
                   onChange={(e) => setFormData({ ...formData, venueName: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="Parque de Exposições"
                 />
               </div>
@@ -340,7 +340,7 @@ export default function NovoEventoPage() {
                   type="text"
                   value={formData.venueAddress}
                   onChange={(e) => setFormData({ ...formData, venueAddress: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="Av. Assis Brasil, 10000"
                 />
               </div>
@@ -353,7 +353,7 @@ export default function NovoEventoPage() {
                   type="text"
                   value={formData.venueCity}
                   onChange={(e) => setFormData({ ...formData, venueCity: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="Esteio"
                 />
               </div>
@@ -365,7 +365,7 @@ export default function NovoEventoPage() {
                 <select
                   value={formData.venueState}
                   onChange={(e) => setFormData({ ...formData, venueState: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                 >
                   <option value="AC">Acre</option>
                   <option value="AL">Alagoas</option>
