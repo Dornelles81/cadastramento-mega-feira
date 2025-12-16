@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  evolution-api:
+    container_name: evolution_api
+    image: atendai/evolution-api:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # Server
+      - SERVER_URL=http://localhost:8080
+
+      # Authentication - IMPORTANTE: Troque esta chave!
+      - AUTHENTICATION_API_KEY=megafeira-evolution-api-key-2025
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+
+      # Database (usando SQLite interno)
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:postgres@postgres:5432/evolution
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_api
+
+      # RabbitMQ (opcional, desabilitado)
+      - RABBITMQ_ENABLED=false
+
+      # Redis (opcional, desabilitado)
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_REDIS_URI=
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_LOCAL_ENABLED=true
+
+      # Webhook
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - WEBHOOK_GLOBAL_URL=
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+
+      # WhatsApp Settings
+      - CONFIG_SESSION_PHONE_CLIENT=Evolution API
+      - CONFIG_SESSION_PHONE_NAME=Chrome
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR=#198754
+
+      # Log
+      - LOG_LEVEL=DEBUG
+      - LOG_COLOR=true
+      - LOG_BAILEYS=debug
+
+      # Instances
+      - DEL_INSTANCE=false
+      - DEL_TEMP_INSTANCES=true
+
+      # Provider Settings
+      - PROVIDER_ENABLED=false
+
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+
+  postgres:
+    container_name: evolution_postgres
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=evolution
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+volumes:
+  evolution_instances:
+  evolution_store:
+  evolution_postgres_data:

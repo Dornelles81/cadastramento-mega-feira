@@ -18,14 +18,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const configs = await prisma.customField.findMany({
         where: {
           fieldName: {
-            in: ['_text_success', '_text_instructions']
+            in: ['_text_success', '_text_instructions', '_text_whatsapp_approval']
           }
         }
       })
 
       const configMap: any = {
         successText: '✅ Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
-        instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação'
+        instructionsText: '📱 Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmação',
+        whatsappApprovalText: 'Olá {nome}! 🎉\n\nSeu cadastro para o evento *{evento}* foi *APROVADO* com sucesso!\n\nVocê já pode acessar o evento utilizando o reconhecimento facial.\n\nLembre-se de levar um documento com foto para eventual verificação.\n\nNos vemos lá!\n\n_Equipe Mega Feira_'
       }
 
       configs.forEach(config => {
@@ -34,6 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         if (config.fieldName === '_text_instructions') {
           configMap.instructionsText = config.label || configMap.instructionsText
+        }
+        if (config.fieldName === '_text_whatsapp_approval') {
+          configMap.whatsappApprovalText = config.label || configMap.whatsappApprovalText
         }
       })
 
@@ -46,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'PUT') {
     try {
-      const { successText, instructionsText } = req.body
+      const { successText, instructionsText, whatsappApprovalText } = req.body
 
       // Save success text
       if (successText !== undefined) {
@@ -98,9 +102,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      return res.status(200).json({ 
+      // Save WhatsApp approval text
+      if (whatsappApprovalText !== undefined) {
+        const existing = await prisma.customField.findFirst({
+          where: { fieldName: '_text_whatsapp_approval' }
+        })
+
+        if (existing) {
+          await prisma.customField.update({
+            where: { id: existing.id },
+            data: { label: whatsappApprovalText }
+          })
+        } else {
+          await prisma.customField.create({
+            data: {
+              fieldName: '_text_whatsapp_approval',
+              label: whatsappApprovalText,
+              type: 'text_config',
+              required: false,
+              active: true,
+              order: -202
+            }
+          })
+        }
+      }
+
+      return res.status(200).json({
         success: true,
-        message: 'Text configuration saved successfully' 
+        message: 'Text configuration saved successfully'
       })
     } catch (error) {
       console.error('Error saving text config:', error)

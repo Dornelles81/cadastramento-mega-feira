@@ -54,7 +54,8 @@ export default function FieldsManagerPage() {
   const [showTextConfig, setShowTextConfig] = useState(false)
   const [textConfig, setTextConfig] = useState({
     successText: '',
-    instructionsText: ''
+    instructionsText: '',
+    whatsappApprovalText: ''
   })
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -1019,6 +1020,23 @@ export default function FieldsManagerPage() {
                   />
                 </div>
 
+                {/* WhatsApp Approval Text Configuration */}
+                <div>
+                  <RichTextEditor
+                    label="📲 Mensagem WhatsApp de Aprovação"
+                    value={textConfig.whatsappApprovalText}
+                    onChange={(value) => setTextConfig({ ...textConfig, whatsappApprovalText: value })}
+                    rows={8}
+                    placeholder="Digite a mensagem que será enviada via WhatsApp quando um cadastro for aprovado..."
+                    helpText="Variáveis disponíveis: {nome}, {cpf}, {email}, {telefone}, {evento}, {data}. Use *texto* para negrito e _texto_ para itálico no WhatsApp."
+                  />
+                  <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-xs text-green-800">
+                      <strong>Dica:</strong> Configure as variáveis de ambiente <code className="bg-green-100 px-1 rounded">EVOLUTION_API_URL</code>, <code className="bg-green-100 px-1 rounded">EVOLUTION_API_KEY</code> e <code className="bg-green-100 px-1 rounded">EVOLUTION_INSTANCE</code> para habilitar o envio automático via Evolution API.
+                    </p>
+                  </div>
+                </div>
+
                 {/* Preview Section */}
                 <div className="border-t pt-4">
                   <h4 className="font-semibold text-gray-800 mb-3">👁️ Pré-visualização</h4>
@@ -1042,7 +1060,7 @@ export default function FieldsManagerPage() {
                     <div className="bg-gray-50 rounded-lg p-4">
                       <h5 className="font-medium text-gray-700 mb-2">Tela de Instruções:</h5>
                       <div className="bg-white rounded p-3 border border-gray-200">
-                        <div 
+                        <div
                           className="text-sm text-gray-600 prose prose-sm max-w-none"
                           dangerouslySetInnerHTML={{
                             __html: (textConfig.instructionsText || 'Texto vazio...')
@@ -1051,6 +1069,29 @@ export default function FieldsManagerPage() {
                               .replace(/_(.*?)_/g, '<em>$1</em>')
                               .replace(/\n/g, '<br/>')
                               .replace(/---/g, '<hr class="my-2 border-gray-300"/>')
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* WhatsApp Preview */}
+                  <div className="mt-4">
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <h5 className="font-medium text-green-800 mb-2">📲 Mensagem WhatsApp (exemplo):</h5>
+                      <div className="bg-white rounded-lg p-3 border border-green-200 font-sans">
+                        <div
+                          className="text-sm text-gray-700 whitespace-pre-wrap"
+                          dangerouslySetInnerHTML={{
+                            __html: (textConfig.whatsappApprovalText || 'Mensagem não configurada...')
+                              .replace(/\{nome\}/gi, '<span class="bg-yellow-100 px-1 rounded">João Silva</span>')
+                              .replace(/\{cpf\}/gi, '<span class="bg-yellow-100 px-1 rounded">123.456.789-00</span>')
+                              .replace(/\{evento\}/gi, '<span class="bg-yellow-100 px-1 rounded">Mega Feira 2025</span>')
+                              .replace(/\{data\}/gi, '<span class="bg-yellow-100 px-1 rounded">15/01/2025</span>')
+                              .replace(/\{telefone\}/gi, '<span class="bg-yellow-100 px-1 rounded">(51) 99999-9999</span>')
+                              .replace(/\{email\}/gi, '<span class="bg-yellow-100 px-1 rounded">joao@email.com</span>')
+                              .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+                              .replace(/_(.*?)_/g, '<em>$1</em>')
+                              .replace(/\n/g, '<br/>')
                           }}
                         />
                       </div>
