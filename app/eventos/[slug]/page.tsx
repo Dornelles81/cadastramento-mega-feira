@@ -7,6 +7,21 @@ import UniversalFaceCapture from '../../../components/UniversalFaceCapture'
 import MegaFeiraLogo from '../../../components/MegaFeiraLogo'
 import { formatTextWithMarkdown } from '../../../utils/formatText'
 
+// Helper function to format date without timezone conversion issues
+// This extracts the date part from ISO string directly to avoid UTC->local conversion problems
+const formatEventDate = (dateString: string): string => {
+  if (!dateString) return ''
+  // If it's an ISO string, extract the date part directly (YYYY-MM-DD)
+  // This avoids the timezone conversion that causes dates to shift
+  const isoMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return `${day}/${month}/${year}`
+  }
+  // Fallback to standard formatting
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
 interface EventConfig {
   id: string
   slug: string
@@ -135,7 +150,7 @@ export default function EventoPage() {
         if (isExpired) {
           setEventError('Este evento ja foi encerrado.')
         } else if (notStarted) {
-          setEventError(`As inscricoes para este evento abrem em ${startDate.toLocaleDateString('pt-BR')}.`)
+          setEventError(`As inscricoes para este evento abrem em ${formatEventDate(eventData.startDate)}.`)
         } else {
           setEventError('Este evento nao esta aceitando cadastros no momento.')
         }
@@ -394,7 +409,7 @@ export default function EventoPage() {
                 </p>
               )}
               <div className="text-xs text-white/60 space-y-1 mb-3">
-                <div>De {new Date(event.startDate).toLocaleDateString('pt-BR')} a {new Date(event.endDate).toLocaleDateString('pt-BR')}</div>
+                <div>De {formatEventDate(event.startDate)} a {formatEventDate(event.endDate)}</div>
                 <div>{event.currentCount}/{event.maxCapacity} vagas preenchidas</div>
               </div>
               <div className="text-xs text-white/90 text-left bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 border border-white/20">

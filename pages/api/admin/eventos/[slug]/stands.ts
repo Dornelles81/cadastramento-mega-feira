@@ -139,7 +139,14 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
     isFull: stand._count.participants >= stand.maxRegistrations
   }));
 
+  // Get event info for the response
+  const eventInfo = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, name: true, code: true, slug: true }
+  });
+
   res.status(200).json({
+    event: eventInfo,
     stands: stats,
     total: stands.length,
     active: stands.filter(s => s.isActive).length,

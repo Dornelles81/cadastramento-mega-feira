@@ -77,35 +77,8 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   });
 
   useEffect(() => {
-    loadEvent();
+    loadStands();
   }, [slug]);
-
-  useEffect(() => {
-    if (event) {
-      loadStands();
-    }
-  }, [event]);
-
-  const loadEvent = async () => {
-    try {
-      const password = localStorage.getItem('adminPassword') || 'admin123';
-      const response = await fetch(`/api/admin/eventos/${slug}`, {
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setEvent(data);
-      } else {
-        alert('Evento não encontrado');
-        router.push('/admin/dashboard');
-      }
-    } catch (error) {
-      console.error('Error loading event:', error);
-    }
-  };
 
   const loadStands = async () => {
     try {
@@ -120,10 +93,20 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
 
       if (response.ok) {
         const data = await response.json();
+        // Event info now comes from stands API
+        if (data.event) {
+          setEvent(data.event);
+        }
         setStats(data);
         setStands(data.stands || []);
       } else {
-        alert('Erro ao carregar stands');
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.error === 'Event not found') {
+          alert('Evento não encontrado');
+          router.push('/admin/dashboard');
+        } else {
+          alert('Erro ao carregar stands');
+        }
       }
     } catch (error) {
       console.error('Error loading stands:', error);

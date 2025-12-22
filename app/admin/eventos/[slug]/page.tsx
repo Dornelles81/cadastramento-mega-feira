@@ -554,19 +554,58 @@ export default function EventAdminPage() {
     }
   }
 
-  // Print credential - 50mm x 25mm
-  const handlePrintCredential = (participant: Participant) => {
+  // Generate QR Code for participant
+  const generateParticipantQRCode = async (participant: Participant): Promise<string> => {
+    const standCode = participant.customData?.standCode || participant.customData?.estande || ''
+    const standName = (participant as any).standName || standCode
+
+    // QR Code payload with participant data
+    const qrPayload = {
+      id: participant.id,
+      name: participant.name,
+      cpf: participant.cpf,
+      event: event?.code || participant.eventCode,
+      stand: standCode,
+      standName: standName,
+      ts: new Date().toISOString(),
+      v: '1.0'
+    }
+
+    // Generate QR Code using the QRCode library via dynamic import
+    const QRCode = (await import('qrcode')).default
+    return QRCode.toDataURL(JSON.stringify(qrPayload), {
+      width: 120,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    })
+  }
+
+  // Print credential - 54mm x 25mm with QR Code
+  const handlePrintCredential = async (participant: Participant) => {
     const standCode = participant.customData?.standCode || participant.customData?.estande || 'N/A'
+    const standName = (participant as any).standName || standCode
     const eventName = event?.name || 'Evento'
 
+    // Generate QR Code
+    let qrCodeDataUrl = ''
+    try {
+      qrCodeDataUrl = await generateParticipantQRCode(participant)
+    } catch (error) {
+      console.error('Failed to generate QR Code:', error)
+    }
+
     // Create print window with credential
-    const printWindow = window.open('', '_blank', 'width=400,height=300')
+    const printWindow = window.open('', '_blank', 'width=500,height=300')
     if (!printWindow) {
       alert('Por favor, permita popups para imprimir a credencial')
       return
     }
 
-    // 50mm x 25mm at 96 DPI = ~189px x 94px, but we'll use mm for print
+    // 54mm x 25mm to accommodate QR Code
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -574,7 +613,7 @@ export default function EventAdminPage() {
         <title>Credencial - ${participant.name}</title>
         <style>
           @page {
-            size: 50mm 25mm;
+            size: 54mm 25mm;
             margin: 0;
           }
           * {
@@ -584,13 +623,12 @@ export default function EventAdminPage() {
           }
           body {
             font-family: Arial, sans-serif;
-            width: 50mm;
+            width: 54mm;
             height: 25mm;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 1mm;
+            padding: 0.5mm;
             background: linear-gradient(135deg, #1E3A5F 0%, #2c5282 100%);
             color: white;
           }
@@ -598,31 +636,57 @@ export default function EventAdminPage() {
             width: 100%;
             height: 100%;
             display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            flex-direction: row;
             align-items: center;
-            text-align: center;
             border: 1px solid rgba(255,255,255,0.3);
             border-radius: 2mm;
             padding: 1mm;
+            gap: 2mm;
+          }
+          .qr-section {
+            flex-shrink: 0;
+            width: 18mm;
+            height: 18mm;
+            background: white;
+            border-radius: 1mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5mm;
+          }
+          .qr-section img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+          .info-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: left;
+            overflow: hidden;
+            gap: 0.5mm;
           }
           .event-name {
-            font-size: 6pt;
+            font-size: 5pt;
             font-weight: bold;
             color: #2DD4BF;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .name {
             font-size: 7pt;
             font-weight: bold;
             line-height: 1.1;
-            max-width: 100%;
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
           }
-          .stand-container {
+          .stand-row {
             display: flex;
             align-items: center;
             gap: 1mm;
@@ -633,9 +697,14 @@ export default function EventAdminPage() {
             text-transform: uppercase;
           }
           .stand {
-            font-size: 8pt;
+            font-size: 7pt;
             font-weight: bold;
             color: #2DD4BF;
+          }
+          .id-row {
+            font-size: 4pt;
+            color: rgba(255,255,255,0.5);
+            font-family: monospace;
           }
           @media print {
             body {
@@ -647,11 +716,17 @@ export default function EventAdminPage() {
       </head>
       <body>
         <div class="credential">
-          <div class="event-name">${eventName}</div>
-          <div class="name">${participant.name}</div>
-          <div class="stand-container">
-            <span class="stand-label">Stand:</span>
-            <span class="stand">${standCode}</span>
+          <div class="qr-section">
+            ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="QR Code" />` : '<span style="color:#999;font-size:6pt;">QR</span>'}
+          </div>
+          <div class="info-section">
+            <div class="event-name">${eventName}</div>
+            <div class="name">${participant.name}</div>
+            <div class="stand-row">
+              <span class="stand-label">Stand:</span>
+              <span class="stand">${standName}</span>
+            </div>
+            <div class="id-row">${participant.id.substring(0, 8).toUpperCase()}</div>
           </div>
         </div>
         <script>
@@ -704,6 +779,20 @@ export default function EventAdminPage() {
                   title="Exportar para PDF"
                 >
                   📄 <span className="hidden sm:inline ml-1">PDF</span>
+                </a>
+                <a
+                  href={event?.id ? `/api/export/qrcodes?eventId=${event.id}&format=batch-json&includeImage=true` : '#'}
+                  className="inline-flex items-center px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                  title="Exportar QR Codes (JSON com imagens base64)"
+                >
+                  📱 <span className="hidden sm:inline ml-1">QR Codes</span>
+                </a>
+                <a
+                  href={event?.id ? `/api/export/qrcodes?eventId=${event.id}&format=csv` : '#'}
+                  className="inline-flex items-center px-3 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors shadow-sm"
+                  title="Exportar QR Codes (CSV para integração)"
+                >
+                  📋 <span className="hidden sm:inline ml-1">QR CSV</span>
                 </a>
                 <a
                   href="/admin/hikcental"
@@ -846,7 +935,7 @@ export default function EventAdminPage() {
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Nome</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>CPF</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden sm:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status</th>
-                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Evento</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Stand</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Telefone</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Qualidade</th>
@@ -898,8 +987,8 @@ export default function EventAdminPage() {
                       )}
                     </td>
                     <td className="px-2 md:px-4 py-3 hidden md:table-cell">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-mega-100 text-mega-800">
-                        {formatEventName(participant.eventCode)}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        🏪 {(participant as any).standName || participant.customData?.standCode || participant.customData?.estande || '-'}
                       </span>
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.email || '-'}</td>
@@ -954,11 +1043,20 @@ export default function EventAdminPage() {
                         <button
                           onClick={() => handlePrintCredential(participant)}
                           className="px-2 md:px-3 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
-                          title="Imprimir credencial 50x25mm"
+                          title="Imprimir credencial com QR Code"
                         >
                           <span className="sm:hidden">🏷️</span>
                           <span className="hidden sm:inline">🏷️ Credencial</span>
                         </button>
+                        <a
+                          href={`/api/export/qrcodes?participantId=${participant.id}&format=png`}
+                          className="px-2 md:px-3 py-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded text-xs font-medium transition-colors whitespace-nowrap inline-flex items-center"
+                          title="Baixar QR Code PNG"
+                          download
+                        >
+                          <span className="sm:hidden">📱</span>
+                          <span className="hidden sm:inline">📱 QR</span>
+                        </a>
                       </div>
                     </td>
                   </tr>
@@ -1028,15 +1126,11 @@ export default function EventAdminPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Evento
+                    Stand
                   </label>
                   <input
                     type="text"
-                    value={editingParticipant.eventCode || event?.code || ''}
-                    onChange={(e) => setEditingParticipant({
-                      ...editingParticipant,
-                      eventCode: e.target.value
-                    })}
+                    value={(editingParticipant as any).standName || editingParticipant.customData?.standCode || editingParticipant.customData?.estande || ''}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-gray-100"
                     readOnly
                   />
@@ -1346,7 +1440,7 @@ export default function EventAdminPage() {
                     </h3>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p><strong>CPF:</strong> {viewingImage.cpf}</p>
-                      <p><strong>Evento:</strong> {formatEventName(viewingImage.eventCode)}</p>
+                      <p><strong>Stand:</strong> {(viewingImage as any).standName || viewingImage.customData?.standCode || viewingImage.customData?.estande || '-'}</p>
                     </div>
                   </div>
                   <button

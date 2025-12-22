@@ -1,8 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MegaFeiraLogo from '../components/MegaFeiraLogo'
+
+// Helper function to format date without timezone conversion issues
+const formatEventDate = (dateString: string): string => {
+  if (!dateString) return ''
+  const isoMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return `${day}/${month}/${year}`
+  }
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
 
 interface EventSummary {
   slug: string
@@ -14,7 +25,7 @@ interface EventSummary {
   maxCapacity: number
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [activeEvents, setActiveEvents] = useState<EventSummary[]>([])
@@ -25,6 +36,34 @@ export default function HomePage() {
     const eventSlug = searchParams.get('event')
     if (eventSlug) {
       router.replace(`/eventos/${eventSlug}`)
+      return
+    }
+
+    // Check for update parameter - redirect to participant's event page with update mode
+    const updateId = searchParams.get('update')
+    if (updateId) {
+      // Fetch participant data to get their event slug
+      fetch(`/api/participants/get?id=${updateId}`)
+        .then(response => {
+          if (response.ok) {
+            return response.json()
+          }
+          throw new Error('Participant not found')
+        })
+        .then(data => {
+          const participant = data.participant
+          if (participant?.eventSlug) {
+            // Redirect to the correct event page with update mode
+            router.replace(`/eventos/${participant.eventSlug}?update=${updateId}`)
+          } else {
+            console.error('Participant has no event slug')
+            setLoading(false)
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load participant for update:', error)
+          setLoading(false)
+        })
       return
     }
 
@@ -111,7 +150,7 @@ export default function HomePage() {
                     <h3 className="font-semibold text-white mb-1">{event.name}</h3>
                     <div className="flex justify-between items-center text-xs text-white/70">
                       <span>
-                        {new Date(event.startDate).toLocaleDateString('pt-BR')} - {new Date(event.endDate).toLocaleDateString('pt-BR')}
+                        {formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}
                       </span>
                       <span className="text-verde-agua">
                         {event.currentCount}/{event.maxCapacity} vagas
@@ -165,5 +204,20 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen gradient-hero flex items-center justify-center">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Carregando...</p>
+        </div>
+      </div>
+    }>
+      <HomePageContent />
+    </Suspense>
   )
 }

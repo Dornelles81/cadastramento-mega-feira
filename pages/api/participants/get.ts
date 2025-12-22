@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'ID is required' })
     }
 
-    // Get participant data
+    // Get participant data with event info
     const participant = await prisma.participant.findUnique({
       where: { id },
       select: {
@@ -23,6 +23,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         email: true,
         phone: true,
         eventCode: true,
+        eventId: true,
+        event: {
+          select: {
+            slug: true,
+            name: true,
+            code: true
+          }
+        },
         customData: true,
         documents: true,
         faceImageUrl: true,
@@ -49,7 +57,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cpf: participant.cpf,
         email: participant.email || '',
         phone: participant.phone || '',
-        eventCode: participant.eventCode || '',
+        eventCode: participant.eventCode || participant.event?.code || '',
+        eventSlug: participant.event?.slug || '',
+        eventName: participant.event?.name || '',
         customData: participant.customData || {},
         documents: participant.documents || {},
         faceImageUrl: participant.faceImageUrl || '',
