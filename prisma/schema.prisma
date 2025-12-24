@@ -83,6 +83,8 @@ model Event {
   documentConfigs DocumentConfig[]
   eventConfigs    EventConfig?
   auditLogs       AuditLog[]
+  accessLogs      AccessLog[]
+  accessStats     AccessStats?
 
   @@index([slug])
   @@index([code])
@@ -261,6 +263,7 @@ model Participant {
   // Relations
   syncLogs     HikCentralSyncLog[]
   approvalLogs ApprovalLog[]
+  accessLogs   AccessLog[]
 
   // @@unique([eventId, cpf]) // CPF must be unique per event - DISABLED FOR MIGRATION
   @@index([eventId])
@@ -653,4 +656,82 @@ model HikCentralWebhookLog {
   @@index([participantId])
   @@index([createdAt])
   @@map("hikcental_webhook_logs")
+}
+
+// ============================================================================
+// ACCESS CONTROL - Entry/Exit Management
+// ============================================================================
+
+// Access Log - Records entry and exit of participants
+model AccessLog {
+  id String @id @default(uuid())
+
+  // Participant
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Event
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Access type: ENTRY or EXIT
+  type String // ENTRY, EXIT
+
+  // Location/Gate (optional - for events with multiple gates)
+  gate     String?
+  location String?
+
+  // Operator who registered the access
+  operatorId    String?
+  operatorName  String?
+  operatorEmail String?
+
+  // Device info
+  deviceId   String?
+  deviceName String?
+  deviceIp   String?
+
+  // Verification method
+  verificationMethod String @default("QR_CODE") // QR_CODE, MANUAL, FACIAL
+
+  // Notes
+  notes String?
+
+  // Timestamp
+  createdAt DateTime @default(now())
+
+  @@index([participantId])
+  @@index([eventId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([eventId, type])
+  @@index([participantId, createdAt])
+  @@index([eventId, createdAt])
+  @@map("access_logs")
+}
+
+// Access Stats Cache - For real-time dashboard (optional, for performance)
+model AccessStats {
+  id String @id @default(uuid())
+
+  // Event
+  eventId String @unique
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Current stats
+  currentInsideCount Int @default(0)
+  totalEntries       Int @default(0)
+  totalExits         Int @default(0)
+  uniqueVisitors     Int @default(0)
+
+  // Peak stats
+  peakCount     Int       @default(0)
+  peakTime      DateTime?
+
+  // Last update
+  lastEntryAt DateTime?
+  lastExitAt  DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@map("access_stats")
 }

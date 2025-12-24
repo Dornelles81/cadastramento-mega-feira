@@ -413,7 +413,7 @@ function FieldEditor({
                 type="text"
                 value={editedField.fieldName}
                 onChange={(e) => setEditedField({ ...editedField, fieldName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                 placeholder="ex: empresa, cargo, setor"
                 required
                 disabled={!!field.id}
@@ -431,7 +431,7 @@ function FieldEditor({
                 type="text"
                 value={editedField.label}
                 onChange={(e) => setEditedField({ ...editedField, label: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                 placeholder="ex: Nome da Empresa, Cargo, Setor"
                 required
               />
@@ -444,7 +444,7 @@ function FieldEditor({
               <select
                 value={editedField.type}
                 onChange={(e) => setEditedField({ ...editedField, type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                 required
               >
                 {FIELD_TYPES.map(type => (
@@ -461,7 +461,7 @@ function FieldEditor({
                 <textarea
                   value={options}
                   onChange={(e) => setOptions(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                   rows={5}
                   placeholder="Opção 1&#10;Opção 2&#10;Opção 3"
                   required
@@ -477,7 +477,7 @@ function FieldEditor({
                 type="text"
                 value={editedField.placeholder || ''}
                 onChange={(e) => setEditedField({ ...editedField, placeholder: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mega-500 bg-white text-gray-900"
                 placeholder="Texto de exemplo"
               />
             </div>

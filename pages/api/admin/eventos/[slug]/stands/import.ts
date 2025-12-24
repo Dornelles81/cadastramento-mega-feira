@@ -14,6 +14,8 @@ interface StandImport {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('📥 [IMPORT] Requisição recebida:', req.method, req.url)
+
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -31,6 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { slug } = req.query
   const { stands } = req.body as { stands: StandImport[] }
+
+  console.log('📥 [IMPORT] Slug:', slug)
+  console.log('📥 [IMPORT] Stands recebidos:', stands?.length || 0)
 
   if (!slug || typeof slug !== 'string') {
     res.status(400).json({ error: 'Slug do evento é obrigatório' })
@@ -103,6 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    console.log('📥 [IMPORT] ✅ Sucesso:', { created, updated, total: stands.length })
     res.status(200).json({
       success: true,
       created,
@@ -111,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
   } catch (error: any) {
-    console.error('Error importing stands:', error)
+    console.error('📥 [IMPORT] ❌ Erro:', error)
     res.status(500).json({
       error: 'Erro ao importar stands',
       message: error.message

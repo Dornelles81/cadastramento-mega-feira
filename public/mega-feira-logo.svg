@@ -1,47 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300">
-  <!-- Logo background -->
-  <rect width="600" height="300" fill="#ffffff"/>
-  
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+  <!-- Background transparent -->
+
   <!-- Icon elements (simplified version of the logo) -->
-  <g transform="translate(50, 50)">
+  <g transform="translate(30, 20)">
     <!-- Calendar -->
-    <rect x="0" y="0" width="40" height="35" fill="none" stroke="#7CC69B" stroke-width="3" rx="3"/>
-    <line x1="8" y1="0" x2="8" y2="10" stroke="#7CC69B" stroke-width="3"/>
-    <line x1="32" y1="0" x2="32" y2="10" stroke="#7CC69B" stroke-width="3"/>
-    <rect x="15" y="15" width="10" height="8" fill="#7CC69B"/>
-    
+    <rect x="0" y="0" width="28" height="24" fill="none" stroke="#7CC69B" stroke-width="2" rx="2"/>
+    <line x1="6" y1="0" x2="6" y2="7" stroke="#7CC69B" stroke-width="2"/>
+    <line x1="22" y1="0" x2="22" y2="7" stroke="#7CC69B" stroke-width="2"/>
+    <rect x="10" y="10" width="8" height="6" fill="#7CC69B"/>
+
     <!-- WiFi signals -->
-    <path d="M60 20 Q80 10, 100 20" fill="none" stroke="#7CC69B" stroke-width="4"/>
-    <path d="M65 25 Q80 18, 95 25" fill="none" stroke="#7CC69B" stroke-width="4"/>
-    <path d="M70 30 Q80 25, 90 30" fill="none" stroke="#7CC69B" stroke-width="4"/>
-    
+    <path d="M40 12 Q55 5, 70 12" fill="none" stroke="#7CC69B" stroke-width="2.5"/>
+    <path d="M44 16 Q55 11, 66 16" fill="none" stroke="#7CC69B" stroke-width="2.5"/>
+    <path d="M48 20 Q55 16, 62 20" fill="none" stroke="#7CC69B" stroke-width="2.5"/>
+
     <!-- Location pin with clock -->
-    <circle cx="80" cy="60" r="25" fill="none" stroke="#7CC69B" stroke-width="3"/>
-    <circle cx="80" cy="60" r="3" fill="#7CC69B"/>
-    <line x1="80" y1="60" x2="80" y2="45" stroke="#7CC69B" stroke-width="2"/>
-    <line x1="80" y1="60" x2="90" y2="65" stroke="#7CC69B" stroke-width="2"/>
-    
+    <circle cx="55" cy="42" r="18" fill="none" stroke="#7CC69B" stroke-width="2"/>
+    <circle cx="55" cy="42" r="2" fill="#7CC69B"/>
+    <line x1="55" y1="42" x2="55" y2="30" stroke="#7CC69B" stroke-width="1.5"/>
+    <line x1="55" y1="42" x2="63" y2="46" stroke="#7CC69B" stroke-width="1.5"/>
+
     <!-- Music notes -->
-    <circle cx="20" cy="70" r="3" fill="#7CC69B"/>
-    <line x1="26" y1="70" x2="26" y2="50" stroke="#7CC69B" stroke-width="2"/>
-    <circle cx="35" cy="80" r="3" fill="#7CC69B"/>
-    <line x1="41" y1="80" x2="41" y2="60" stroke="#7CC69B" stroke-width="2"/>
-    
+    <circle cx="14" cy="48" r="3" fill="#7CC69B"/>
+    <line x1="17" y1="48" x2="17" y2="35" stroke="#7CC69B" stroke-width="1.5"/>
+    <circle cx="26" cy="55" r="3" fill="#7CC69B"/>
+    <line x1="29" y1="55" x2="29" y2="42" stroke="#7CC69B" stroke-width="1.5"/>
+
     <!-- Play button -->
-    <polygon points="110,50 130,60 110,70" fill="#7CC69B"/>
-    
+    <polygon points="78,35 92,42 78,49" fill="#7CC69B"/>
+
     <!-- Decorative dots -->
-    <circle cx="120" cy="80" r="2" fill="#7CC69B"/>
-    <circle cx="125" cy="75" r="1.5" fill="#7CC69B"/>
-    <circle cx="130" cy="82" r="1" fill="#7CC69B"/>
+    <circle cx="85" cy="55" r="2" fill="#7CC69B"/>
+    <circle cx="90" cy="50" r="1.5" fill="#7CC69B"/>
+    <circle cx="95" cy="57" r="1" fill="#7CC69B"/>
   </g>
-  
+
   <!-- Text MEGA FEIRA -->
-  <g transform="translate(50, 180)">
-    <!-- MEGA in green gradient -->
-    <text x="0" y="60" font-family="Arial Black, sans-serif" font-size="72" font-weight="900" fill="#7CC69B">MEGA</text>
-    
-    <!-- FEIRA in black -->
-    <text x="250" y="60" font-family="Arial Black, sans-serif" font-size="72" font-weight="900" fill="#2D3436">FEIRA</text>
+  <g transform="translate(30, 100)">
+    <!-- MEGA in green italic -->
+    <text x="0" y="50" font-family="Arial Black, Helvetica, sans-serif" font-size="52" font-weight="900" font-style="italic" fill="#7CC69B">MEGA</text>
+
+    <!-- FEIRA in dark gray -->
+    <text x="165" y="50" font-family="Arial Black, Helvetica, sans-serif" font-size="52" font-weight="900" fill="#2D3436">FEIRA</text>
   </g>
+
+  <!-- Tagline -->
+  <text x="30" y="175" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#64748B" letter-spacing="1">acessando conexões</text>
 </svg>

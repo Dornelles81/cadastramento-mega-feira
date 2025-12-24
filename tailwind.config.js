@@ -18,21 +18,37 @@ module.exports = {
       // Mega Feira brand colors - Identidade Visual Oficial
       colors: {
         // CORES PRINCIPAIS
-        // Verde-água - Logo "MEGA", destaques, CTAs, acentos
+        // Verde Mega Feira - Logo "MEGA", destaques, CTAs, acentos
+        'verde-mega': {
+          DEFAULT: '#7CC69B',
+          light: '#9DD4B3',
+          dark: '#5CB882',
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#9DD4B3',
+          400: '#7CC69B',
+          500: '#5CB882',
+          600: '#4ade80',
+          700: '#22c55e',
+          800: '#16a34a',
+          900: '#15803d',
+        },
+        // Verde-água (legacy alias for backward compatibility)
         'verde-agua': {
-          DEFAULT: '#2DD4BF',
-          light: '#5eead4',
-          dark: '#14b8a6',
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2DD4BF',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
+          DEFAULT: '#7CC69B',
+          light: '#9DD4B3',
+          dark: '#5CB882',
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#9DD4B3',
+          400: '#7CC69B',
+          500: '#5CB882',
+          600: '#4ade80',
+          700: '#22c55e',
+          800: '#16a34a',
+          900: '#15803d',
         },
         // Azul marinho - Logo "FEIRA", títulos, fundos escuros
         'azul-marinho': {
@@ -50,21 +66,21 @@ module.exports = {
           800: '#1a365d',
           900: '#1e3a8a',
         },
-        // Primary alias para verde-água
+        // Primary alias para verde Mega Feira
         'primary': {
-          DEFAULT: '#2DD4BF',
-          light: '#5eead4',
-          dark: '#14b8a6',
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2DD4BF',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
+          DEFAULT: '#7CC69B',
+          light: '#9DD4B3',
+          dark: '#5CB882',
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#9DD4B3',
+          400: '#7CC69B',
+          500: '#5CB882',
+          600: '#4ade80',
+          700: '#22c55e',
+          800: '#16a34a',
+          900: '#15803d',
         },
         // CORES SECUNDÁRIAS
         // Azul médio - Gradientes, botões secundários
@@ -120,18 +136,18 @@ module.exports = {
           claro: '#F8FAFC',      // Fundo principal (light mode)
           medio: '#E2E8F0',      // Gradiente de fundo
         },
-        // Mega brand (verde-água)
+        // Mega brand (verde Mega Feira)
         'mega': {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2DD4BF',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#9DD4B3',
+          400: '#7CC69B',
+          500: '#5CB882',
+          600: '#4ade80',
+          700: '#22c55e',
+          800: '#16a34a',
+          900: '#15803d',
         },
         // Feira (azul marinho)
         'feira': {

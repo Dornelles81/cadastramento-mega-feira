@@ -78,14 +78,17 @@ export default async function handler(
     }
 
     // Create event
+    // IMPORTANT: Add 12:00:00 to dates to avoid timezone issues
+    // When dates are stored as midnight UTC, they can appear as the previous day
+    // in timezones west of UTC (like America/Sao_Paulo which is UTC-3)
     const event = await prisma.event.create({
       data: {
         slug,
         name,
         code,
         description: description || null,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: new Date(`${startDate}T12:00:00Z`),
+        endDate: new Date(`${endDate}T12:00:00Z`),
         maxCapacity: maxCapacity || 2000,
         currentCount: 0,
         status: 'active',

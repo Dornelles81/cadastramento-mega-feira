@@ -11,12 +11,12 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Cadastro Mega Feira - Reconhecimento Facial',
+  title: 'Mega Feira - Cadastro Facial',
   description: 'Sistema de cadastro com reconhecimento facial para eventos da Mega Feira',
   manifest: '/manifest.json',
   icons: {
-    icon: '/mega-feira-logo.svg',
-    apple: '/mega-feira-logo.svg',
+    icon: '/icons/icon.svg',
+    apple: '/icons/icon.svg',
   },
   other: {
     'mobile-web-app-capable': 'yes',
@@ -32,7 +32,7 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#2DD4BF',
+  themeColor: '#7CC69B',
 }
 
 export default function RootLayout({

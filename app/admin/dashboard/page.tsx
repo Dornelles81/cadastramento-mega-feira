@@ -138,6 +138,33 @@ export default function AdminDashboard() {
               <div className="font-semibold text-lg">Logs Globais</div>
               <div className="text-sm opacity-90">Ver auditoria de todos os eventos</div>
             </button>
+
+            <button
+              onClick={() => router.push('/admin/access-control')}
+              className="p-6 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:shadow-lg transition-all text-left"
+            >
+              <div className="text-3xl mb-2">🚪</div>
+              <div className="font-semibold text-lg">Controle de Acesso</div>
+              <div className="text-sm opacity-90">Entrada e saida de participantes</div>
+            </button>
+
+            <button
+              onClick={() => router.push('/admin/access-control/reports')}
+              className="p-6 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg hover:shadow-lg transition-all text-left"
+            >
+              <div className="text-3xl mb-2">📊</div>
+              <div className="font-semibold text-lg">Relatorios de Acesso</div>
+              <div className="text-sm opacity-90">Historico de entradas e saidas</div>
+            </button>
+
+            <button
+              onClick={() => router.push('/admin/approvals')}
+              className="p-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg hover:shadow-lg transition-all text-left"
+            >
+              <div className="text-3xl mb-2">✅</div>
+              <div className="font-semibold text-lg">Aprovacoes</div>
+              <div className="text-sm opacity-90">Aprovar ou rejeitar cadastros</div>
+            </button>
           </div>
         )}
 
@@ -250,6 +277,12 @@ export default function AdminDashboard() {
                         </button>
                       </>
                     )}
+                    <button
+                      onClick={() => router.push(`/admin/access-control?event=${event.slug}`)}
+                      className="w-full py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold text-sm"
+                    >
+                      🚪 Controle de Acesso
+                    </button>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => router.push(`/eventos/${event.slug}/cadastro`)}

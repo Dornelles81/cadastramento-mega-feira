@@ -73,7 +73,7 @@ export default function SuccessScreen({ participantName, onNewRegistration }: Su
             <span className="font-semibold text-green-800">Acesso Liberado</span>
           </div>
           <p className="text-sm text-green-700">
-            Você já pode entrar na Mega Feira usando reconhecimento facial
+            Você já pode entrar na <em>Mega</em> Feira usando reconhecimento facial
           </p>
         </div>
 
@@ -141,7 +141,7 @@ export default function SuccessScreen({ participantName, onNewRegistration }: Su
       {/* Contact info */}
       <div className="pt-4 border-t border-gray-200">
         <p className="text-xs text-gray-500">
-          🎫 <strong>Mega Feira 2025</strong><br/>
+          🎫 <strong><em>Mega</em> Feira 2025</strong><br/>
           📧 Suporte: suporte@megafeira.com<br/>
           📞 WhatsApp: (11) 99999-9999
         </p>

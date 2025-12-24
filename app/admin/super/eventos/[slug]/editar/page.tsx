@@ -88,11 +88,23 @@ export default function EditarEventoPage() {
       setEvent(event)
 
       // Populate form with existing data
+      // Convert dates to local date strings to avoid timezone issues
+      // The dates are stored in UTC, so we need to extract just the date part correctly
+      const formatDateForInput = (dateStr: string) => {
+        if (!dateStr) return ''
+        // Parse the date and format it as YYYY-MM-DD in local timezone
+        const date = new Date(dateStr)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
+
       setFormData({
         name: event.name || '',
         description: event.description || '',
-        startDate: event.startDate ? event.startDate.split('T')[0] : '',
-        endDate: event.endDate ? event.endDate.split('T')[0] : '',
+        startDate: formatDateForInput(event.startDate),
+        endDate: formatDateForInput(event.endDate),
         maxCapacity: event.maxCapacity || 2000,
         status: event.status || 'draft',
         isActive: event.isActive !== undefined ? event.isActive : true,
@@ -222,7 +234,7 @@ export default function EditarEventoPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   placeholder="Ex: Mega Feira 2026"
                   required
                 />
@@ -265,7 +277,7 @@ export default function EditarEventoPage() {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   rows={3}
                   placeholder="Descrição do evento..."
                 />
@@ -279,7 +291,7 @@ export default function EditarEventoPage() {
                   type="date"
                   value={formData.startDate}
                   onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   required
                 />
               </div>
@@ -292,7 +304,7 @@ export default function EditarEventoPage() {
                   type="date"
                   value={formData.endDate}
                   onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   required
                 />
               </div>
@@ -305,7 +317,7 @@ export default function EditarEventoPage() {
                   type="number"
                   value={formData.maxCapacity}
                   onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   min="1"
                 />
               </div>
@@ -317,7 +329,7 @@ export default function EditarEventoPage() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                 >
                   <option value="draft">Rascunho</option>
                   <option value="published">Publicado</option>

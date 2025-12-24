@@ -93,7 +93,7 @@ export default function ConsentForm({ onAccept }: ConsentFormProps) {
           <h4 className="font-semibold mb-2">TERMO DE CONSENTIMENTO PARA TRATAMENTO DE DADOS BIOMÉTRICOS</h4>
           <p className="mb-2">
             <strong>1. IDENTIFICAÇÃO:</strong> Eu, ao fornecer meus dados pessoais, AUTORIZO o tratamento 
-            de meus dados pessoais e biométricos para fins de controle de acesso ao evento Mega Feira 2025.
+            de meus dados pessoais e biométricos para fins de controle de acesso ao evento <em>Mega</em> Feira 2025.
           </p>
           <p className="mb-2">
             <strong>2. DADOS COLETADOS:</strong> Nome completo, CPF, email (opcional), telefone (opcional) e 

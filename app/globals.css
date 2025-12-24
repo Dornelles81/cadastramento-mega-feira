@@ -5,20 +5,25 @@
 /* ===== MEGA FEIRA - CSS Variables - Identidade Visual Oficial ===== */
 :root {
   /* CORES PRINCIPAIS */
-  /* Verde-água #2DD4BF - Logo "MEGA", destaques, CTAs, acentos */
-  --verde-agua: 168 73% 51%;
-  --verde-agua-light: 168 70% 62%;
-  --verde-agua-dark: 168 73% 41%;
+  /* Verde Mega Feira #7CC69B - Logo "MEGA", destaques, CTAs, acentos */
+  --verde-mega: 145 39% 63%;
+  --verde-mega-light: 145 39% 73%;
+  --verde-mega-dark: 145 39% 53%;
+
+  /* Verde-água (legacy alias) */
+  --verde-agua: 145 39% 63%;
+  --verde-agua-light: 145 39% 73%;
+  --verde-agua-dark: 145 39% 53%;
 
   /* Azul marinho #1E3A5F - Logo "FEIRA", títulos, fundos escuros */
   --azul-marinho: 212 52% 25%;
   --azul-marinho-light: 212 44% 34%;
   --azul-marinho-dark: 212 52% 23%;
 
-  /* Primary alias (verde-água) */
-  --primary: 168 73% 51%;        /* #2DD4BF */
-  --primary-light: 168 70% 62%;
-  --primary-dark: 168 73% 41%;
+  /* Primary alias (verde Mega Feira) */
+  --primary: 145 39% 63%;        /* #7CC69B */
+  --primary-light: 145 39% 73%;
+  --primary-dark: 145 39% 53%;
 
   /* CORES SECUNDÁRIAS */
   /* Azul médio #2563EB - Gradientes, botões secundários */
@@ -96,11 +101,11 @@ html, body {
   }
 
   .gradient-mega-feira {
-    background: linear-gradient(135deg, #2DD4BF 0%, #1E3A5F 100%);
+    background: linear-gradient(135deg, #7CC69B 0%, #2D3436 100%);
   }
 
   .gradient-text {
-    background: linear-gradient(to right, #2DD4BF, #2563EB, #1E3A5F);
+    background: linear-gradient(to right, #7CC69B, #2563EB, #2D3436);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -306,16 +311,58 @@ video {
   color: #f8fafc;
 }
 
+/* ===== FORM INPUTS - GLOBAL CONTRAST FIX ===== */
+/* Ensure proper contrast on all form inputs */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  background-color: #ffffff;
+  color: #111827; /* text-gray-900 */
+}
+
+input:not([type="checkbox"]):not([type="radio"])::placeholder,
+textarea::placeholder {
+  color: #9ca3af; /* text-gray-400 - visible but not too dark */
+}
+
+/* Dark mode inputs (when inside .dark class or dark-mode class) */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea,
+.dark-mode input:not([type="checkbox"]):not([type="radio"]),
+.dark-mode select,
+.dark-mode textarea {
+  background-color: #374151; /* bg-gray-700 */
+  color: #f9fafb; /* text-gray-50 */
+  border-color: #4b5563; /* border-gray-600 */
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder,
+.dark-mode input::placeholder,
+.dark-mode textarea::placeholder {
+  color: #9ca3af; /* text-gray-400 */
+}
+
+/* Disabled inputs */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background-color: #f3f4f6; /* bg-gray-100 */
+  color: #6b7280; /* text-gray-500 */
+  cursor: not-allowed;
+}
+
 /* ===== LOGO MEGA FEIRA ===== */
 .logo-mega {
-  color: #2DD4BF;
+  color: #7CC69B;
+  font-weight: 900;
   font-style: italic;
-  font-weight: bold;
 }
 
 .logo-feira {
-  color: #1E3A5F;
-  font-weight: bold;
+  color: #2D3436;
+  font-weight: 900;
 }
 
 .logo-tagline {

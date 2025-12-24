@@ -370,7 +370,7 @@ export default function FieldsManagerPage() {
               type="text"
               value={localField.fieldName}
               onChange={(e) => setLocalField({ ...localField, fieldName: e.target.value.toLowerCase().replace(/\s/g, '_') })}
-              className={`w-full px-3 py-2 border rounded-lg ${!localField.fieldName ? 'border-red-300' : 'border-gray-300'}`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 ${!localField.fieldName ? 'border-red-300' : 'border-gray-300'}`}
               placeholder="ex: telefone_comercial"
               required
             />
@@ -387,7 +387,7 @@ export default function FieldsManagerPage() {
               type="text"
               value={localField.label}
               onChange={(e) => setLocalField({ ...localField, label: e.target.value })}
-              className={`w-full px-3 py-2 border rounded-lg ${!localField.label ? 'border-red-300' : 'border-gray-300'}`}
+              className={`w-full px-3 py-2 border rounded-lg bg-white text-gray-900 ${!localField.label ? 'border-red-300' : 'border-gray-300'}`}
               placeholder="ex: Telefone Comercial"
               required
             />
@@ -427,7 +427,7 @@ export default function FieldsManagerPage() {
 
                 setLocalField(updates)
               }}
-              className="w-full px-3 py-2 border rounded-lg bg-white"
+              className="w-full px-3 py-2 border rounded-lg bg-white text-gray-900"
             >
               {FIELD_TYPES.map(type => (
                 <option key={type.value} value={type.value}>{type.label}</option>
