@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MegaFeiraLogo from '../../../components/MegaFeiraLogo'
+import jsQR from 'jsqr'
 
 interface Participant {
   id: string
@@ -441,18 +442,58 @@ function AccessControlContent() {
   // QR Scanner functions
   const startScanner = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      })
+      // Check if mediaDevices is available (requires HTTPS)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setMessage({ type: 'error', text: 'Camera nao suportada neste navegador. Use HTTPS.' })
+        return
+      }
+
+      // Mobile-optimized constraints
+      const constraints = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        },
+        audio: false
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         streamRef.current = stream
-        setScannerActive(true)
-        scanQRCode()
+
+        // Required for iOS Safari
+        videoRef.current.setAttribute('playsinline', 'true')
+        videoRef.current.setAttribute('webkit-playsinline', 'true')
+        videoRef.current.muted = true
+
+        // Wait for video to be ready
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play()
+            .then(() => {
+              setScannerActive(true)
+              setMessage({ type: 'info', text: 'Camera ativa. Aponte para o QR Code.' })
+              setTimeout(() => setMessage(null), 2000)
+            })
+            .catch((err) => {
+              console.error('Error playing video:', err)
+              setMessage({ type: 'error', text: 'Erro ao iniciar video. Toque na tela.' })
+            })
+        }
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Nao foi possivel acessar a camera' })
+    } catch (error: any) {
+      console.error('Camera error:', error)
+      if (error.name === 'NotAllowedError') {
+        setMessage({ type: 'error', text: 'Permissao de camera negada. Verifique as configuracoes.' })
+      } else if (error.name === 'NotFoundError') {
+        setMessage({ type: 'error', text: 'Nenhuma camera encontrada.' })
+      } else if (error.name === 'NotReadableError') {
+        setMessage({ type: 'error', text: 'Camera em uso por outro aplicativo.' })
+      } else {
+        setMessage({ type: 'error', text: `Erro na camera: ${error.message || 'desconhecido'}` })
+      }
     }
   }
 
@@ -461,29 +502,82 @@ function AccessControlContent() {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
     setScannerActive(false)
   }
 
-  const scanQRCode = useCallback(() => {
-    if (!scannerActive || !videoRef.current || !canvasRef.current) return
+  // QR Code scanning with jsQR
+  useEffect(() => {
+    if (!scannerActive) return
 
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
+    let animationId: number
+    let lastScanTime = 0
+    const scanInterval = 200 // Scan every 200ms to avoid duplicates
 
-    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
-      requestAnimationFrame(scanQRCode)
-      return
+    const scan = () => {
+      if (!videoRef.current || !canvasRef.current) {
+        animationId = requestAnimationFrame(scan)
+        return
+      }
+
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+
+      if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        animationId = requestAnimationFrame(scan)
+        return
+      }
+
+      const now = Date.now()
+      if (now - lastScanTime < scanInterval) {
+        animationId = requestAnimationFrame(scan)
+        return
+      }
+      lastScanTime = now
+
+      // Set canvas size to match video
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Get image data and scan for QR code
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        })
+
+        if (code && code.data) {
+          // QR Code found!
+          console.log('QR Code detected:', code.data)
+
+          // Stop scanner and search
+          stopScanner()
+          setSearchInput(code.data)
+          searchParticipant(code.data)
+
+          // Vibrate on success (if supported)
+          if (navigator.vibrate) {
+            navigator.vibrate(100)
+          }
+        }
+      } catch (err) {
+        console.error('QR scan error:', err)
+      }
+
+      animationId = requestAnimationFrame(scan)
     }
 
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    ctx.drawImage(video, 0, 0)
+    animationId = requestAnimationFrame(scan)
 
-    // Use jsQR library if available (would need to be imported)
-    // For now, we rely on manual input or other QR scanning methods
-
-    requestAnimationFrame(scanQRCode)
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId)
+      }
+    }
   }, [scannerActive])
 
   const saveSettings = () => {
@@ -687,10 +781,21 @@ function AccessControlContent() {
                     ref={videoRef}
                     autoPlay
                     playsInline
-                    className="w-full rounded-lg"
-                    style={{ maxHeight: '300px' }}
+                    muted
+                    className="w-full rounded-lg bg-black"
+                    style={{ maxHeight: '300px', objectFit: 'cover' }}
+                    onClick={() => videoRef.current?.play()}
                   />
                   <canvas ref={canvasRef} className="hidden" />
+                  {/* Scanning indicator */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-48 h-48 border-2 border-green-500 rounded-lg opacity-50"></div>
+                  </div>
+                  <div className="absolute bottom-2 left-2 right-2 text-center">
+                    <span className="bg-black/70 text-white text-xs px-2 py-1 rounded">
+                      📷 Escaneando QR Code...
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
