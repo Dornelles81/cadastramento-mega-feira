@@ -88,6 +88,7 @@ function AccessControlContent() {
   const [forceEntry, setForceEntry] = useState(false)
   const [turboMode, setTurboMode] = useState(false)
   const [lastRegistrations, setLastRegistrations] = useState<{name: string, type: string, time: Date}[]>([])
+  const [qrDetected, setQrDetected] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -532,7 +533,8 @@ function AccessControlContent() {
 
     let animationId: number
     let lastScanTime = 0
-    const scanInterval = 200 // Scan every 200ms to avoid duplicates
+    let scanCount = 0
+    const scanInterval = 100 // Scan every 100ms for faster detection
 
     const scan = () => {
       if (!videoRef.current || !canvasRef.current) {
@@ -555,6 +557,12 @@ function AccessControlContent() {
         return
       }
       lastScanTime = now
+      scanCount++
+
+      // Log every 50 scans to confirm scanning is happening
+      if (scanCount % 50 === 0) {
+        console.log(`Scanning... (${scanCount} scans, video: ${video.videoWidth}x${video.videoHeight})`)
+      }
 
       // Set canvas size to match video
       canvas.width = video.videoWidth
@@ -564,23 +572,31 @@ function AccessControlContent() {
       // Get image data and scan for QR code
       try {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+        // Try with different inversion attempts for better detection
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert'
+          inversionAttempts: 'attemptBoth'
         })
 
         if (code && code.data) {
           // QR Code found!
-          console.log('QR Code detected:', code.data)
+          console.log('✅ QR Code detected:', code.data)
+          console.log('QR location:', code.location)
+
+          // Prevent duplicate detections
+          setQrDetected(code.data)
+
+          // Vibrate on success (if supported)
+          if (navigator.vibrate) {
+            navigator.vibrate([100, 50, 100])
+          }
 
           // Stop scanner and search
           stopScanner()
           setSearchInput(code.data)
           searchParticipant(code.data)
 
-          // Vibrate on success (if supported)
-          if (navigator.vibrate) {
-            navigator.vibrate(100)
-          }
+          return // Stop scanning
         }
       } catch (err) {
         console.error('QR scan error:', err)
@@ -589,9 +605,11 @@ function AccessControlContent() {
       animationId = requestAnimationFrame(scan)
     }
 
+    console.log('🎥 Starting QR scanner...')
     animationId = requestAnimationFrame(scan)
 
     return () => {
+      console.log('🛑 Stopping QR scanner...')
       if (animationId) {
         cancelAnimationFrame(animationId)
       }
