@@ -453,13 +453,18 @@ function AccessControlContent() {
     setMessage({ type: 'info', text: 'Iniciando camera...' })
   }
 
+  // Ref to track if camera is already initializing
+  const cameraInitRef = useRef(false)
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
   // Initialize camera when video element is mounted
   useEffect(() => {
-    if (!scannerLoading || !videoRef.current) return
+    if (!scannerLoading || !videoRef.current || cameraInitRef.current) return
+
+    cameraInitRef.current = true
 
     const initCamera = async () => {
       try {
-        // Mobile-optimized constraints
         const constraints = {
           video: {
             facingMode: { ideal: 'environment' },
@@ -469,27 +474,30 @@ function AccessControlContent() {
           audio: false
         }
 
-        console.log('Requesting camera access...')
+        console.log('📷 Requesting camera access...')
         const stream = await navigator.mediaDevices.getUserMedia(constraints)
-        console.log('Camera access granted, stream:', stream)
+        console.log('✅ Camera access granted')
 
-        if (videoRef.current) {
+        if (videoRef.current && scannerLoading) {
           videoRef.current.srcObject = stream
           streamRef.current = stream
 
-          // Wait for video to be ready
           videoRef.current.onloadedmetadata = () => {
-            console.log('Video metadata loaded')
+            console.log('📹 Video metadata loaded')
             videoRef.current?.play()
               .then(() => {
-                console.log('Video playing')
+                console.log('▶️ Video playing - starting QR scanner')
                 setScannerActive(true)
                 setScannerLoading(false)
                 setMessage({ type: 'info', text: 'Camera ativa. Aponte para o QR Code.' })
                 setTimeout(() => setMessage(null), 2000)
+
+                // Start QR scanning directly here
+                startQRScanning()
               })
               .catch((err) => {
                 console.error('Error playing video:', err)
+                cameraInitRef.current = false
                 setScannerLoading(false)
                 setMessage({ type: 'error', text: 'Erro ao iniciar video. Toque na tela.' })
               })
@@ -497,6 +505,7 @@ function AccessControlContent() {
         }
       } catch (error: any) {
         console.error('Camera error:', error)
+        cameraInitRef.current = false
         setScannerLoading(false)
         if (error.name === 'NotAllowedError') {
           setMessage({ type: 'error', text: 'Permissao de camera negada. Verifique as configuracoes.' })
@@ -510,35 +519,18 @@ function AccessControlContent() {
       }
     }
 
-    // Small delay to ensure video element is fully mounted
     const timer = setTimeout(initCamera, 100)
     return () => clearTimeout(timer)
   }, [scannerLoading])
 
-  const stopScanner = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-    setScannerActive(false)
-    setScannerLoading(false)
-  }
-
-  // QR Code scanning with jsQR
-  useEffect(() => {
-    if (!scannerActive) return
-
-    let animationId: number
-    let lastScanTime = 0
+  // QR Scanning function
+  const startQRScanning = () => {
+    console.log('🔍 Starting QR code scanning...')
     let scanCount = 0
-    const scanInterval = 100 // Scan every 100ms for faster detection
 
-    const scan = () => {
-      if (!videoRef.current || !canvasRef.current) {
-        animationId = requestAnimationFrame(scan)
+    const scanFrame = () => {
+      if (!videoRef.current || !canvasRef.current || !streamRef.current) {
+        console.log('❌ Scanner stopped - refs not available')
         return
       }
 
@@ -547,74 +539,73 @@ function AccessControlContent() {
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
 
       if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
-        animationId = requestAnimationFrame(scan)
+        scanIntervalRef.current = setTimeout(scanFrame, 100)
         return
       }
 
-      const now = Date.now()
-      if (now - lastScanTime < scanInterval) {
-        animationId = requestAnimationFrame(scan)
-        return
-      }
-      lastScanTime = now
       scanCount++
-
-      // Log every 50 scans to confirm scanning is happening
       if (scanCount % 50 === 0) {
-        console.log(`Scanning... (${scanCount} scans, video: ${video.videoWidth}x${video.videoHeight})`)
+        console.log(`🔄 Scanning... (${scanCount} frames, ${video.videoWidth}x${video.videoHeight})`)
       }
 
-      // Set canvas size to match video
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-      // Get image data and scan for QR code
       try {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-
-        // Try with different inversion attempts for better detection
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'attemptBoth'
         })
 
         if (code && code.data) {
-          // QR Code found!
           console.log('✅ QR Code detected:', code.data)
-          console.log('QR location:', code.location)
 
-          // Prevent duplicate detections
-          setQrDetected(code.data)
-
-          // Vibrate on success (if supported)
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100])
           }
 
-          // Stop scanner and search
+          // Stop scanning and process
+          if (scanIntervalRef.current) {
+            clearTimeout(scanIntervalRef.current)
+            scanIntervalRef.current = null
+          }
+
           stopScanner()
           setSearchInput(code.data)
           searchParticipant(code.data)
-
-          return // Stop scanning
+          return
         }
       } catch (err) {
         console.error('QR scan error:', err)
       }
 
-      animationId = requestAnimationFrame(scan)
+      scanIntervalRef.current = setTimeout(scanFrame, 100)
     }
 
-    console.log('🎥 Starting QR scanner...')
-    animationId = requestAnimationFrame(scan)
+    scanFrame()
+  }
 
-    return () => {
-      console.log('🛑 Stopping QR scanner...')
-      if (animationId) {
-        cancelAnimationFrame(animationId)
-      }
+  const stopScanner = () => {
+    console.log('🛑 Stopping scanner...')
+    // Stop scan interval
+    if (scanIntervalRef.current) {
+      clearTimeout(scanIntervalRef.current)
+      scanIntervalRef.current = null
     }
-  }, [scannerActive])
+    // Stop camera stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    // Reset states
+    cameraInitRef.current = false
+    setScannerActive(false)
+    setScannerLoading(false)
+  }
 
   const saveSettings = () => {
     if (typeof window !== 'undefined') {
