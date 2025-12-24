@@ -81,6 +81,7 @@ function AccessControlContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
   const [darkMode, setDarkMode] = useState(false)
   const [scannerActive, setScannerActive] = useState(false)
+  const [scannerLoading, setScannerLoading] = useState(false)
   const [requireExitFirst, setRequireExitFirst] = useState(true)
   const [operatorName, setOperatorName] = useState('')
   const [gateName, setGateName] = useState('')
@@ -440,62 +441,78 @@ function AccessControlContent() {
   }
 
   // QR Scanner functions
-  const startScanner = async () => {
-    try {
-      // Check if mediaDevices is available (requires HTTPS)
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setMessage({ type: 'error', text: 'Camera nao suportada neste navegador. Use HTTPS.' })
-        return
-      }
+  const startScanner = () => {
+    // Check if mediaDevices is available (requires HTTPS)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMessage({ type: 'error', text: 'Camera nao suportada neste navegador. Use HTTPS.' })
+      return
+    }
+    // Show video element first, then initialize camera
+    setScannerLoading(true)
+    setMessage({ type: 'info', text: 'Iniciando camera...' })
+  }
 
-      // Mobile-optimized constraints
-      const constraints = {
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 }
-        },
-        audio: false
-      }
+  // Initialize camera when video element is mounted
+  useEffect(() => {
+    if (!scannerLoading || !videoRef.current) return
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+    const initCamera = async () => {
+      try {
+        // Mobile-optimized constraints
+        const constraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
+          },
+          audio: false
+        }
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
+        console.log('Requesting camera access...')
+        const stream = await navigator.mediaDevices.getUserMedia(constraints)
+        console.log('Camera access granted, stream:', stream)
 
-        // Required for iOS Safari
-        videoRef.current.setAttribute('playsinline', 'true')
-        videoRef.current.setAttribute('webkit-playsinline', 'true')
-        videoRef.current.muted = true
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          streamRef.current = stream
 
-        // Wait for video to be ready
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play()
-            .then(() => {
-              setScannerActive(true)
-              setMessage({ type: 'info', text: 'Camera ativa. Aponte para o QR Code.' })
-              setTimeout(() => setMessage(null), 2000)
-            })
-            .catch((err) => {
-              console.error('Error playing video:', err)
-              setMessage({ type: 'error', text: 'Erro ao iniciar video. Toque na tela.' })
-            })
+          // Wait for video to be ready
+          videoRef.current.onloadedmetadata = () => {
+            console.log('Video metadata loaded')
+            videoRef.current?.play()
+              .then(() => {
+                console.log('Video playing')
+                setScannerActive(true)
+                setScannerLoading(false)
+                setMessage({ type: 'info', text: 'Camera ativa. Aponte para o QR Code.' })
+                setTimeout(() => setMessage(null), 2000)
+              })
+              .catch((err) => {
+                console.error('Error playing video:', err)
+                setScannerLoading(false)
+                setMessage({ type: 'error', text: 'Erro ao iniciar video. Toque na tela.' })
+              })
+          }
+        }
+      } catch (error: any) {
+        console.error('Camera error:', error)
+        setScannerLoading(false)
+        if (error.name === 'NotAllowedError') {
+          setMessage({ type: 'error', text: 'Permissao de camera negada. Verifique as configuracoes.' })
+        } else if (error.name === 'NotFoundError') {
+          setMessage({ type: 'error', text: 'Nenhuma camera encontrada.' })
+        } else if (error.name === 'NotReadableError') {
+          setMessage({ type: 'error', text: 'Camera em uso por outro aplicativo.' })
+        } else {
+          setMessage({ type: 'error', text: `Erro na camera: ${error.message || 'desconhecido'}` })
         }
       }
-    } catch (error: any) {
-      console.error('Camera error:', error)
-      if (error.name === 'NotAllowedError') {
-        setMessage({ type: 'error', text: 'Permissao de camera negada. Verifique as configuracoes.' })
-      } else if (error.name === 'NotFoundError') {
-        setMessage({ type: 'error', text: 'Nenhuma camera encontrada.' })
-      } else if (error.name === 'NotReadableError') {
-        setMessage({ type: 'error', text: 'Camera em uso por outro aplicativo.' })
-      } else {
-        setMessage({ type: 'error', text: `Erro na camera: ${error.message || 'desconhecido'}` })
-      }
     }
-  }
+
+    // Small delay to ensure video element is fully mounted
+    const timer = setTimeout(initCamera, 100)
+    return () => clearTimeout(timer)
+  }, [scannerLoading])
 
   const stopScanner = () => {
     if (streamRef.current) {
@@ -506,6 +523,7 @@ function AccessControlContent() {
       videoRef.current.srcObject = null
     }
     setScannerActive(false)
+    setScannerLoading(false)
   }
 
   // QR Code scanning with jsQR
@@ -754,14 +772,19 @@ function AccessControlContent() {
               {/* Scanner toggle */}
               <div className="mt-3 flex gap-2">
                 <button
-                  onClick={scannerActive ? stopScanner : startScanner}
+                  onClick={(scannerActive || scannerLoading) ? stopScanner : startScanner}
+                  disabled={scannerLoading && !scannerActive}
                   className={`px-4 py-2 rounded-lg text-sm ${
-                    scannerActive
+                    scannerActive || scannerLoading
                       ? 'bg-red-600 text-white hover:bg-red-700'
                       : 'bg-gray-600 text-white hover:bg-gray-700'
-                  }`}
+                  } ${scannerLoading && !scannerActive ? 'opacity-50' : ''}`}
                 >
-                  {scannerActive ? '📷 Parar Camera' : '📷 Usar Camera'}
+                  {scannerLoading && !scannerActive
+                    ? '⏳ Iniciando...'
+                    : scannerActive
+                      ? '📷 Parar Camera'
+                      : '📷 Usar Camera'}
                 </button>
                 <label className={`flex items-center gap-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   <input
@@ -775,27 +798,41 @@ function AccessControlContent() {
               </div>
 
               {/* Scanner video */}
-              {scannerActive && (
+              {(scannerLoading || scannerActive) && (
                 <div className="mt-3 relative">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    className="w-full rounded-lg bg-black"
+                    className="w-full rounded-lg bg-black min-h-[200px]"
                     style={{ maxHeight: '300px', objectFit: 'cover' }}
                     onClick={() => videoRef.current?.play()}
                   />
                   <canvas ref={canvasRef} className="hidden" />
+                  {/* Loading indicator */}
+                  {scannerLoading && !scannerActive && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                      <div className="text-center text-white">
+                        <div className="text-4xl animate-pulse mb-2">📷</div>
+                        <p>Iniciando camera...</p>
+                        <p className="text-xs text-gray-400 mt-1">Permita o acesso quando solicitado</p>
+                      </div>
+                    </div>
+                  )}
                   {/* Scanning indicator */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-48 h-48 border-2 border-green-500 rounded-lg opacity-50"></div>
-                  </div>
-                  <div className="absolute bottom-2 left-2 right-2 text-center">
-                    <span className="bg-black/70 text-white text-xs px-2 py-1 rounded">
-                      📷 Escaneando QR Code...
-                    </span>
-                  </div>
+                  {scannerActive && (
+                    <>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-48 h-48 border-2 border-green-500 rounded-lg opacity-50 animate-pulse"></div>
+                      </div>
+                      <div className="absolute bottom-2 left-2 right-2 text-center">
+                        <span className="bg-black/70 text-white text-xs px-2 py-1 rounded">
+                          📷 Escaneando QR Code...
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
