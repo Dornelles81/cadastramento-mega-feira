@@ -60,7 +60,24 @@
       "Bash(git rm:*)",
       "Bash(DEPLOY-INSTRUCTIONS.md)",
       "Bash(npm uninstall:*)",
-      "Bash(.npmrc)"
+      "Bash(.npmrc)",
+      "Bash(npm run db:seed:*)",
+      "Bash(if exist .next rmdir /s /q .next)",
+      "Bash(start_ocr.bat)",
+      "Bash(cmd /c start_ocr.bat)",
+      "Bash(venvScriptspython.exe -m pip install --upgrade pip)",
+      "Bash(venvScriptspip.exe install -r requirements.txt)",
+      "Bash(python -m json.tool:*)",
+      "Bash(python:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm audit fix:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(do echo \"=== Tentativa $i ===\")",
+      "Bash(done)",
+      "Bash(docker restart:*)"
     ],
     "defaultMode": "acceptEdits"
   }

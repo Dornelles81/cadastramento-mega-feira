@@ -554,12 +554,19 @@ function AccessControlContent() {
 
       try {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+        // Log image data info every 100 frames
+        if (scanCount % 100 === 0) {
+          console.log(`📊 Image data: ${imageData.width}x${imageData.height}, ${imageData.data.length} bytes`)
+        }
+
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'attemptBoth'
         })
 
         if (code && code.data) {
           console.log('✅ QR Code detected:', code.data)
+          console.log('📍 Location:', JSON.stringify(code.location))
 
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100])

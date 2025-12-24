@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start http://localhost:3000)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(taskkill /PID 37948 /F)",
+      "Bash(timeout /t)",
+      "Bash(npm run dev:*)",
+      "Bash(vercel:*)"
+    ]
+  }
+}
