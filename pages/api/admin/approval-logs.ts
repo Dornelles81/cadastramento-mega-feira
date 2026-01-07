@@ -17,19 +17,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { participantId, eventId, eventCode } = req.query
 
   try {
-    // Build where clause with event filter
-    const where: any = participantId ? { participantId: participantId.toString() } : {}
+    // Build where clause with proper event filter
+    const where: any = {}
 
-    // Filter by event if eventId or eventCode is provided
-    if (eventId) {
-      where.participant = {
-        eventId: eventId.toString()
-      }
-    } else if (eventCode) {
-      where.participant = {
-        eventCode: eventCode.toString()
+    // Filter by participantId if provided
+    if (participantId) {
+      where.participantId = participantId.toString()
+    }
+
+    // Filter by event through participant relation
+    if (eventId || eventCode) {
+      where.participant = {}
+
+      if (eventId) {
+        where.participant.eventId = eventId.toString()
+      } else if (eventCode) {
+        where.participant.eventCode = eventCode.toString()
       }
     }
+
+    console.log('🔍 Approval logs query:', { where, eventId, eventCode })
 
     const logs = await prisma.approvalLog.findMany({
       where,
@@ -56,6 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       take: 100 // Limit to last 100 logs
     })
+
+    console.log(`✅ Found ${logs.length} approval logs`)
 
     res.status(200).json({ logs })
 
