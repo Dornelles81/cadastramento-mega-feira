@@ -18,13 +18,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const format = req.query.format as string || 'json';
+  const eventId = req.query.eventId as string;
+  const eventCode = req.query.eventCode as string;
 
   try {
+    // Build where clause with event filter
+    const where: any = {
+      approvalStatus: 'approved'
+    };
+
+    // Filter by event if provided
+    if (eventId) {
+      where.eventId = eventId;
+    } else if (eventCode) {
+      where.eventCode = eventCode;
+    }
+
     // Get all approved participants
     const participants = await prisma.participant.findMany({
-      where: {
-        approvalStatus: 'approved'
-      },
+      where,
       orderBy: {
         approvedAt: 'desc'
       }

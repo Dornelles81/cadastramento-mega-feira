@@ -14,11 +14,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { participantId } = req.query
+  const { participantId, eventId, eventCode } = req.query
 
   try {
-    const where = participantId ? { participantId: participantId.toString() } : {}
-    
+    // Build where clause with event filter
+    const where: any = participantId ? { participantId: participantId.toString() } : {}
+
+    // Filter by event if eventId or eventCode is provided
+    if (eventId) {
+      where.participant = {
+        eventId: eventId.toString()
+      }
+    } else if (eventCode) {
+      where.participant = {
+        eventCode: eventCode.toString()
+      }
+    }
+
     const logs = await prisma.approvalLog.findMany({
       where,
       include: {
@@ -26,7 +38,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           select: {
             name: true,
             cpf: true,
-            email: true
+            email: true,
+            eventCode: true,
+            eventId: true,
+            event: {
+              select: {
+                name: true,
+                code: true,
+                slug: true
+              }
+            }
           }
         }
       },

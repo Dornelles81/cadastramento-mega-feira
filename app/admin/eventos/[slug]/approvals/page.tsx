@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import MegaFeiraLogo from '../../../components/MegaFeiraLogo'
+import { useRouter, useParams } from 'next/navigation'
+import MegaFeiraLogo from '../../../../../components/MegaFeiraLogo'
 
 interface ApprovalLog {
   id: string
@@ -30,9 +30,20 @@ interface ApprovalLog {
   }
 }
 
-export default function ApprovalsPage() {
+interface Event {
+  id: string
+  name: string
+  code: string
+  slug: string
+}
+
+export default function EventApprovalsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const params = useParams()
+  const eventSlug = params?.slug as string
+
+  const [event, setEvent] = useState<Event | null>(null)
   const [logs, setLogs] = useState<ApprovalLog[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'approved' | 'rejected'>('all')
@@ -53,17 +64,43 @@ export default function ApprovalsPage() {
     }
   }, [])
 
-  // Load logs when authenticated
+  // Load event info
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && eventSlug) {
+      loadEvent()
+    }
+  }, [status, eventSlug])
+
+  // Load logs when event is loaded
+  useEffect(() => {
+    if (event) {
       loadLogs()
     }
-  }, [status])
+  }, [event])
+
+  const loadEvent = async () => {
+    try {
+      const response = await fetch(`/api/admin/eventos/${eventSlug}`)
+      if (response.ok) {
+        const data = await response.json()
+        setEvent({
+          id: data.event.id,
+          name: data.event.name,
+          code: data.event.code,
+          slug: data.event.slug
+        })
+      }
+    } catch (error) {
+      console.error('Error loading event:', error)
+    }
+  }
 
   const loadLogs = async () => {
+    if (!event) return
+
     setLoading(true)
     try {
-      const response = await fetch('/api/admin/approval-logs', {
+      const response = await fetch(`/api/admin/approval-logs?eventId=${event.id}`, {
         headers: {
           'Authorization': 'Bearer admin-token-mega-feira-2025'
         }
@@ -96,6 +133,18 @@ export default function ApprovalsPage() {
     return null
   }
 
+  // Show loading while event is loading
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-pulse">⏳</div>
+          <p className="text-gray-600">Carregando evento...</p>
+        </div>
+      </div>
+    )
+  }
+
   const filteredLogs = filter === 'all'
     ? logs
     : logs.filter(log => log.action === filter)
@@ -121,7 +170,7 @@ export default function ApprovalsPage() {
                   ✅ Central de Aprovacoes
                 </h1>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Historico de aprovacoes e rejeicoes de participantes
+                  {event.name} - Historico de aprovacoes e rejeicoes
                 </p>
               </div>
             </div>
@@ -144,12 +193,12 @@ export default function ApprovalsPage() {
                 {darkMode ? '☀️' : '🌙'}
               </button>
               <button
-                onClick={() => router.back()}
+                onClick={() => router.push(`/admin/eventos/${eventSlug}`)}
                 className={`px-4 py-2 rounded-lg transition-colors ${
                   darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
-                ← Voltar
+                ← Voltar ao Evento
               </button>
             </div>
           </div>
@@ -246,9 +295,6 @@ export default function ApprovalsPage() {
                     </td>
                     <td className={`px-4 py-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                       <div className="font-medium">{log.participant?.name || 'N/A'}</div>
-                      <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {log.participant?.eventCode || ''}
-                      </div>
                     </td>
                     <td className={`px-4 py-3 font-mono text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {log.participant?.cpf || 'N/A'}
@@ -280,7 +326,7 @@ export default function ApprovalsPage() {
             <div className="text-center py-12">
               <div className="text-4xl mb-4">📋</div>
               <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                {loading ? 'Carregando logs...' : 'Nenhum log de aprovacao encontrado'}
+                {loading ? 'Carregando logs...' : 'Nenhum log de aprovacao encontrado para este evento'}
               </p>
               <p className={`text-sm mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                 Os logs sao gerados quando participantes sao aprovados ou rejeitados na pagina do evento
@@ -295,8 +341,8 @@ export default function ApprovalsPage() {
             ℹ️ Como funciona?
           </h3>
           <p className={`text-sm ${darkMode ? 'text-blue-200' : 'text-blue-700'}`}>
-            Esta pagina mostra o historico de todas as aprovacoes e rejeicoes de participantes.
-            Para aprovar ou rejeitar participantes, acesse a pagina de gerenciamento do evento
+            Esta pagina mostra o historico de aprovacoes e rejeicoes de participantes do evento <strong>{event.name}</strong>.
+            Para aprovar ou rejeitar participantes, volte para a pagina de gerenciamento do evento
             e use os botoes "Aprovar" ou "Rejeitar" em cada participante.
           </p>
         </div>

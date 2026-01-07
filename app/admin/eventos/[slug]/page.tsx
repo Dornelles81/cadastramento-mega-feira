@@ -1639,6 +1639,12 @@ export default function EventAdminPage() {
           >
             🏪 Gerenciar Stands
           </a>
+          <a
+            href={`/admin/eventos/${eventSlug}/approvals`}
+            className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            ✅ Central de Aprovações
+          </a>
           {isSuperAdmin && (
             <a
               href="/admin/logs"
