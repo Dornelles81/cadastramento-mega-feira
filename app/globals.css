@@ -53,36 +53,15 @@
   --whatsapp-hover: 142 70% 43%; /* #20BA5C */
 }
 
-/* CSS Reset for consistency */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body {
-  width: 100%;
-  overflow-x: hidden;
-}
-
 /* Mobile-first optimizations */
 @layer base {
   html {
-    /* Prevent zoom on iOS */
-    touch-action: manipulation;
-    /* Smooth scrolling */
     scroll-behavior: smooth;
   }
-  
+
   body {
-    /* Prevent overscroll bounce on mobile */
-    overscroll-behavior: none;
-    /* Improve font rendering on mobile */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Full viewport height on mobile */
-    min-height: 100vh;
-    min-height: 100dvh;
   }
 
   /* Safe area insets for iPhone notch */
