@@ -1,8 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../../../lib/prisma'
 import { requireAuth, isSuperAdmin, createAuditLog } from '../../../../lib/auth'
-
-const prisma = new PrismaClient()
 
 /**
  * API: Criar novo evento (SUPER ADMIN apenas)
@@ -189,8 +187,10 @@ export default async function handler(
       return res.status(401).json({ error: 'Não autenticado' })
     }
 
+    // Return actual error details for debugging
+    const errorMessage = error?.meta?.cause || error?.message || 'Erro desconhecido'
     return res.status(500).json({
-      error: 'Erro ao criar evento. Tente novamente.'
+      error: `Erro ao criar evento: ${errorMessage}`
     })
   }
 }
