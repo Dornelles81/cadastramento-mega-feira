@@ -5,36 +5,36 @@
 /* ===== MEGA FEIRA - CSS Variables - Identidade Visual Oficial ===== */
 :root {
   /* CORES PRINCIPAIS */
-  /* Verde Mega Feira #7CC69B - Logo "MEGA", destaques, CTAs, acentos */
-  --verde-mega: 145 39% 63%;
-  --verde-mega-light: 145 39% 73%;
-  --verde-mega-dark: 145 39% 53%;
+  /* Verde Mega Feira Pantone 7472C (#5EC2B7) - Logo "MEGA", destaques, CTAs, acentos */
+  --verde-mega: 176 44% 56%;
+  --verde-mega-light: 176 44% 66%;
+  --verde-mega-dark: 176 44% 43%;
 
   /* Verde-água (legacy alias) */
-  --verde-agua: 145 39% 63%;
-  --verde-agua-light: 145 39% 73%;
-  --verde-agua-dark: 145 39% 53%;
+  --verde-agua: 176 44% 56%;
+  --verde-agua-light: 176 44% 66%;
+  --verde-agua-dark: 176 44% 43%;
 
-  /* Azul marinho #1E3A5F - Logo "FEIRA", títulos, fundos escuros */
-  --azul-marinho: 212 52% 25%;
-  --azul-marinho-light: 212 44% 34%;
-  --azul-marinho-dark: 212 52% 23%;
+  /* Azul marinho Pantone 534C (#1F3664) - Logo "FEIRA", títulos, fundos escuros */
+  --azul-marinho: 220 52% 25%;
+  --azul-marinho-light: 220 45% 36%;
+  --azul-marinho-dark: 220 52% 18%;
 
-  /* Primary alias (verde Mega Feira) */
-  --primary: 145 39% 63%;        /* #7CC69B */
-  --primary-light: 145 39% 73%;
-  --primary-dark: 145 39% 53%;
+  /* Primary alias (verde Mega Feira Pantone 7472C) */
+  --primary: 176 44% 56%;        /* #5EC2B7 */
+  --primary-light: 176 44% 66%;
+  --primary-dark: 176 44% 43%;
 
   /* CORES SECUNDÁRIAS */
-  /* Azul médio #2563EB - Gradientes, botões secundários */
-  --azul-medio: 217 91% 53%;
-  --azul-medio-light: 217 91% 60%;
-  --azul-medio-dark: 217 91% 45%;
+  /* Azul médio (derivado Pantone 534C) */
+  --azul-medio: 220 52% 43%;
+  --azul-medio-light: 220 52% 55%;
+  --azul-medio-dark: 220 52% 35%;
 
-  /* Verde #10B981 - Credenciamento, sucesso */
-  --verde: 160 84% 39%;
-  --verde-light: 158 64% 52%;
-  --verde-dark: 161 94% 30%;
+  /* Verde Pantone 7472C - Credenciamento, sucesso */
+  --verde: 176 44% 56%;
+  --verde-light: 176 44% 66%;
+  --verde-dark: 176 44% 43%;
 
   /* Cinza #64748B - Tagline, textos secundários */
   --cinza: 215 16% 47%;
@@ -76,15 +76,15 @@
 @layer components {
   /* ===== GRADIENTES - MEGA FEIRA ===== */
   .gradient-hero {
-    background: linear-gradient(135deg, #1E3A5F 0%, #2c5282 100%);
+    background: linear-gradient(135deg, #1F3664 0%, #2D4E8A 100%);
   }
 
   .gradient-mega-feira {
-    background: linear-gradient(135deg, #7CC69B 0%, #2D3436 100%);
+    background: linear-gradient(135deg, #5EC2B7 0%, #2D3436 100%);
   }
 
   .gradient-text {
-    background: linear-gradient(to right, #7CC69B, #2563EB, #2D3436);
+    background: linear-gradient(to right, #5EC2B7, #3258AA, #2D3436);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -95,7 +95,7 @@
   }
 
   .gradient-azul {
-    background: linear-gradient(135deg, #2563EB 0%, #1E3A5F 100%);
+    background: linear-gradient(135deg, #3258AA 0%, #1F3664 100%);
   }
 
   /* ===== BUTTONS - MEGA FEIRA ===== */
@@ -284,9 +284,9 @@ video {
   }
 }
 
-/* Dark mode body - Azul marinho */
+/* Dark mode body - Azul marinho Pantone 534C */
 .dark-mode {
-  background: #1E3A5F;
+  background: #1F3664;
   color: #f8fafc;
 }
 
@@ -334,7 +334,7 @@ textarea:disabled {
 
 /* ===== LOGO MEGA FEIRA ===== */
 .logo-mega {
-  color: #7CC69B;
+  color: #5EC2B7;
   font-weight: 900;
   font-style: italic;
 }
