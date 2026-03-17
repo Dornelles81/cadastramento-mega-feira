@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import { invalidateStandCache } from '../../../lib/cache';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 // API para gerenciamento de Stands (CRUD)
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
@@ -43,7 +42,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error.message
     });
   } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -83,7 +81,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
 
   // Buscar stand por código
   if (code) {
-    const stand = await prisma.stand.findUnique({
+    const stand = await prisma.stand.findFirst({
       where: { code: code as string },
       include: {
         _count: {
@@ -104,11 +102,11 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
   // Listar todos os stands com filtros opcionais
   const where: any = {
     // Excluir stands auto-criados por campos personalizados
-    NOT: {
-      description: {
-        contains: 'Auto-criado pelo campo:'
-      }
-    }
+    // Usar OR para incluir stands com description null (NOT LIKE exclui NULL no PostgreSQL)
+    OR: [
+      { description: null },
+      { NOT: { description: { contains: 'Auto-criado pelo campo:' } } }
+    ]
   };
 
   if (eventCode) {
@@ -176,7 +174,7 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse): Promise<vo
   }
 
   // Verificar se o código já existe
-  const existingStand = await prisma.stand.findUnique({
+  const existingStand = await prisma.stand.findFirst({
     where: { code }
   });
 

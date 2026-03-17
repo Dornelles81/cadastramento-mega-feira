@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import { invalidateStandCache } from '../../../../../lib/cache';
+import { prisma } from '../../../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 // API para gerenciamento de Stands por Evento (CRUD)
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
@@ -61,7 +60,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error.message
     });
   } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -106,11 +104,11 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
   const where: any = {
     eventId: eventId,
     // Excluir stands auto-criados por campos personalizados
-    NOT: {
-      description: {
-        contains: 'Auto-criado pelo campo:'
-      }
-    }
+    // Usar OR para incluir stands com description null (NOT LIKE exclui NULL no PostgreSQL)
+    OR: [
+      { description: null },
+      { NOT: { description: { contains: 'Auto-criado pelo campo:' } } }
+    ]
   };
 
   if (active !== undefined) {

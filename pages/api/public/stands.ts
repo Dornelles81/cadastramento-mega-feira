@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import { cache, CacheTTL } from '../../../lib/cache';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 // Public API to list active stands with availability
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
@@ -25,11 +24,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const where: any = {
           isActive: true,
           // Excluir stands auto-criados por campos personalizados
-          NOT: {
-            description: {
-              contains: 'Auto-criado pelo campo:'
-            }
-          }
+          // Usar OR para incluir stands com description null (NOT LIKE exclui NULL no PostgreSQL)
+          OR: [
+            { description: null },
+            { NOT: { description: { contains: 'Auto-criado pelo campo:' } } }
+          ]
         };
 
         // Se eventCode foi fornecido, buscar o eventId correspondente
@@ -125,6 +124,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Erro ao carregar stands'
     });
   } finally {
-    await prisma.$disconnect();
   }
 }

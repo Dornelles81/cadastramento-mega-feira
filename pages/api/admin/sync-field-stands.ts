@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, isSuperAdmin } from '../../../lib/auth';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 // API to sync field options with Stand table when limits are enabled
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
@@ -42,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const standCode = `${fieldName}_${option}`.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
 
       // Check if stand already exists
-      const existingStand = await prisma.stand.findUnique({
+      const existingStand = await prisma.stand.findFirst({
         where: { code: standCode },
         include: {
           _count: {
@@ -56,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Only update if new limit is >= current participant count
         if (limit >= existingStand._count.participants) {
           await prisma.stand.update({
-            where: { code: standCode },
+            where: { id: existingStand.id },
             data: {
               name: option,
               maxRegistrations: limit,
@@ -162,6 +161,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   } finally {
-    await prisma.$disconnect();
   }
 }

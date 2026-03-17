@@ -1,11 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import formidable from 'formidable';
 import xlsx from 'xlsx';
 import fs from 'fs';
 import crypto from 'crypto';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 export const config = {
   api: {
@@ -115,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .replace(/[^A-Z0-9_]/g, '');
 
         // Check if stand already exists
-        const existingStand = await prisma.stand.findUnique({
+        const existingStand = await prisma.stand.findFirst({
           where: { code: standCode },
           include: {
             _count: {
@@ -129,7 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // Only update if new limit is >= current participant count
           if (maxRegistrations >= existingStand._count.participants) {
             await prisma.stand.update({
-              where: { code: standCode },
+              where: { id: existingStand.id },
               data: {
                 name: standName,
                 maxRegistrations: maxRegistrations,
@@ -191,6 +190,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error.message
     });
   } finally {
-    await prisma.$disconnect();
   }
 }
