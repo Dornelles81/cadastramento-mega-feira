@@ -241,6 +241,9 @@ model Participant {
   hikCentralSyncedAt   DateTime?
   hikCentralErrorMsg   String?
 
+  // Credential numbering
+  credentialNumber String? // Sequential per event (e.g., "0042")
+
   // Credential print tracking
   credentialPrinted   Boolean   @default(false)
   credentialPrintedAt DateTime?

@@ -678,6 +678,12 @@ function AccessControlContent() {
                 📊 Relatorios
               </button>
               <button
+                onClick={() => router.push('/admin/access-control/credentials')}
+                className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700"
+              >
+                🎫 Credenciais
+              </button>
+              <button
                 onClick={() => router.back()}
                 className={`px-3 py-2 rounded-lg text-sm ${
                   darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'
