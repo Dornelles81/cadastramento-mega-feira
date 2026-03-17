@@ -108,27 +108,6 @@ function LoginForm() {
         </button>
       </form>
 
-      {/* Demo Credentials */}
-      <div className="mt-8 p-4 bg-fundo-claro rounded-lg border border-cinza-200">
-        <p className="text-xs font-semibold text-azul-marinho mb-2">
-          💡 Credenciais de Demonstração:
-        </p>
-        <div className="space-y-2 text-xs text-cinza-700">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-verde-agua/10 p-2 rounded border border-verde-agua/20">
-              <strong className="block text-azul-marinho">Super Admin:</strong>
-              <code className="text-cinza-700">admin@megafeira.com.br</code>
-              <code className="block text-cinza-700">SuperAdmin@2025</code>
-            </div>
-            <div className="bg-azul-medio/10 p-2 rounded border border-azul-medio/20">
-              <strong className="block text-azul-marinho">Event Admin:</strong>
-              <code className="text-cinza-700">evento@megafeira.com.br</code>
-              <code className="block text-cinza-700">EventAdmin@2025</code>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Footer */}
       <div className="mt-6 text-center">
         <a

@@ -241,6 +241,11 @@ model Participant {
   hikCentralSyncedAt   DateTime?
   hikCentralErrorMsg   String?
 
+  // Credential print tracking
+  credentialPrinted   Boolean   @default(false)
+  credentialPrintedAt DateTime?
+  credentialPrintedBy String? // AdminId
+
   // Check-in tracking
   checkedIn       Boolean   @default(false)
   checkedInAt     DateTime?

@@ -36,12 +36,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const format = req.query.format as string || 'excel';
+  const eventId = req.query.eventId as string | undefined;
 
   try {
-    // Get all approved participants
+    // Build where clause with optional event filter
+    const whereClause: any = {
+      approvalStatus: 'approved'
+    };
+    if (eventId) {
+      whereClause.eventId = eventId;
+    }
+
+    // Get approved participants (filtered by event if provided)
     const participants = await prisma.participant.findMany({
-      where: {
-        approvalStatus: 'approved'
+      where: whereClause,
+      include: {
+        event: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -83,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           'Gender': 'Male',
           'Phone': phoneClean,
           'Email': p.email || '',
-          'Organization': 'MEGA-FEIRA-2025',
+          'Organization': (p as any).event?.name || 'MEGA-FEIRA-2025',
           'Valid Begin Time': formatDate(startDate),
           'Valid End Time': formatDate(endDate)
         };

@@ -24,6 +24,16 @@ node_modules/
 # Vercel
 .vercel
 
+# SSL certificates (local dev)
+certificates/
+*.pem
+*.key
+
+# Windows artifacts
+nul
+
+# Claude Code local settings
+.claude/settings.local.json
 # Debug logs
 npm-debug.log*
 yarn-debug.log*

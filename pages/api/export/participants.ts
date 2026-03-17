@@ -59,8 +59,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get participants from database
     let where: any = {}
 
-    if (event && typeof event === 'string') {
-      where.eventCode = event
+    const { eventId } = req.query
+
+    if (eventId && typeof eventId === 'string') {
+      where.eventId = eventId
+    } else if (event && typeof event === 'string') {
+      where.OR = [
+        { eventCode: event },
+        { event: { code: event } }
+      ]
     }
 
     if (date_from && typeof date_from === 'string') {

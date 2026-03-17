@@ -24,6 +24,8 @@ interface Participant {
   approvedAt?: string
   approvedBy?: string
   rejectionReason?: string
+  credentialPrinted?: boolean
+  credentialPrintedAt?: string
 }
 
 const MOCK_PARTICIPANTS: Participant[] = [
@@ -124,6 +126,8 @@ export default function EventAdminPage() {
   const [loading, setLoading] = useState(false)
   const [participantImages, setParticipantImages] = useState<Record<string, string>>({})
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
+  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set())
+  const [printingBulk, setPrintingBulk] = useState(false)
 
   // Calculate stands and their counts whenever participants change
   useEffect(() => {
@@ -584,6 +588,23 @@ export default function EventAdminPage() {
     })
   }
 
+  // Mark participants as printed in DB and update local state
+  const markAsPrinted = async (ids: string[]) => {
+    try {
+      await fetch('/api/admin/mark-credential-printed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantIds: ids })
+      })
+      const now = new Date().toISOString()
+      setParticipants(prev =>
+        prev.map(p => ids.includes(p.id) ? { ...p, credentialPrinted: true, credentialPrintedAt: now } : p)
+      )
+    } catch (e) {
+      console.error('Failed to mark credentials as printed', e)
+    }
+  }
+
   // Print credential - 54mm x 25mm with QR Code
   const handlePrintCredential = async (participant: Participant) => {
     const standCode = participant.customData?.standCode || participant.customData?.estande || 'N/A'
@@ -629,8 +650,8 @@ export default function EventAdminPage() {
             justify-content: center;
             align-items: center;
             padding: 0.5mm;
-            background: linear-gradient(135deg, #1E3A5F 0%, #2c5282 100%);
-            color: white;
+            background: white;
+            color: #1a1a1a;
           }
           .credential {
             width: 100%;
@@ -638,7 +659,7 @@ export default function EventAdminPage() {
             display: flex;
             flex-direction: row;
             align-items: center;
-            border: 1px solid rgba(255,255,255,0.3);
+            border: 1px solid #cccccc;
             border-radius: 2mm;
             padding: 1mm;
             gap: 2mm;
@@ -671,7 +692,7 @@ export default function EventAdminPage() {
           .event-name {
             font-size: 5pt;
             font-weight: bold;
-            color: #2DD4BF;
+            color: #0d9488;
             text-transform: uppercase;
             letter-spacing: 0.3px;
             white-space: nowrap;
@@ -681,6 +702,7 @@ export default function EventAdminPage() {
           .name {
             font-size: 7pt;
             font-weight: bold;
+            color: #1a1a1a;
             line-height: 1.1;
             white-space: nowrap;
             overflow: hidden;
@@ -693,17 +715,17 @@ export default function EventAdminPage() {
           }
           .stand-label {
             font-size: 5pt;
-            color: rgba(255,255,255,0.7);
+            color: #666666;
             text-transform: uppercase;
           }
           .stand {
             font-size: 7pt;
             font-weight: bold;
-            color: #2DD4BF;
+            color: #0d9488;
           }
           .id-row {
             font-size: 4pt;
-            color: rgba(255,255,255,0.5);
+            color: #999999;
             font-family: monospace;
           }
           @media print {
@@ -741,6 +763,142 @@ export default function EventAdminPage() {
       </html>
     `)
     printWindow.document.close()
+    markAsPrinted([participant.id])
+  }
+
+  // Print multiple credentials in a single print window
+  const handlePrintBulkCredentials = async (participantIds: string[]) => {
+    const targets = filteredParticipants.filter(p => participantIds.includes(p.id))
+    if (targets.length === 0) return
+
+    setPrintingBulk(true)
+    try {
+      // Generate all QR codes in parallel
+      const qrCodes = await Promise.all(
+        targets.map(p => generateParticipantQRCode(p).catch(() => ''))
+      )
+
+      const eventName = event?.name || 'Evento'
+
+      const credentialBlocks = targets.map((participant, i) => {
+        const standCode = participant.customData?.standCode || participant.customData?.estande || 'N/A'
+        const standName = (participant as any).standName || standCode
+        const qr = qrCodes[i]
+        return `
+          <div class="credential">
+            <div class="qr-section">
+              ${qr ? `<img src="${qr}" alt="QR" />` : '<span style="color:#999;font-size:6pt;">QR</span>'}
+            </div>
+            <div class="info-section">
+              <div class="event-name">${eventName}</div>
+              <div class="name">${participant.name}</div>
+              <div class="stand-row">
+                <span class="stand-label">Stand:</span>
+                <span class="stand">${standName}</span>
+              </div>
+              <div class="id-row">${participant.id.substring(0, 8).toUpperCase()}</div>
+            </div>
+          </div>
+        `
+      }).join('')
+
+      const printWindow = window.open('', '_blank', 'width=600,height=800')
+      if (!printWindow) {
+        alert('Por favor, permita popups para imprimir as credenciais')
+        return
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Credenciais - ${eventName}</title>
+          <style>
+            @page { size: 54mm 25mm; margin: 0; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: Arial, sans-serif;
+              background: white;
+            }
+            .credential {
+              width: 54mm;
+              height: 25mm;
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              border: 1px solid #cccccc;
+              border-radius: 2mm;
+              padding: 1mm;
+              gap: 2mm;
+              page-break-after: always;
+              background: white;
+              color: #1a1a1a;
+            }
+            .credential:last-child { page-break-after: avoid; }
+            .qr-section {
+              flex-shrink: 0;
+              width: 18mm;
+              height: 18mm;
+              background: white;
+              border-radius: 1mm;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 0.5mm;
+            }
+            .qr-section img { width: 100%; height: 100%; object-fit: contain; }
+            .info-section {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              overflow: hidden;
+              gap: 0.5mm;
+            }
+            .event-name {
+              font-size: 5pt;
+              font-weight: bold;
+              color: #0d9488;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .name {
+              font-size: 7pt;
+              font-weight: bold;
+              color: #1a1a1a;
+              line-height: 1.1;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .stand-row { display: flex; align-items: center; gap: 1mm; }
+            .stand-label { font-size: 5pt; color: #666666; text-transform: uppercase; }
+            .stand { font-size: 7pt; font-weight: bold; color: #0d9488; }
+            .id-row { font-size: 4pt; color: #999999; font-family: monospace; }
+            @media print {
+              body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+          </style>
+        </head>
+        <body>
+          ${credentialBlocks}
+          <script>
+            window.onload = function() {
+              window.print();
+              window.onafterprint = function() { window.close(); };
+            };
+          <\/script>
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+      markAsPrinted(participantIds)
+    } finally {
+      setPrintingBulk(false)
+    }
   }
 
   return (
@@ -767,14 +925,14 @@ export default function EventAdminPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <a
-                  href={`/api/export/participants?format=excel`}
+                  href={`/api/export/participants?format=excel&eventId=${event?.id || ''}&event=${event?.code || ''}`}
                   className="inline-flex items-center px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
                   title="Exportar para Excel"
                 >
                   📊 <span className="hidden sm:inline ml-1">Excel</span>
                 </a>
                 <a
-                  href={`/api/export/participants?format=pdf`}
+                  href={`/api/export/participants?format=pdf&eventId=${event?.id || ''}&event=${event?.code || ''}`}
                   className="inline-flex items-center px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
                   title="Exportar para PDF"
                 >
@@ -795,7 +953,7 @@ export default function EventAdminPage() {
                   📋 <span className="hidden sm:inline ml-1">QR CSV</span>
                 </a>
                 <a
-                  href="/admin/hikcental"
+                  href={`/admin/eventos/${eventSlug}/hikcental`}
                   className="inline-flex items-center px-3 py-2 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
                   title="Integração com HikCentral - Exportar participantes para reconhecimento facial"
                 >
@@ -915,13 +1073,45 @@ export default function EventAdminPage() {
                 </span>
               </div>
             </div>
-            <button
-              onClick={() => loadParticipants(searchTerm)}
-              className="text-xs sm:text-sm bg-mega-500 text-white px-3 py-2 rounded hover:bg-mega-600 whitespace-nowrap w-full sm:w-auto"
-              disabled={loading}
-            >
-              🔄 Atualizar
-            </button>
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  const approvedIds = filteredParticipants
+                    .filter(p => p.approvalStatus === 'approved')
+                    .map(p => p.id)
+                  setSelectedParticipants(new Set(approvedIds))
+                }}
+                className="text-xs sm:text-sm bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 whitespace-nowrap"
+                title="Selecionar todos os aprovados visíveis"
+              >
+                ✅ Sel. Aprovados
+              </button>
+              {selectedParticipants.size > 0 && (
+                <>
+                  <button
+                    onClick={() => setSelectedParticipants(new Set())}
+                    className="text-xs sm:text-sm bg-gray-400 text-white px-3 py-2 rounded hover:bg-gray-500 whitespace-nowrap"
+                  >
+                    ✖ Limpar ({selectedParticipants.size})
+                  </button>
+                  <button
+                    onClick={() => handlePrintBulkCredentials(Array.from(selectedParticipants))}
+                    disabled={printingBulk}
+                    className="text-xs sm:text-sm bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 whitespace-nowrap disabled:opacity-50"
+                    title="Imprimir credenciais selecionadas"
+                  >
+                    {printingBulk ? '⏳ Gerando...' : `🏷️ Imprimir (${selectedParticipants.size})`}
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => loadParticipants(searchTerm)}
+                className="text-xs sm:text-sm bg-mega-500 text-white px-3 py-2 rounded hover:bg-mega-600 whitespace-nowrap"
+                disabled={loading}
+              >
+                🔄 Atualizar
+              </button>
+            </div>
           </div>
         </div>
 
@@ -931,6 +1121,21 @@ export default function EventAdminPage() {
             <table className="min-w-full table-auto">
               <thead className={darkMode ? 'bg-gray-700' : 'bg-gray-50'}>
                 <tr>
+                  <th className="px-2 md:px-4 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={selectedParticipants.size > 0 && filteredParticipants.every(p => selectedParticipants.has(p.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedParticipants(new Set(filteredParticipants.map(p => p.id)))
+                        } else {
+                          setSelectedParticipants(new Set())
+                        }
+                      }}
+                      title="Selecionar todos"
+                    />
+                  </th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Face</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Nome</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>CPF</th>
@@ -946,6 +1151,19 @@ export default function EventAdminPage() {
               <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
                 {filteredParticipants.map((participant) => (
                   <tr key={participant.id} className={darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}>
+                    <td className="px-2 md:px-4 py-3">
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={selectedParticipants.has(participant.id)}
+                        onChange={(e) => {
+                          const next = new Set(selectedParticipants)
+                          if (e.target.checked) next.add(participant.id)
+                          else next.delete(participant.id)
+                          setSelectedParticipants(next)
+                        }}
+                      />
+                    </td>
                     <td className="px-2 md:px-4 py-3">
                       <div className="flex items-center">
                         {participantImages[participant.id] ? (
@@ -969,7 +1187,19 @@ export default function EventAdminPage() {
                         )}
                       </div>
                     </td>
-                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{participant.name}</td>
+                    <td className={`px-2 md:px-4 py-3 text-xs md:text-sm ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span>{participant.name}</span>
+                        {participant.credentialPrinted && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 border border-green-200 whitespace-nowrap"
+                            title={`Impresso em ${new Date(participant.credentialPrintedAt!).toLocaleString('pt-BR')}`}
+                          >
+                            🖨️ Impresso
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className={`px-2 md:px-4 py-3 font-mono text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.cpf}</td>
                     <td className="px-2 md:px-4 py-3 hidden sm:table-cell">
                       {participant.approvalStatus === 'approved' ? (
@@ -1043,10 +1273,14 @@ export default function EventAdminPage() {
                         <button
                           onClick={() => handlePrintCredential(participant)}
                           className="px-2 md:px-3 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
-                          title="Imprimir credencial com QR Code"
+                          title={participant.credentialPrinted
+                            ? `Credencial já impressa em ${new Date(participant.credentialPrintedAt!).toLocaleString('pt-BR')}`
+                            : 'Imprimir credencial com QR Code'}
                         >
-                          <span className="sm:hidden">🏷️</span>
-                          <span className="hidden sm:inline">🏷️ Credencial</span>
+                          <span className="sm:hidden">{participant.credentialPrinted ? '✅' : '🏷️'}</span>
+                          <span className="hidden sm:inline">
+                            {participant.credentialPrinted ? '✅ Reimpressão' : '🏷️ Credencial'}
+                          </span>
                         </button>
                         <a
                           href={`/api/export/qrcodes?participantId=${participant.id}&format=png`}

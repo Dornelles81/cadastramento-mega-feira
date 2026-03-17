@@ -67,6 +67,28 @@ export default async function handler(
     })
 
     // ========================================================================
+    // CREDENTIAL PRINT STATUS: fetch via raw SQL (new fields)
+    // ========================================================================
+    let printStatusMap: Record<string, { credentialPrinted: boolean; credentialPrintedAt: Date | null }> = {}
+    try {
+      const ids = participants.map(p => p.id)
+      if (ids.length > 0) {
+        const rows = await prisma.$queryRawUnsafe<Array<{ id: string; credential_printed: boolean; credential_printed_at: Date | null }>>(
+          `SELECT id, credential_printed, credential_printed_at FROM participants WHERE id = ANY($1::uuid[])`,
+          ids
+        )
+        for (const row of rows) {
+          printStatusMap[row.id] = {
+            credentialPrinted: row.credential_printed,
+            credentialPrintedAt: row.credential_printed_at
+          }
+        }
+      }
+    } catch (_) {
+      // column may not exist yet in old deployments — ignore
+    }
+
+    // ========================================================================
     // RESPONSE: Retornar dados
     // ========================================================================
     return res.status(200).json({
@@ -80,7 +102,8 @@ export default async function handler(
       participants: participants.map(p => ({
         ...p,
         // Remove dados sensíveis se necessário
-        faceData: undefined
+        faceData: undefined,
+        ...(printStatusMap[p.id] ?? {})
       })),
       total: participants.length,
       admin: {
