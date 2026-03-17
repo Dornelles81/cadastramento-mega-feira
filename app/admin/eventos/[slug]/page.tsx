@@ -1222,7 +1222,19 @@ export default function EventAdminPage() {
                       </span>
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.email || '-'}</td>
-                    <td className={`px-2 md:px-4 py-3 font-mono text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.phone || '-'}</td>
+                    <td className={`px-2 md:px-4 py-3 font-mono text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {participant.phone ? (
+                        <a
+                          href={`https://wa.me/55${participant.phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-600 hover:text-green-800 hover:underline"
+                          title="Abrir WhatsApp"
+                        >
+                          {participant.phone}
+                        </a>
+                      ) : '-'}
+                    </td>
                     <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {participant.captureQuality ?
                         `${Math.round(participant.captureQuality * 100)}%` :
@@ -1595,7 +1607,7 @@ export default function EventAdminPage() {
                           '_blank'
                         )
                       }}
-                      disabled={!editingParticipant.phone || !(editingParticipant as any).whatsappMessage}
+                      disabled={!editingParticipant.phone}
                       className="w-full py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       <span>📱 Enviar via WhatsApp</span>
