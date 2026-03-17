@@ -87,7 +87,17 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
       if (response.ok) {
         const data = await response.json()
         console.log('🏪 Stands loaded:', data.stands)
-        setStands(data.stands || [])
+        const loadedStands = data.stands || []
+        setStands(loadedStands)
+        // Pre-select first stand if none selected yet
+        if (loadedStands.length > 0) {
+          setFormData((prev: any) => {
+            if (!prev.standCode && !prev.estande) {
+              return { ...prev, standCode: loadedStands[0].code, estande: loadedStands[0].code }
+            }
+            return prev
+          })
+        }
       } else {
         setStands([])
       }
@@ -525,7 +535,6 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
                   errors.standCode ? 'border-red-400' : 'border-white/30'
                 }`}
               >
-                <option value="">Nenhum stand selecionado</option>
                 {stands.map(stand => (
                   <option key={stand.code} value={stand.code}>
                     {stand.name}
