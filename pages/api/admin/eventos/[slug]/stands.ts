@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { invalidateStandCache } from '../../../../../lib/cache';
+import { requireAuth } from '../../../../../lib/auth';
 import { prisma } from '../../../../../lib/prisma'
 
 
@@ -12,16 +13,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  // Basic authentication check
-  const authHeader = req.headers.authorization;
-  const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
-  if (!authHeader || !authHeader.includes(validPassword)) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-
   try {
+    // Verificar autenticação via NextAuth
+    await requireAuth(req, res);
     // Find event by slug
     const event = await prisma.event.findUnique({
       where: { slug: slug.toLowerCase() },
@@ -54,6 +48,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.status(405).json({ error: 'Method not allowed' });
     }
   } catch (error: any) {
+    if (error.message === 'Não autenticado') {
+      res.status(401).json({ error: 'Não autenticado' });
+      return;
+    }
     console.error('Event Stand API Error:', error);
     res.status(500).json({
       error: 'Internal server error',

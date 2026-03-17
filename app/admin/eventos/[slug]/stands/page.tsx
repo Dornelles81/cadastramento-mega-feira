@@ -83,13 +83,8 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   const loadStands = async () => {
     try {
       setLoading(true);
-      const password = localStorage.getItem('adminPassword') || 'admin123';
 
-      const response = await fetch(`/api/admin/eventos/${slug}/stands`, {
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
-      });
+      const response = await fetch(`/api/admin/eventos/${slug}/stands`);
 
       if (response.ok) {
         const data = await response.json();
@@ -119,7 +114,6 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const password = localStorage.getItem('adminPassword') || 'admin123';
     const url = editingStand
       ? `/api/admin/eventos/${slug}/stands?id=${editingStand.id}`
       : `/api/admin/eventos/${slug}/stands`;
@@ -131,7 +125,6 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
         },
         body: JSON.stringify(formData)
       });
@@ -153,14 +146,8 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   };
 
   const handleEdit = async (stand: Stand) => {
-    const password = localStorage.getItem('adminPassword') || 'admin123';
-
     try {
-      const response = await fetch(`/api/admin/eventos/${slug}/stands?id=${stand.id}`, {
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
-      });
+      const response = await fetch(`/api/admin/eventos/${slug}/stands?id=${stand.id}`);
 
       if (response.ok) {
         const detailedStand = await response.json();
@@ -189,14 +176,9 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   const handleDelete = async (standId: string) => {
     if (!confirm('Tem certeza que deseja deletar este stand?')) return;
 
-    const password = localStorage.getItem('adminPassword') || 'admin123';
-
     try {
       const response = await fetch(`/api/admin/eventos/${slug}/stands?id=${standId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
       });
 
       if (response.ok) {
@@ -371,12 +353,10 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
       }
 
       // Send to API
-      const password = localStorage.getItem('adminPassword') || 'admin123';
       const response = await fetch(`/api/admin/eventos/${slug}/stands/import`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
         },
         body: JSON.stringify({ stands: standsToImport })
       });
