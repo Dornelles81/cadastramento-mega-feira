@@ -512,10 +512,10 @@ export default function CredentialsPage() {
     try {
       const { jsPDF } = await import('jspdf')
       const evName = selectedEvent?.name || ''
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 40] })
+      const doc = new jsPDF({ unit: 'mm', format: [100, 40] })
 
       for (let i = 0; i < targets.length; i++) {
-        if (i > 0) doc.addPage([100, 40], 'landscape')
+        if (i > 0) doc.addPage([100, 40])
         const v = targets[i]
 
         // Stripe
@@ -613,21 +613,15 @@ export default function CredentialsPage() {
 
       const evName = selectedEvent?.name || ''
 
-      // Página no formato exato da etiqueta (100mm × 40mm landscape)
+      // Página no formato exato da etiqueta (100mm × 40mm)
+      // Não usar orientation:'landscape' com formato customizado — jsPDF pode inverter as dimensões
       const doc = new jsPDF({
-        orientation: 'landscape',
         unit: 'mm',
         format: [100, 40]
       })
 
       for (let i = 0; i < printTargets.length; i++) {
-        if (i > 0) doc.addPage([100, 40], 'landscape')
-
-        const p = printTargets[i]
-        const grp = p.stand?.category ||
-          (p.customData as Record<string,string> | null)?.grupo ||
-          (p.customData as Record<string,string> | null)?.empresa || ''
-        const standDisplay = p.stand ? `${p.stand.code} · ${p.stand.name}` : grp
+        if (i > 0) doc.addPage([100, 40])
 
         // ── Faixa preta (6mm × 40mm) ──────────────────────────────────────
         doc.setFillColor(0, 0, 0)
@@ -652,14 +646,6 @@ export default function CredentialsPage() {
         doc.text(nameLines[0], 8, 19)
         const hasLine2 = nameLines.length >= 2
         if (hasLine2) doc.text(nameLines[1], 8, 26)
-
-        // ── Linha 4: stand ────────────────────────────────────────────────
-        if (standDisplay) {
-          doc.setFontSize(9)
-          doc.setFont('helvetica', 'bold')
-          const standY = hasLine2 ? 34 : 28
-          doc.text(doc.splitTextToSize(standDisplay, 54)[0], 8, standY)
-        }
 
         // ── QR Code (x=64, y=3, 30×30mm) ─────────────────────────────────
         if (p.qrDataUrl) {
