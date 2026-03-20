@@ -115,25 +115,6 @@ function HomePageContent() {
             </p>
           </div>
 
-          {/* Info Card */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-6 mb-6 border border-white/20">
-            <div className="text-center mb-4">
-              <div className="text-4xl mb-3">🎫</div>
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Como se cadastrar?
-              </h2>
-            </div>
-            <p className="text-sm text-white/80 text-center mb-4">
-              Para se cadastrar em um evento, você precisa do <strong className="text-verde-agua">link exclusivo</strong> fornecido pelo organizador.
-            </p>
-            <div className="bg-white/10 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/70 mb-2">Exemplo de link:</p>
-              <code className="text-verde-agua text-sm font-mono">
-                app.megafeira.com/eventos/nome-do-evento
-              </code>
-            </div>
-          </div>
-
           {/* Active Events (if any) */}
           {!loading && activeEvents.length > 0 && (
             <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-6 mb-6 border border-white/20">
