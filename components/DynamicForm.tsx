@@ -87,7 +87,9 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
       if (response.ok) {
         const data = await response.json()
         console.log('🏪 Stands loaded:', data.stands)
-        const loadedStands = data.stands || []
+        const loadedStands = (data.stands || []).sort((a: any, b: any) =>
+          a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+        )
         setStands(loadedStands)
         // Pre-select first stand if none selected yet
         if (loadedStands.length > 0) {
