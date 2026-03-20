@@ -62,6 +62,22 @@ interface Event {
   slug: string
 }
 
+interface VehicleCredential {
+  id: string
+  number: string
+  type: string
+  plate?: string | null
+}
+
+interface VehicleAccessStatus {
+  isInside: boolean
+  canEnter: boolean
+  canExit: boolean
+  lastAccess?: { type: string; time: string; gate?: string } | null
+  totalEntries: number
+  totalExits: number
+}
+
 function AccessControlContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -89,6 +105,8 @@ function AccessControlContent() {
   const [turboMode, setTurboMode] = useState(false)
   const [lastRegistrations, setLastRegistrations] = useState<{name: string, type: string, time: Date}[]>([])
   const [qrDetected, setQrDetected] = useState<string | null>(null)
+  const [vehicle, setVehicle] = useState<VehicleCredential | null>(null)
+  const [vehicleStatus, setVehicleStatus] = useState<VehicleAccessStatus | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -177,6 +195,20 @@ function AccessControlContent() {
 
   const searchParticipant = async (query: string) => {
     if (!query.trim()) return
+
+    // Detect vehicle QR: VEI|V-001|EVENTCODE
+    if (query.startsWith('VEI|')) {
+      const parts = query.split('|')
+      const vNumber = parts[1]
+      const vEventCode = parts[2]
+      if (vNumber && vEventCode) {
+        return searchVehicle(vNumber, vEventCode)
+      }
+    }
+
+    // Clear vehicle state when searching participant
+    setVehicle(null)
+    setVehicleStatus(null)
 
     setLoading(true)
     setMessage(null)
@@ -436,6 +468,97 @@ function AccessControlContent() {
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Erro de conexao' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Vehicle lookup by QR (VEI|number|eventCode)
+  const searchVehicle = async (number: string, eventCode: string) => {
+    setLoading(true)
+    setMessage(null)
+    setParticipant(null)
+    setAccessStatus(null)
+    try {
+      const res = await fetch(`/api/access/vehicle-status?number=${encodeURIComponent(number)}&eventCode=${encodeURIComponent(eventCode)}`)
+      const data = await res.json()
+      if (res.ok) {
+        setVehicle(data.vehicle)
+        setVehicleStatus({
+          isInside: data.isInside,
+          canEnter: data.canEnter,
+          canExit: data.canExit,
+          lastAccess: data.lastAccess,
+          totalEntries: data.totalEntries,
+          totalExits: data.totalExits
+        })
+      } else {
+        setMessage({ type: 'error', text: data.message || data.error || 'Credencial de veículo não encontrada' })
+        setVehicle(null)
+        setVehicleStatus(null)
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro ao buscar credencial de veículo' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVehicleCheckIn = async () => {
+    if (!vehicle || !selectedEvent) return
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/access/vehicle-check-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleCredentialId: vehicle.id,
+          eventId: selectedEvent.id,
+          gate: gateName || undefined,
+          operatorName: operatorName || session?.user?.name || 'Admin',
+          requirePreviousExit: requireExitFirst
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: `✅ ENTRADA registrada: ${vehicle.number} (${vehicle.type})` })
+        await searchVehicle(vehicle.number, selectedEvent.code)
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Erro ao registrar entrada' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVehicleCheckOut = async () => {
+    if (!vehicle || !selectedEvent) return
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/access/vehicle-check-out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleCredentialId: vehicle.id,
+          eventId: selectedEvent.id,
+          gate: gateName || undefined,
+          operatorName: operatorName || session?.user?.name || 'Admin',
+          forceExit: forceEntry
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: `✅ SAÍDA registrada: ${vehicle.number} (${data.duration?.formatted || ''})` })
+        await searchVehicle(vehicle.number, selectedEvent.code)
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Erro ao registrar saída' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' })
     } finally {
       setLoading(false)
     }
@@ -1043,6 +1166,89 @@ function AccessControlContent() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Vehicle Card */}
+            {vehicle && vehicleStatus && (
+              <div className={`rounded-lg shadow-lg p-6 ${
+                vehicleStatus.isInside
+                  ? darkMode ? 'bg-amber-900/30 border-2 border-amber-500' : 'bg-amber-50 border-2 border-amber-400'
+                  : darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+              }`}>
+                <div className="flex items-start gap-4">
+                  <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-4xl">
+                      {vehicle.type === 'CAMINHÃO' ? '🚛' : vehicle.type === 'VAN' ? '🚐' : '🚗'}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className={`text-2xl font-bold font-mono ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+                      {vehicle.number}
+                    </h3>
+                    <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {vehicle.type}
+                    </p>
+                    {vehicle.plate && (
+                      <p className={`text-sm font-mono mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        🚗 {vehicle.plate}
+                      </p>
+                    )}
+                    <div className="mt-2 flex gap-2">
+                      {vehicleStatus.isInside ? (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
+                          📍 DENTRO
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                          📍 FORA
+                        </span>
+                      )}
+                    </div>
+                    {vehicleStatus.lastAccess && (
+                      <p className={`text-sm mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Último acesso: {vehicleStatus.lastAccess.type === 'ENTRY' ? '➡️ Entrada' : '⬅️ Saída'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-4 flex gap-3">
+                  <button
+                    onClick={handleVehicleCheckIn}
+                    disabled={loading || !vehicleStatus.canEnter}
+                    className={`flex-1 py-4 rounded-lg font-bold text-lg transition-all ${
+                      vehicleStatus.canEnter
+                        ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    ➡️ ENTRADA
+                  </button>
+                  <button
+                    onClick={handleVehicleCheckOut}
+                    disabled={loading || (!vehicleStatus.canExit && !forceEntry)}
+                    className={`flex-1 py-4 rounded-lg font-bold text-lg transition-all ${
+                      vehicleStatus.canExit || forceEntry
+                        ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-lg'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    ⬅️ SAÍDA
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                    <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{vehicleStatus.totalEntries}</div>
+                    <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Entradas</div>
+                  </div>
+                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                    <div className={`font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{vehicleStatus.totalExits}</div>
+                    <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Saídas</div>
+                  </div>
+                </div>
               </div>
             )}
 

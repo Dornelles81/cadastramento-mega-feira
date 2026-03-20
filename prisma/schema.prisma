@@ -65,6 +65,9 @@ model Event {
   // Registration URLs
   registrationUrl String? // Custom URL for this event
 
+  // Vehicle access orientations (free text, per event)
+  vehicleOrientations String?
+
   // Metadata
   metadata Json? // Additional custom fields
   tags     String[] // Tags for categorization
@@ -76,15 +79,17 @@ model Event {
   completedAt DateTime?
 
   // Relations
-  participants    Participant[]
-  stands          Stand[]
-  admins          EventAdminAccess[]
-  customFields    CustomField[]
-  documentConfigs DocumentConfig[]
-  eventConfigs    EventConfig?
-  auditLogs       AuditLog[]
-  accessLogs      AccessLog[]
-  accessStats     AccessStats?
+  participants       Participant[]
+  stands             Stand[]
+  admins             EventAdminAccess[]
+  customFields       CustomField[]
+  documentConfigs    DocumentConfig[]
+  eventConfigs       EventConfig?
+  auditLogs          AuditLog[]
+  accessLogs         AccessLog[]
+  accessStats        AccessStats?
+  vehicleCredentials VehicleCredential[]
+  vehicleAccessLogs  VehicleAccessLog[]
 
   @@index([slug])
   @@index([code])
@@ -273,7 +278,7 @@ model Participant {
   approvalLogs ApprovalLog[]
   accessLogs   AccessLog[]
 
-  // @@unique([eventId, cpf]) // CPF must be unique per event - DISABLED FOR MIGRATION
+  @@unique([eventId, cpf])
   @@index([eventId])
   @@index([standId])
   @@index([eventCode])
@@ -742,4 +747,60 @@ model AccessStats {
   updatedAt   DateTime  @updatedAt
 
   @@map("access_stats")
+}
+
+// ============================================================================
+// VEHICLE CREDENTIALS
+// ============================================================================
+
+model VehicleCredential {
+  id      String @id @default(uuid())
+
+  // Event association
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Credential data
+  number String // e.g., "V-001"
+  type   String @default("VEÍCULO") // VEÍCULO, CAMINHÃO, VAN, etc.
+  plate  String? // License plate — optional
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  accessLogs VehicleAccessLog[]
+
+  @@unique([eventId, number])
+  @@index([eventId])
+  @@index([plate])
+  @@index([isActive])
+  @@map("vehicle_credentials")
+}
+
+// Vehicle Access Log — entry/exit tracking per vehicle credential
+model VehicleAccessLog {
+  id String @id @default(uuid())
+
+  vehicleCredentialId String
+  vehicleCredential   VehicleCredential @relation(fields: [vehicleCredentialId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  type String // ENTRY, EXIT
+
+  gate         String?
+  operatorName String?
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleCredentialId])
+  @@index([eventId])
+  @@index([vehicleCredentialId, createdAt])
+  @@map("vehicle_access_logs")
 }
