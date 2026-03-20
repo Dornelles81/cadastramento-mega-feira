@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Event {
   id: string
@@ -17,6 +17,7 @@ interface Event {
   isActive: boolean
   isPublic: boolean
   eventConfigs?: {
+    logoUrl?: string
     primaryColor?: string
     secondaryColor?: string
     accentColor?: string
@@ -39,6 +40,9 @@ export default function EditarEventoPage() {
   const [loadingEvent, setLoadingEvent] = useState(true)
   const [error, setError] = useState('')
   const [event, setEvent] = useState<Event | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -50,6 +54,7 @@ export default function EditarEventoPage() {
     status: 'draft',
     isActive: true,
     isPublic: true,
+    logoUrl: '',
     primaryColor: '#8B5CF6',
     secondaryColor: '#EC4899',
     accentColor: '#F59E0B',
@@ -100,6 +105,7 @@ export default function EditarEventoPage() {
         return `${year}-${month}-${day}`
       }
 
+      const existingLogoUrl = event.eventConfigs?.logoUrl || ''
       setFormData({
         name: event.name || '',
         description: event.description || '',
@@ -109,6 +115,7 @@ export default function EditarEventoPage() {
         status: event.status || 'draft',
         isActive: event.isActive !== undefined ? event.isActive : true,
         isPublic: event.isPublic !== undefined ? event.isPublic : true,
+        logoUrl: existingLogoUrl,
         primaryColor: event.eventConfigs?.primaryColor || '#8B5CF6',
         secondaryColor: event.eventConfigs?.secondaryColor || '#EC4899',
         accentColor: event.eventConfigs?.accentColor || '#F59E0B',
@@ -119,11 +126,34 @@ export default function EditarEventoPage() {
         enableCheckIn: event.eventConfigs?.enableCheckIn !== undefined ? event.eventConfigs.enableCheckIn : true,
         enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true
       })
+      if (existingLogoUrl) setLogoPreview(existingLogoUrl)
 
       setLoadingEvent(false)
     } catch (err: any) {
       setError(err.message)
       setLoadingEvent(false)
+    }
+  }
+
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return
+    setLogoUploading(true)
+    try {
+      const formDataUpload = new FormData()
+      formDataUpload.append('file', file)
+      const response = await fetch('/api/admin/upload-logo', {
+        method: 'POST',
+        body: formDataUpload
+      })
+      if (!response.ok) throw new Error('Erro ao fazer upload')
+      const data = await response.json()
+      const url = data.url
+      setFormData(prev => ({ ...prev, logoUrl: url }))
+      setLogoPreview(url)
+    } catch (err: any) {
+      setError('Erro ao fazer upload da logo: ' + err.message)
+    } finally {
+      setLogoUploading(false)
     }
   }
 
@@ -219,6 +249,62 @@ export default function EditarEventoPage() {
               <p className="text-red-800 text-sm">❌ {error}</p>
             </div>
           )}
+
+          {/* Logo do Evento */}
+          <div className="bg-white rounded-lg shadow-sm p-6 border-2 border-dashed border-purple-200">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">
+              🖼️ Logo do Evento
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              A marca do evento exibida na tela inicial do cadastro.
+            </p>
+            <div className="flex items-start gap-6">
+              <div className="bg-white border border-gray-200 rounded-2xl shadow p-4 flex items-center justify-center" style={{ minWidth: '180px', minHeight: '100px' }}>
+                {logoPreview ? (
+                  <div className="relative">
+                    <img
+                      src={logoPreview}
+                      alt="Logo do evento"
+                      className="max-h-20 w-auto object-contain"
+                      style={{ maxWidth: '200px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setLogoPreview(''); setFormData(prev => ({ ...prev, logoUrl: '' })) }}
+                      className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                      title="Remover logo"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-gray-300 text-sm text-center">Prévia do logo<br />aqui</span>
+                )}
+              </div>
+              <div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleLogoUpload(file)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={logoUploading}
+                  className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium disabled:opacity-50 shadow-sm"
+                >
+                  {logoUploading ? '⏳ Enviando...' : '📁 Selecionar logo'}
+                </button>
+                <p className="text-xs text-gray-500 mt-2">PNG, JPG, SVG ou WebP · máx. 5MB</p>
+                <p className="text-xs text-gray-400 mt-1">Recomendado: fundo transparente ou branco</p>
+              </div>
+            </div>
+          </div>
 
           {/* Basic Information */}
           <div className="bg-white rounded-lg shadow-sm p-6">
@@ -374,7 +460,9 @@ export default function EditarEventoPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4">
               🎨 Personalização Visual
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-4">
+              {/* Colors */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Cor Primária
@@ -410,6 +498,7 @@ export default function EditarEventoPage() {
                   className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
                 />
               </div>
+            </div>
             </div>
           </div>
 
@@ -517,6 +606,41 @@ export default function EditarEventoPage() {
             </button>
           </div>
         </form>
+
+        {/* Danger Zone */}
+        <div className="mt-8 border border-red-200 rounded-xl p-6 bg-red-50">
+          <h3 className="text-lg font-bold text-red-700 mb-1">⚠️ Zona de Perigo</h3>
+          <p className="text-sm text-red-600 mb-4">
+            Excluir o evento remove permanentemente todos os participantes, stands, credenciais e registros associados. Esta ação não pode ser desfeita.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!event) return
+              if (!confirm(`Tem certeza que deseja excluir o evento "${event.name}"?\n\nEsta ação é IRREVERSÍVEL e apagará todos os dados associados.`)) return
+              if (!confirm(`Confirme novamente: excluir permanentemente "${event.name}"?`)) return
+              setLoading(true)
+              try {
+                const res = await fetch(`/api/admin/eventos/${eventSlug}`, { method: 'DELETE' })
+                const data = await res.json()
+                if (res.ok) {
+                  alert('Evento excluído com sucesso.')
+                  router.push('/admin/super/eventos/novo')
+                } else {
+                  setError(data.error || 'Erro ao excluir evento')
+                }
+              } catch {
+                setError('Erro de conexão')
+              } finally {
+                setLoading(false)
+              }
+            }}
+            disabled={loading}
+            className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-semibold transition-colors"
+          >
+            🗑️ Excluir Evento Permanentemente
+          </button>
+        </div>
       </div>
     </div>
   )

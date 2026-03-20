@@ -108,7 +108,7 @@ async function main() {
       // Notifications
       notifyOnRegister: true,
       notifyOnApprove: false,
-      adminEmail: 'admin@megafeira.com.br'
+      adminEmail: 'megafeira@megafeira.com'
     }
   })
 
@@ -119,14 +119,14 @@ async function main() {
   // ============================================================================
   console.log('👑 Creating SUPER ADMIN user...')
 
-  const hashedPassword = await bcrypt.hash('SuperAdmin@2025', 10)
+  const hashedPassword = await bcrypt.hash('Mega-Feira', 10)
 
   const superAdmin = await prisma.eventAdmin.upsert({
-    where: { email: 'admin@megafeira.com.br' },
+    where: { email: 'megafeira@megafeira.com' },
     update: {},
     create: {
       name: 'Super Administrador',
-      email: 'admin@megafeira.com.br',
+      email: 'megafeira@megafeira.com',
       password: hashedPassword,
       phone: '(51) 99999-9999',
       role: 'SUPER_ADMIN',
@@ -140,7 +140,7 @@ async function main() {
   })
 
   console.log(`✅ Super Admin created: ${superAdmin.email}`)
-  console.log(`   Password: SuperAdmin@2025`)
+  console.log(`   Password: Mega-Feira`)
 
   // ============================================================================
   // 4. CREATE EVENT ADMIN (Example)
@@ -266,7 +266,7 @@ async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log(`✅ Event: ${defaultEvent.name} (${defaultEvent.slug})`)
   console.log(`✅ Super Admin: ${superAdmin.email}`)
-  console.log(`   🔑 Password: SuperAdmin@2025`)
+  console.log(`   🔑 Password: Mega-Feira`)
   console.log(`✅ Event Admin: ${eventAdmin.email}`)
   console.log(`   🔑 Password: EventAdmin@2025`)
   console.log(`✅ Participants migrated: ${migratedCount.count}`)

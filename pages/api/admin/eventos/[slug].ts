@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import { requireAuth, isSuperAdmin } from '../../../../lib/auth'
+import { prisma } from '../../../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * API: Buscar e atualizar evento específico (SUPER ADMIN apenas)
@@ -75,6 +74,7 @@ export default async function handler(
         venueCountry,
         venuePostalCode,
         // EventConfig (customization)
+        logoUrl,
         primaryColor,
         secondaryColor,
         accentColor,
@@ -118,7 +118,7 @@ export default async function handler(
       })
 
       // Update or create EventConfig
-      if (primaryColor || secondaryColor || accentColor ||
+      if (logoUrl !== undefined || primaryColor || secondaryColor || accentColor ||
           typeof requireConsent === 'boolean' ||
           typeof requireFace === 'boolean' ||
           typeof requireDocuments === 'boolean' ||
@@ -131,6 +131,7 @@ export default async function handler(
           await prisma.eventConfig.update({
             where: { eventId: existingEvent.id },
             data: {
+              ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
               ...(primaryColor && { primaryColor }),
               ...(secondaryColor && { secondaryColor }),
               ...(accentColor && { accentColor }),
@@ -175,6 +176,16 @@ export default async function handler(
         event: finalEvent,
         message: 'Evento atualizado com sucesso'
       })
+    }
+
+    // DELETE - Excluir evento
+    if (req.method === 'DELETE') {
+      const event = await prisma.event.findUnique({ where: { slug } })
+      if (!event) return res.status(404).json({ error: 'Evento não encontrado' })
+
+      await prisma.event.delete({ where: { slug } })
+
+      return res.status(200).json({ success: true, message: 'Evento excluído com sucesso' })
     }
 
     return res.status(405).json({ error: 'Método não permitido' })
