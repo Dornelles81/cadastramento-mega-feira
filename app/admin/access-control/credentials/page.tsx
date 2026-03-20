@@ -566,8 +566,12 @@ export default function CredentialsPage() {
 
       const blob = doc.output('blob')
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      setMessage({ type: 'success', text: '✅ PDF aberto! Ctrl+P → Impressora → Tamanho real → Margens = nenhuma.' })
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `credenciais-veiculos-${Date.now()}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      setMessage({ type: 'success', text: '✅ PDF baixado! Abra o arquivo e pressione Ctrl+P → Tamanho real → Margens = nenhuma.' })
     } catch (err) {
       console.error('Erro ao gerar PDF de veículos:', err)
       alert('Erro ao gerar PDF.')
@@ -670,10 +674,14 @@ export default function CredentialsPage() {
 
       const blob = doc.output('blob')
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `credenciais-${Date.now()}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
       setMessage({
         type: 'success',
-        text: '✅ PDF aberto! Na aba do PDF: pressione Ctrl+P → Mais configurações → Margens = NENHUMA → desmarque CABEÇALHOS E RODAPÉS → Escala = Tamanho real → Imprimir'
+        text: '✅ PDF baixado! Abra o arquivo e pressione Ctrl+P → Mais configurações → Margens = NENHUMA → desmarque CABEÇALHOS E RODAPÉS → Escala = Tamanho real → Imprimir'
       })
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
