@@ -128,6 +128,7 @@ export default function EventAdminPage() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set())
   const [printingBulk, setPrintingBulk] = useState(false)
+  const [printingLabels, setPrintingLabels] = useState(false)
 
   // Calculate stands and their counts whenever participants change
   useEffect(() => {
@@ -475,10 +476,7 @@ export default function EventAdminPage() {
     try {
       const response = await fetch('/api/admin/participant-approval', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer admin-token-mega-feira-2025'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           participantId: participant.id,
           action: 'approve'
@@ -509,10 +507,7 @@ export default function EventAdminPage() {
     try {
       const response = await fetch('/api/admin/participant-approval', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer admin-token-mega-feira-2025'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           participantId: participant.id,
           action: 'reject',
@@ -901,6 +896,72 @@ export default function EventAdminPage() {
     }
   }
 
+  // Impressão de etiquetas 100mm×40mm via jsPDF — igual ao controle de acesso
+  const handlePrintLabelsPDF = async (participantIds: string[]) => {
+    const targets = filteredParticipants.filter(p => participantIds.includes(p.id))
+    if (targets.length === 0) return
+
+    setPrintingLabels(true)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const QRCode = (await import('qrcode')).default
+
+      const evName = event?.name || 'Evento'
+      const evCode = event?.code || ''
+
+      // Sem orientation para evitar inversão de dimensões com formato customizado
+      const doc = new jsPDF({ unit: 'mm', format: [100, 40] })
+
+      for (let i = 0; i < targets.length; i++) {
+        if (i > 0) doc.addPage([100, 40])
+
+        const p = targets[i]
+
+        // QR Code — formato compacto compatível com o scanner de acesso
+        const qrPayload = `MF|${p.id.substring(0, 8)}|${p.cpf.replace(/\D/g, '')}|${evCode}|-|${p.name.substring(0, 30)}`
+        const qrDataUrl = await QRCode.toDataURL(qrPayload, {
+          width: 200, margin: 1, errorCorrectionLevel: 'M',
+          color: { dark: '#000000', light: '#ffffff' }
+        })
+
+        // ── Faixa preta (6mm × 40mm) ──────────────────────────────────────
+        doc.setFillColor(0, 0, 0)
+        doc.rect(0, 0, 6, 40, 'F')
+        doc.setTextColor(0, 0, 0)
+
+        // ── Linha 1: nome do evento ────────────────────────────────────────
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'bold')
+        doc.text(doc.splitTextToSize(evName.toUpperCase(), 54)[0], 8, 9)
+
+        // ── Linha 2+3: nome do participante (até 2 linhas, 16pt) ──────────
+        doc.setFontSize(16)
+        doc.setFont('helvetica', 'bold')
+        const nameLines = doc.splitTextToSize(p.name, 54)
+        doc.text(nameLines[0], 8, 19)
+        const hasLine2 = nameLines.length >= 2
+        if (hasLine2) doc.text(nameLines[1], 8, 26)
+
+        // ── QR Code (x=64, y=3, 30×30mm) ─────────────────────────────────
+        doc.addImage(qrDataUrl, 'PNG', 64, 3, 30, 30)
+      }
+
+      const blob = doc.output('blob')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `credenciais-${Date.now()}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      markAsPrinted(participantIds)
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err)
+      alert('Erro ao gerar PDF de etiquetas.')
+    } finally {
+      setPrintingLabels(false)
+    }
+  }
+
   return (
     <div className={`min-h-screen p-4 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
       <div className="max-w-7xl mx-auto">
@@ -1095,12 +1156,12 @@ export default function EventAdminPage() {
                     ✖ Limpar ({selectedParticipants.size})
                   </button>
                   <button
-                    onClick={() => handlePrintBulkCredentials(Array.from(selectedParticipants))}
-                    disabled={printingBulk}
+                    onClick={() => handlePrintLabelsPDF(Array.from(selectedParticipants))}
+                    disabled={printingLabels}
                     className="text-xs sm:text-sm bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 whitespace-nowrap disabled:opacity-50"
-                    title="Imprimir credenciais selecionadas"
+                    title="Imprimir etiquetas 100×40mm (Elgin L42 Pro)"
                   >
-                    {printingBulk ? '⏳ Gerando...' : `🏷️ Imprimir (${selectedParticipants.size})`}
+                    {printingLabels ? '⏳ Gerando PDF...' : `🏷️ Imprimir etiquetas (${selectedParticipants.size})`}
                   </button>
                 </>
               )}
@@ -1283,15 +1344,15 @@ export default function EventAdminPage() {
                           <span className="hidden sm:inline">🗑️ Excluir</span>
                         </button>
                         <button
-                          onClick={() => handlePrintCredential(participant)}
+                          onClick={() => handlePrintLabelsPDF([participant.id])}
                           className="px-2 md:px-3 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
                           title={participant.credentialPrinted
-                            ? `Credencial já impressa em ${new Date(participant.credentialPrintedAt!).toLocaleString('pt-BR')}`
-                            : 'Imprimir credencial com QR Code'}
+                            ? `Já impressa em ${new Date(participant.credentialPrintedAt!).toLocaleString('pt-BR')} — clique para reimprimir`
+                            : 'Imprimir etiqueta 100×40mm'}
                         >
                           <span className="sm:hidden">{participant.credentialPrinted ? '✅' : '🏷️'}</span>
                           <span className="hidden sm:inline">
-                            {participant.credentialPrinted ? '✅ Reimpressão' : '🏷️ Credencial'}
+                            {participant.credentialPrinted ? '✅ Reimprimir' : '🏷️ Etiqueta'}
                           </span>
                         </button>
                         <a
