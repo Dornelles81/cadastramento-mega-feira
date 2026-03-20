@@ -159,14 +159,9 @@ function HomePageContent() {
                     className="block bg-white/10 hover:bg-white/20 rounded-lg p-4 transition-colors border border-white/10 hover:border-verde-agua/50"
                   >
                     <h3 className="font-semibold text-white mb-1">{event.name}</h3>
-                    <div className="flex justify-between items-center text-xs text-white/70">
-                      <span>
-                        {formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}
-                      </span>
-                      <span className="text-verde-agua">
-                        {event.currentCount}/{event.maxCapacity} vagas
-                      </span>
-                    </div>
+                    <p className="text-xs text-white/70">
+                      {formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}
+                    </p>
                   </a>
                 ))}
               </div>
