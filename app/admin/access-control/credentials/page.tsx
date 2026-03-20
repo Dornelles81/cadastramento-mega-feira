@@ -85,7 +85,7 @@ function CredentialCard({
     '—'
 
   const standDisplay = participant.stand
-    ? `${participant.stand.code} · ${participant.stand.name}`
+    ? participant.stand.name
     : '—'
 
   if (templateStyle === 'label') {
