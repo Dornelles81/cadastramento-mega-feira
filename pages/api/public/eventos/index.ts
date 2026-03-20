@@ -1,7 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../../../../lib/prisma'
 
 /**
  * API PUBLICA: Listar eventos publicos ativos
@@ -16,16 +14,12 @@ export default async function handler(
       return res.status(405).json({ error: 'Metodo nao permitido' })
     }
 
-    const now = new Date()
-
-    // Fetch only public and active events
+    // Fetch only public and active events — filtered solely by status
     const events = await prisma.event.findMany({
       where: {
         isActive: true,
         isPublic: true,
-        status: 'active',
-        startDate: { lte: now },
-        endDate: { gte: now }
+        status: 'active'
       },
       select: {
         slug: true,

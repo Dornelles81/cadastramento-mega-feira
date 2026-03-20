@@ -76,9 +76,7 @@ function HomePageContent() {
       const response = await fetch('/api/public/eventos')
       if (response.ok) {
         const data = await response.json()
-        // Filter only active events
-        const active = (data.events || []).filter((e: EventSummary) => e.status === 'active')
-        setActiveEvents(active)
+        setActiveEvents(data.events || [])
       }
     } catch (error) {
       console.error('Failed to load events:', error)
