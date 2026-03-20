@@ -115,36 +115,8 @@ function HomePageContent() {
             </p>
           </div>
 
-          {/* Active Events (if any) */}
-          {!loading && activeEvents.length > 0 && (
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-6 mb-6 border border-white/20">
-              <h2 className="text-lg font-semibold text-white mb-4 text-center">
-                📅 Eventos Ativos
-              </h2>
-              <div className="space-y-3">
-                {activeEvents.map((event) => (
-                  <a
-                    key={event.slug}
-                    href={`/eventos/${event.slug}`}
-                    className="block bg-white/10 hover:bg-white/20 rounded-lg p-4 transition-colors border border-white/10 hover:border-verde-agua/50"
-                  >
-                    <h3 className="font-semibold text-white mb-1">{event.name}</h3>
-                    <div className="flex justify-between items-center text-xs text-white/70">
-                      <span>
-                        {formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}
-                      </span>
-                      <span className="text-verde-agua">
-                        {event.currentCount}/{event.maxCapacity} vagas
-                      </span>
-                    </div>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Features */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-6 border border-white/20">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-6 mb-6 border border-white/20">
             <h2 className="text-lg font-semibold text-white mb-4 text-center">
               ✨ Por que usar nosso sistema?
             </h2>
@@ -172,6 +144,34 @@ function HomePageContent() {
               </div>
             </div>
           </div>
+
+          {/* Active Events (if any) */}
+          {!loading && activeEvents.length > 0 && (
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-6 border border-white/20">
+              <h2 className="text-lg font-semibold text-white mb-4 text-center">
+                📅 Eventos Ativos
+              </h2>
+              <div className="space-y-3">
+                {activeEvents.map((event) => (
+                  <a
+                    key={event.slug}
+                    href={`/eventos/${event.slug}`}
+                    className="block bg-white/10 hover:bg-white/20 rounded-lg p-4 transition-colors border border-white/10 hover:border-verde-agua/50"
+                  >
+                    <h3 className="font-semibold text-white mb-1">{event.name}</h3>
+                    <div className="flex justify-between items-center text-xs text-white/70">
+                      <span>
+                        {formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}
+                      </span>
+                      <span className="text-verde-agua">
+                        {event.currentCount}/{event.maxCapacity} vagas
+                      </span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="mt-8 text-center">
