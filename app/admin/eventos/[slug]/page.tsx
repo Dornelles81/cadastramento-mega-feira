@@ -483,20 +483,20 @@ export default function EventAdminPage() {
         })
       })
       
+      const data = await response.json()
       if (response.ok) {
-        // Update local state
-        setParticipants(prev => 
-          prev.map(p => p.id === participant.id 
-            ? { ...p, approvalStatus: 'approved', approvedAt: new Date().toISOString(), approvedBy: 'admin' } 
+        setParticipants(prev =>
+          prev.map(p => p.id === participant.id
+            ? { ...p, approvalStatus: 'approved', approvedAt: new Date().toISOString(), approvedBy: 'admin' }
             : p)
         )
         alert(`✅ ${participant.name} aprovado com sucesso!`)
       } else {
-        alert('Erro ao aprovar participante')
+        alert(`Erro ao aprovar participante: ${data.error || data.details || response.status}`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error approving participant:', error)
-      alert('Erro ao aprovar participante')
+      alert(`Erro ao aprovar participante: ${error.message}`)
     }
   }
 

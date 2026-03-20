@@ -1,14 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client'
+import { prisma } from '../../../lib/prisma'
+import { getSession } from '../../../lib/auth'
 
-const prisma = new PrismaClient()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Check authentication
-  const authHeader = req.headers.authorization
-  if (!authHeader || authHeader !== 'Bearer admin-token-mega-feira-2025') {
-    return res.status(401).json({ error: 'Unauthorized' })
+  // Check authentication via NextAuth session
+  const session = await getSession(req, res)
+  if (!session || !session.user) {
+    return res.status(401).json({ error: 'Não autenticado' })
   }
 
   if (req.method !== 'POST') {
@@ -154,9 +154,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
   } catch (error: any) {
-    console.error('Error updating participant approval:', error)
-    res.status(500).json({ error: 'Failed to update participant approval', details: error.message })
-  } finally {
-    await prisma.$disconnect()
+    console.error('Error updating participant approval:', error?.message, error?.code, error?.meta)
+    res.status(500).json({
+      error: 'Erro ao aprovar participante',
+      details: error.message,
+      code: error.code
+    })
   }
 }
