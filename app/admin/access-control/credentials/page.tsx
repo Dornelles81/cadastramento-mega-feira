@@ -512,10 +512,10 @@ export default function CredentialsPage() {
     try {
       const { jsPDF } = await import('jspdf')
       const evName = selectedEvent?.name || ''
-      const doc = new jsPDF({ unit: 'mm', format: [100, 40] })
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 40] })
 
       for (let i = 0; i < targets.length; i++) {
-        if (i > 0) doc.addPage([100, 40])
+        if (i > 0) doc.addPage([100, 40], 'landscape')
         const v = targets[i]
 
         // Stripe
@@ -613,15 +613,10 @@ export default function CredentialsPage() {
 
       const evName = selectedEvent?.name || ''
 
-      // Página no formato exato da etiqueta (100mm × 40mm)
-      // Não usar orientation:'landscape' com formato customizado — jsPDF pode inverter as dimensões
-      const doc = new jsPDF({
-        unit: 'mm',
-        format: [100, 40]
-      })
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 40] })
 
       for (let i = 0; i < printTargets.length; i++) {
-        if (i > 0) doc.addPage([100, 40])
+        if (i > 0) doc.addPage([100, 40], 'landscape')
 
         // ── Faixa preta (6mm × 40mm) ──────────────────────────────────────
         doc.setFillColor(0, 0, 0)

@@ -909,11 +909,10 @@ export default function EventAdminPage() {
       const evName = event?.name || 'Evento'
       const evCode = event?.code || ''
 
-      // Sem orientation para evitar inversão de dimensões com formato customizado
-      const doc = new jsPDF({ unit: 'mm', format: [100, 40] })
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 40] })
 
       for (let i = 0; i < targets.length; i++) {
-        if (i > 0) doc.addPage([100, 40])
+        if (i > 0) doc.addPage([100, 40], 'landscape')
 
         const p = targets[i]
 
