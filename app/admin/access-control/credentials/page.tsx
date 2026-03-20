@@ -619,6 +619,7 @@ export default function CredentialsPage() {
         if (i > 0) doc.addPage([100, 40], 'landscape')
 
         const p = printTargets[i]
+        const standName = p.stand?.name || ''
 
         // ── Faixa preta (6mm × 40mm) ──────────────────────────────────────
         doc.setFillColor(0, 0, 0)
@@ -643,6 +644,13 @@ export default function CredentialsPage() {
         doc.text(nameLines[0], 8, 19)
         const hasLine2 = nameLines.length >= 2
         if (hasLine2) doc.text(nameLines[1], 8, 26)
+
+        // ── Linha 4: stand ────────────────────────────────────────────────
+        if (standName) {
+          doc.setFontSize(9)
+          doc.setFont('helvetica', 'bold')
+          doc.text(doc.splitTextToSize(standName, 54)[0], 8, hasLine2 ? 34 : 28)
+        }
 
         // ── QR Code (x=64, y=3, 30×30mm) ─────────────────────────────────
         if (p.qrDataUrl) {

@@ -915,9 +915,11 @@ export default function EventAdminPage() {
         if (i > 0) doc.addPage([100, 40], 'landscape')
 
         const p = targets[i]
+        const standCode = p.customData?.standCode || p.customData?.estande || ''
+        const standName = (p as any).standName || standCode
 
         // QR Code — formato compacto compatível com o scanner de acesso
-        const qrPayload = `MF|${p.id.substring(0, 8)}|${p.cpf.replace(/\D/g, '')}|${evCode}|-|${p.name.substring(0, 30)}`
+        const qrPayload = `MF|${p.id.substring(0, 8)}|${p.cpf.replace(/\D/g, '')}|${evCode}|${standCode}|${p.name.substring(0, 30)}`
         const qrDataUrl = await QRCode.toDataURL(qrPayload, {
           width: 200, margin: 1, errorCorrectionLevel: 'M',
           color: { dark: '#000000', light: '#ffffff' }
@@ -940,6 +942,13 @@ export default function EventAdminPage() {
         doc.text(nameLines[0], 8, 19)
         const hasLine2 = nameLines.length >= 2
         if (hasLine2) doc.text(nameLines[1], 8, 26)
+
+        // ── Linha 4: stand ────────────────────────────────────────────────
+        if (standName) {
+          doc.setFontSize(9)
+          doc.setFont('helvetica', 'bold')
+          doc.text(doc.splitTextToSize(standName, 54)[0], 8, hasLine2 ? 34 : 28)
+        }
 
         // ── QR Code (x=64, y=3, 30×30mm) ─────────────────────────────────
         doc.addImage(qrDataUrl, 'PNG', 64, 3, 30, 30)
