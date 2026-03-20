@@ -39,6 +39,7 @@ export default async function handler(
       primaryColor,
       secondaryColor,
       accentColor,
+      logoUrl,
       requireConsent,
       requireFace,
       requireDocuments,
@@ -133,6 +134,7 @@ export default async function handler(
     await prisma.eventConfig.create({
       data: {
         eventId: event.id,
+        logoUrl: logoUrl || null,
         primaryColor: primaryColor || '#8B5CF6',
         secondaryColor: secondaryColor || '#EC4899',
         accentColor: accentColor || '#F59E0B',
@@ -144,7 +146,7 @@ export default async function handler(
         enableQRCode: enableQRCode !== false,
         enableExport: true,
         welcomeMessage: `Bem-vindo ao cadastramento do ${name}!`,
-        successMessage: 'Cadastro realizado com sucesso! Aguardamos você no evento.',
+        successMessage: 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.',
         consentText: 'Autorizo o uso da minha imagem facial para controle de acesso ao evento.',
         notifyOnRegister: true,
         notifyOnApprove: false,

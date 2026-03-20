@@ -27,6 +27,7 @@ interface Event {
     autoApprove?: boolean
     enableCheckIn?: boolean
     enableQRCode?: boolean
+    successMessage?: string
   }
 }
 
@@ -63,7 +64,8 @@ export default function EditarEventoPage() {
     requireDocuments: false,
     autoApprove: false,
     enableCheckIn: true,
-    enableQRCode: true
+    enableQRCode: true,
+    successMessage: ''
   })
 
   useEffect(() => {
@@ -124,7 +126,8 @@ export default function EditarEventoPage() {
         requireDocuments: event.eventConfigs?.requireDocuments !== undefined ? event.eventConfigs.requireDocuments : false,
         autoApprove: event.eventConfigs?.autoApprove !== undefined ? event.eventConfigs.autoApprove : false,
         enableCheckIn: event.eventConfigs?.enableCheckIn !== undefined ? event.eventConfigs.enableCheckIn : true,
-        enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true
+        enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true,
+        successMessage: event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.'
       })
       if (existingLogoUrl) setLogoPreview(existingLogoUrl)
 
@@ -586,6 +589,21 @@ export default function EditarEventoPage() {
                 </div>
               </label>
             </div>
+          </div>
+
+          {/* Success Message */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-4">💬 Mensagem de Sucesso</h2>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto exibido após o cadastro ser realizado
+            </label>
+            <textarea
+              value={formData.successMessage}
+              onChange={(e) => setFormData({ ...formData, successMessage: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
+              rows={3}
+              placeholder="Ex: Retire sua credencial física na secretaria do parque."
+            />
           </div>
 
           {/* Submit */}

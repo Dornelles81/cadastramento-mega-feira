@@ -83,7 +83,8 @@ export default async function handler(
         requireDocuments,
         autoApprove,
         enableCheckIn,
-        enableQRCode
+        enableQRCode,
+        successMessage
       } = req.body
 
       // Find existing event
@@ -124,7 +125,8 @@ export default async function handler(
           typeof requireDocuments === 'boolean' ||
           typeof autoApprove === 'boolean' ||
           typeof enableCheckIn === 'boolean' ||
-          typeof enableQRCode === 'boolean') {
+          typeof enableQRCode === 'boolean' ||
+          successMessage !== undefined) {
 
         if (existingEvent.eventConfigs) {
           // Update existing config
@@ -141,6 +143,7 @@ export default async function handler(
               ...(typeof autoApprove === 'boolean' && { autoApprove }),
               ...(typeof enableCheckIn === 'boolean' && { enableCheckIn }),
               ...(typeof enableQRCode === 'boolean' && { enableQRCode }),
+              ...(successMessage !== undefined && { successMessage }),
               updatedAt: new Date()
             }
           })
