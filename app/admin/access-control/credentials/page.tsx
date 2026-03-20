@@ -618,6 +618,8 @@ export default function CredentialsPage() {
       for (let i = 0; i < printTargets.length; i++) {
         if (i > 0) doc.addPage([100, 40], 'landscape')
 
+        const p = printTargets[i]
+
         // ── Faixa preta (6mm × 40mm) ──────────────────────────────────────
         doc.setFillColor(0, 0, 0)
         doc.rect(0, 0, 6, 40, 'F')
