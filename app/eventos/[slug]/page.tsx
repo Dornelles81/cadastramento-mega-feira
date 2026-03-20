@@ -397,8 +397,19 @@ export default function EventoPage() {
           <div className="max-w-md mx-auto">
             {/* Header with Event Info */}
             <div className="text-center py-6">
-              <div className="mb-4">
-                <MegaFeiraLogo className="text-4xl" showTagline />
+              <div className="mb-4 flex justify-center">
+                {event.config.logoUrl ? (
+                  <div className="bg-white rounded-2xl shadow-lg px-6 py-4 flex items-center justify-center" style={{ minWidth: '200px', maxWidth: '300px' }}>
+                    <img
+                      src={event.config.logoUrl}
+                      alt={event.name}
+                      className="max-h-24 w-auto object-contain"
+                      style={{ maxWidth: '260px' }}
+                    />
+                  </div>
+                ) : (
+                  <MegaFeiraLogo className="text-4xl" showTagline />
+                )}
               </div>
               <h1 className="text-xl font-bold text-white mb-2">
                 {event.name}
@@ -410,7 +421,6 @@ export default function EventoPage() {
               )}
               <div className="text-xs text-white/60 space-y-1 mb-3">
                 <div>De {formatEventDate(event.startDate)} a {formatEventDate(event.endDate)}</div>
-                <div>{event.currentCount}/{event.maxCapacity} vagas preenchidas</div>
               </div>
               <div className="text-xs text-white/90 text-left bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 border border-white/20">
                 <p className="mb-2">
