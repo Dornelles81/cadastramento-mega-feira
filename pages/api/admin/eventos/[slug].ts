@@ -149,6 +149,7 @@ export default async function handler(
           await prisma.eventConfig.create({
             data: {
               eventId: existingEvent.id,
+              ...(logoUrl && { logoUrl }),
               primaryColor: primaryColor || '#8B5CF6',
               secondaryColor: secondaryColor || '#EC4899',
               accentColor: accentColor || '#F59E0B',

@@ -2,18 +2,11 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import { requireAuth } from '../../../lib/auth'
 import formidable from 'formidable'
 import fs from 'fs'
-import path from 'path'
 
 export const config = {
   api: {
     bodyParser: false,
   },
-}
-
-const logosDir = path.join(process.cwd(), 'public', 'uploads', 'logos')
-
-if (!fs.existsSync(logosDir)) {
-  fs.mkdirSync(logosDir, { recursive: true })
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -29,8 +22,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const form = formidable({
-      uploadDir: logosDir,
-      keepExtensions: true,
       maxFileSize: 5 * 1024 * 1024, // 5MB
     })
 
@@ -41,19 +32,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Nenhum arquivo enviado' })
     }
 
-    const timestamp = Date.now()
-    const originalName = file.originalFilename || 'logo'
-    const extension = path.extname(originalName)
-    const baseName = path.basename(originalName, extension)
-      .replace(/[^a-zA-Z0-9]/g, '_')
-    const uniqueName = `${baseName}_${timestamp}${extension}`
+    const mimeType = file.mimetype || 'image/png'
+    const buffer = fs.readFileSync(file.filepath)
+    const base64 = buffer.toString('base64')
+    const dataUrl = `data:${mimeType};base64,${base64}`
 
-    const finalPath = path.join(logosDir, uniqueName)
-    fs.renameSync(file.filepath, finalPath)
+    // Clean up temp file
+    try { fs.unlinkSync(file.filepath) } catch { /* ignore */ }
 
     return res.status(200).json({
       success: true,
-      url: `/uploads/logos/${uniqueName}`
+      url: dataUrl
     })
   } catch (error) {
     console.error('Logo upload error:', error)
