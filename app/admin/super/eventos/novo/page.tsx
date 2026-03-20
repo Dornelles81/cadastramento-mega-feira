@@ -2,13 +2,16 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export default function NovoEventoPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [logoPreview, setLogoPreview] = useState<string>('')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -26,6 +29,7 @@ export default function NovoEventoPage() {
     venueAddress: '',
     venueCity: '',
     venueState: 'RS',
+    logoUrl: '',
     primaryColor: '#8B5CF6',
     secondaryColor: '#EC4899',
     accentColor: '#F59E0B',
@@ -71,6 +75,28 @@ export default function NovoEventoPage() {
       .replace(/(^-|-$)/g, '')
 
     setFormData({ ...formData, code })
+  }
+
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return
+    setLogoUploading(true)
+    try {
+      const formDataUpload = new FormData()
+      formDataUpload.append('file', file)
+      const response = await fetch('/api/admin/upload-logo', {
+        method: 'POST',
+        body: formDataUpload
+      })
+      if (!response.ok) throw new Error('Erro ao fazer upload')
+      const data = await response.json()
+      const url = data.url
+      setFormData(prev => ({ ...prev, logoUrl: url }))
+      setLogoPreview(url)
+    } catch (err: any) {
+      setError('Erro ao fazer upload da logo: ' + err.message)
+    } finally {
+      setLogoUploading(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,6 +174,64 @@ export default function NovoEventoPage() {
               <p className="text-red-800 text-sm">❌ {error}</p>
             </div>
           )}
+
+          {/* Logo do Evento */}
+          <div className="bg-white rounded-lg shadow-sm p-6 border-2 border-dashed border-purple-200">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">
+              🖼️ Logo do Evento
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Adicione a marca do evento — ela será exibida na tela inicial do cadastro.
+            </p>
+            <div className="flex items-start gap-6">
+              {/* Preview */}
+              <div className="bg-white border border-gray-200 rounded-2xl shadow p-4 flex items-center justify-center" style={{ minWidth: '180px', minHeight: '100px' }}>
+                {logoPreview ? (
+                  <div className="relative">
+                    <img
+                      src={logoPreview}
+                      alt="Logo do evento"
+                      className="max-h-20 w-auto object-contain"
+                      style={{ maxWidth: '200px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setLogoPreview(''); setFormData(prev => ({ ...prev, logoUrl: '' })) }}
+                      className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                      title="Remover logo"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-gray-300 text-sm text-center">Prévia do logo<br />aqui</span>
+                )}
+              </div>
+              {/* Upload */}
+              <div>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleLogoUpload(file)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={logoUploading}
+                  className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium disabled:opacity-50 shadow-sm"
+                >
+                  {logoUploading ? '⏳ Enviando...' : '📁 Selecionar logo'}
+                </button>
+                <p className="text-xs text-gray-500 mt-2">PNG, JPG, SVG ou WebP · máx. 5MB</p>
+                <p className="text-xs text-gray-400 mt-1">Recomendado: fundo transparente ou branco</p>
+              </div>
+            </div>
+          </div>
 
           {/* Basic Information */}
           <div className="bg-white rounded-lg shadow-sm p-6">
@@ -404,7 +488,9 @@ export default function NovoEventoPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4">
               🎨 Personalização Visual
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-4">
+              {/* Colors */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Cor Primária
@@ -440,6 +526,7 @@ export default function NovoEventoPage() {
                   className="w-full h-12 border border-gray-300 rounded-lg cursor-pointer"
                 />
               </div>
+            </div>
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../../../lib/prisma'
+import { getSession } from '../../../../../../lib/auth'
 
 interface StandImport {
   code: string
@@ -15,6 +16,11 @@ interface StandImport {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log('📥 [IMPORT] Requisição recebida:', req.method, req.url)
+
+  const session = await getSession(req, res)
+  if (!session || !session.user) {
+    return res.status(401).json({ error: 'Não autenticado' })
+  }
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -122,7 +128,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       error: 'Erro ao importar stands',
       message: error.message
     })
-  } finally {
-    await prisma.$disconnect()
   }
 }

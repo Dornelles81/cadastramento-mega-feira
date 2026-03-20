@@ -1,7 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../../../../lib/prisma'
 
 /**
  * API PÚBLICA: Buscar configurações de um evento
@@ -72,7 +70,9 @@ export default async function handler(
           secondaryColor: event.eventConfigs?.secondaryColor || '#EC4899',
           accentColor: event.eventConfigs?.accentColor || '#F59E0B',
           welcomeMessage: event.eventConfigs?.welcomeMessage,
-          successMessage: event.eventConfigs?.successMessage,
+          successMessage: event.eventConfigs?.successMessage?.includes('Aguardamos')
+            ? 'Cadastro realizado com sucesso! Retire sua credencial na secretaria.'
+            : (event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial na secretaria.'),
           consentText: event.eventConfigs?.consentText,
           requireConsent: event.eventConfigs?.requireConsent !== false,
           requireFace: event.eventConfigs?.requireFace !== false,

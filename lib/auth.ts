@@ -1,9 +1,7 @@
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../pages/api/auth/[...nextauth]'
 import { GetServerSidePropsContext, NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from './prisma'
 
 /**
  * Get session from API route or getServerSideProps

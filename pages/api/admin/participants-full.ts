@@ -1,9 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { getSession } from '../../../lib/auth'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  // Check authentication
+  const session = await getSession(req, res)
+  if (!session || !session.user) {
+    return res.status(401).json({ error: 'Não autenticado' })
+  }
+
+  // CORS headers (restricted to same origin for authenticated endpoint)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   // Disable cache to ensure fresh data
@@ -128,7 +134,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       error: 'Internal server error',
       message: 'Erro ao consultar participantes'
     })
-  } finally {
-    await prisma.$disconnect()
   }
 }

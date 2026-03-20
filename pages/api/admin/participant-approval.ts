@@ -50,41 +50,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     })
 
-    // Create approval log
-    await prisma.approvalLog.create({
-      data: {
-        participantId,
-        action: newStatus,
-        previousStatus,
-        newStatus,
-        reason,
-        notes,
-        adminUser: 'admin',
-        adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
-      }
-    })
-
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        action: action.toUpperCase(),
-        entityType: 'participant',
-        entityId: participantId,
-        adminUser: 'admin',
-        adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null,
-        previousData: {
-          approvalStatus: previousStatus
-        },
-        newData: {
-          approvalStatus: newStatus
-        },
-        description: `Participant ${participant.name} (${participant.cpf}) was ${newStatus}`,
-        metadata: {
+    // Create approval log (non-blocking — table may not exist in all environments)
+    try {
+      await prisma.approvalLog.create({
+        data: {
+          participantId,
+          action: newStatus,
+          previousStatus,
+          newStatus,
           reason,
-          notes
+          notes,
+          adminUser: 'admin',
+          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
         }
-      }
-    })
+      })
+    } catch (logErr: any) {
+      console.warn('approvalLog.create skipped:', logErr?.message)
+    }
+
+    // Create audit log (non-blocking)
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: action.toUpperCase(),
+          entityType: 'participant',
+          entityId: participantId,
+          adminUser: 'admin',
+          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null,
+          previousData: { approvalStatus: previousStatus },
+          newData: { approvalStatus: newStatus },
+          description: `Participant ${participant.name} (${participant.cpf}) was ${newStatus}`,
+          metadata: { reason, notes }
+        }
+      })
+    } catch (auditErr: any) {
+      console.warn('auditLog.create skipped:', auditErr?.message)
+    }
 
     // Send WhatsApp notification on approval
     let whatsappSent = false
