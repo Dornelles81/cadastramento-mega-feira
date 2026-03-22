@@ -107,6 +107,7 @@ function AccessControlContent() {
   const [qrDetected, setQrDetected] = useState<string | null>(null)
   const [vehicle, setVehicle] = useState<VehicleCredential | null>(null)
   const [vehicleStatus, setVehicleStatus] = useState<VehicleAccessStatus | null>(null)
+  const [gateType, setGateType] = useState<'ENTRADA' | 'SAÍDA' | ''>('')
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -126,6 +127,8 @@ function AccessControlContent() {
       setDarkMode(localStorage.getItem('adminDarkMode') === 'true')
       setOperatorName(localStorage.getItem('accessControlOperator') || '')
       setGateName(localStorage.getItem('accessControlGate') || '')
+      const saved = localStorage.getItem('operatorGateType') as 'ENTRADA' | 'SAÍDA' | ''
+      if (saved) setGateType(saved)
     }
   }, [])
 
@@ -781,26 +784,63 @@ function AccessControlContent() {
     return (
       <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
         {/* Compact header */}
-        <div className="bg-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
-          <div className="min-w-0">
-            <p className="text-white font-bold text-sm truncate max-w-[180px]">
-              {selectedEvent?.name || 'Selecione o evento'}
-            </p>
-            <p className="text-gray-400 text-xs">{session.user.name}</p>
+        <div className="bg-gray-800 px-4 py-3 shrink-0 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-white font-bold text-sm truncate max-w-[180px]">
+                {selectedEvent?.name || 'Selecione o evento'}
+              </p>
+              <p className="text-gray-400 text-xs">{session.user.name}</p>
+            </div>
+            <select
+              value={selectedEvent?.id || ''}
+              onChange={(e) => {
+                const ev = events.find(x => x.id === e.target.value)
+                setSelectedEvent(ev || null)
+              }}
+              className="bg-gray-700 text-white text-xs px-2 py-1 rounded ml-2 shrink-0"
+            >
+              <option value="">Evento</option>
+              {events.map(ev => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+            </select>
           </div>
-          <select
-            value={selectedEvent?.id || ''}
-            onChange={(e) => {
-              const ev = events.find(x => x.id === e.target.value)
-              setSelectedEvent(ev || null)
-            }}
-            className="bg-gray-700 text-white text-xs px-2 py-1 rounded ml-2 shrink-0"
-          >
-            <option value="">Evento</option>
-            {events.map(ev => (
-              <option key={ev.id} value={ev.id}>{ev.name}</option>
-            ))}
-          </select>
+
+          {/* Gate type toggle */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const v = gateType === 'ENTRADA' ? '' : 'ENTRADA'
+                setGateType(v as any)
+                localStorage.setItem('operatorGateType', v)
+              }}
+              className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${
+                gateType === 'ENTRADA'
+                  ? 'bg-green-500 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-400'
+              }`}
+            >
+              ➡️ ENTRADA
+            </button>
+            <button
+              onClick={() => {
+                const v = gateType === 'SAÍDA' ? '' : 'SAÍDA'
+                setGateType(v as any)
+                localStorage.setItem('operatorGateType', v)
+              }}
+              className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${
+                gateType === 'SAÍDA'
+                  ? 'bg-orange-500 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-400'
+              }`}
+            >
+              ⬅️ SAÍDA
+            </button>
+          </div>
+          {!gateType && (
+            <p className="text-yellow-400 text-xs text-center">⚠️ Selecione o tipo do portão acima</p>
+          )}
         </div>
 
         {/* Camera — always visible, fills remaining height */}
@@ -894,60 +934,76 @@ function AccessControlContent() {
             )}
 
             {/* Action buttons — participant */}
-            {participant && (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleCheckIn}
-                  disabled={loading || (!accessStatus?.canEnter && !forceEntry)}
-                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                    accessStatus?.canEnter || forceEntry
-                      ? 'bg-green-600 text-white shadow-lg'
-                      : 'bg-gray-200 text-gray-400'
-                  }`}
-                >
-                  {loading ? '⏳' : '➡️ ENTRADA'}
-                </button>
-                <button
-                  onClick={handleCheckOut}
-                  disabled={loading || (!accessStatus?.canExit && !forceEntry)}
-                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                    accessStatus?.canExit || forceEntry
-                      ? 'bg-orange-600 text-white shadow-lg'
-                      : 'bg-gray-200 text-gray-400'
-                  }`}
-                >
-                  {loading ? '⏳' : '⬅️ SAÍDA'}
-                </button>
-              </div>
-            )}
+            {participant && (() => {
+              const blockedDoubleEntry = gateType === 'ENTRADA' && accessStatus?.isInside
+              const blockedNoEntry    = gateType === 'SAÍDA'   && !accessStatus?.isInside
+              if (blockedDoubleEntry) return (
+                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
+                  <p className="text-red-700 font-bold text-lg">🚫 DUPLA ENTRADA NEGADA</p>
+                  <p className="text-red-500 text-sm mt-1">Credencial já registrou entrada</p>
+                </div>
+              )
+              if (blockedNoEntry) return (
+                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
+                  <p className="text-red-700 font-bold text-lg">🚫 SAÍDA NEGADA</p>
+                  <p className="text-red-500 text-sm mt-1">Nenhuma entrada registrada</p>
+                </div>
+              )
+              return (
+                <div className="flex gap-3">
+                  {(!gateType || gateType === 'ENTRADA') && (
+                    <button onClick={handleCheckIn} disabled={loading || !accessStatus?.canEnter}
+                      className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                        accessStatus?.canEnter ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
+                      {loading ? '⏳' : '➡️ ENTRADA'}
+                    </button>
+                  )}
+                  {(!gateType || gateType === 'SAÍDA') && (
+                    <button onClick={handleCheckOut} disabled={loading || !accessStatus?.canExit}
+                      className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                        accessStatus?.canExit ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
+                      {loading ? '⏳' : '⬅️ SAÍDA'}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Action buttons — vehicle */}
-            {vehicle && (
+            {vehicle && (() => {
+              const blockedDoubleEntry = gateType === 'ENTRADA' && vehicleStatus?.isInside
+              const blockedNoEntry    = gateType === 'SAÍDA'   && !vehicleStatus?.isInside
+              if (blockedDoubleEntry) return (
+                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
+                  <p className="text-red-700 font-bold text-lg">🚫 DUPLA ENTRADA NEGADA</p>
+                  <p className="text-red-500 text-sm mt-1">Veículo já registrou entrada</p>
+                </div>
+              )
+              if (blockedNoEntry) return (
+                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
+                  <p className="text-red-700 font-bold text-lg">🚫 SAÍDA NEGADA</p>
+                  <p className="text-red-500 text-sm mt-1">Nenhuma entrada registrada para este veículo</p>
+                </div>
+              )
+              return (
               <div className="flex gap-3">
-                <button
-                  onClick={handleVehicleCheckIn}
-                  disabled={loading || !vehicleStatus?.canEnter}
-                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                    vehicleStatus?.canEnter
-                      ? 'bg-green-600 text-white shadow-lg'
-                      : 'bg-gray-200 text-gray-400'
-                  }`}
-                >
-                  {loading ? '⏳' : '➡️ ENTRADA'}
-                </button>
-                <button
-                  onClick={handleVehicleCheckOut}
-                  disabled={loading || !vehicleStatus?.canExit}
-                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                    vehicleStatus?.canExit
-                      ? 'bg-orange-600 text-white shadow-lg'
-                      : 'bg-gray-200 text-gray-400'
-                  }`}
-                >
-                  {loading ? '⏳' : '⬅️ SAÍDA'}
-                </button>
+                {(!gateType || gateType === 'ENTRADA') && (
+                  <button onClick={handleVehicleCheckIn} disabled={loading || !vehicleStatus?.canEnter}
+                    className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                      vehicleStatus?.canEnter ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
+                    {loading ? '⏳' : '➡️ ENTRADA'}
+                  </button>
+                )}
+                {(!gateType || gateType === 'SAÍDA') && (
+                  <button onClick={handleVehicleCheckOut} disabled={loading || !vehicleStatus?.canExit}
+                    className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                      vehicleStatus?.canExit ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
+                    {loading ? '⏳' : '⬅️ SAÍDA'}
+                  </button>
+                )}
               </div>
-            )}
+              )
+            })()}
           </div>
         )}
       </div>
