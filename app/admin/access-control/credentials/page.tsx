@@ -397,7 +397,11 @@ export default function CredentialsPage() {
         type: c.type,
         plate: c.plate,
         eventCode: event.code
-      }))
+      })).sort((a: VehicleCredential, b: VehicleCredential) => {
+        const numA = parseInt(a.number.replace(/\D/g, ''), 10) || 0
+        const numB = parseInt(b.number.replace(/\D/g, ''), 10) || 0
+        return numA - numB
+      })
       // Generate QR codes
       const withQR = await Promise.all(
         list.map(async c => ({
