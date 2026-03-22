@@ -237,35 +237,45 @@ export default function EventoPage() {
 
     console.log('Form data received:', { name, cpf, evento, mesa })
 
-    setRegistrationData(prev => ({
-      ...prev,
+    const updatedData: RegistrationData = {
+      ...registrationData,
       name,
       cpf,
       email,
       phone,
       mesa: selectedMesa,
       customData: customFields
-    }))
-    setCurrentStep('capture')
+    }
+
+    setRegistrationData(updatedData)
+
+    if (!event?.config.requireFace) {
+      // Face not required — submit directly without photo
+      handleFaceCaptured('', undefined, updatedData)
+    } else {
+      setCurrentStep('capture')
+    }
   }
 
-  const handleFaceCaptured = async (imageData: string, faceData?: any) => {
+  const handleFaceCaptured = async (imageData: string, faceData?: any, overrideData?: RegistrationData) => {
     setIsSubmitting(true)
 
+    const reg = overrideData || registrationData
+
     const payload = {
-      name: registrationData.name || '',
-      cpf: registrationData.cpf && registrationData.cpf.includes('.')
-        ? registrationData.cpf
-        : (registrationData.cpf || '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
-      email: registrationData.email || '',
-      phone: registrationData.phone || '',
-      eventCode: event?.code || registrationData.eventCode,
-      faceImage: imageData,
+      name: reg.name || '',
+      cpf: reg.cpf && reg.cpf.includes('.')
+        ? reg.cpf
+        : (reg.cpf || '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'),
+      email: reg.email || '',
+      phone: reg.phone || '',
+      eventCode: event?.code || reg.eventCode,
+      faceImage: imageData || null,
       faceData: faceData,
-      consent: registrationData.consent,
+      consent: reg.consent,
       customData: {
-        ...registrationData.customData,
-        mesa: registrationData.mesa || registrationData.customData?.mesa || ''
+        ...reg.customData,
+        mesa: reg.mesa || reg.customData?.mesa || ''
       }
     }
 

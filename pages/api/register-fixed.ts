@@ -11,7 +11,7 @@ const registrationSchema = Joi.object({
   phone: Joi.string().min(10).allow('', null).optional(), // Make phone optional
   eventCode: Joi.string().allow('', null).optional().default('MEGA-FEIRA-2025'), // Optional with default
   standCode: Joi.string().allow('', null).optional(), // Stand code for registration limit control
-  faceImage: Joi.string().required(),
+  faceImage: Joi.string().allow('', null).optional(), // Optional - depends on event config
   faceData: Joi.object().allow(null).optional(), // Azure Face API data
   consent: Joi.boolean().valid(true).required(),
   customData: Joi.object().optional() // Allow any custom fields
@@ -83,13 +83,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Find event - try by slug first (lowercase), then by code (uppercase)
     // This supports both formats: 'expofest-2026' (slug) and 'EXPOFEST-2026' (code)
     let event = await prisma.event.findUnique({
-      where: { slug: eventCodeOrSlug.toLowerCase() }
+      where: { slug: eventCodeOrSlug.toLowerCase() },
+      include: { eventConfigs: true }
     })
 
     // If not found by slug, try by code (backward compatibility)
     if (!event) {
       event = await prisma.event.findUnique({
-        where: { code: eventCodeOrSlug.toUpperCase() }
+        where: { code: eventCodeOrSlug.toUpperCase() },
+        include: { eventConfigs: true }
       })
     }
 
@@ -102,6 +104,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log('✅ Event found:', event.name, '(ID:', event.id, ')')
+
+    // Check if face capture is required for this event
+    const requireFace = (event as any).eventConfigs?.requireFace !== false
+    console.log('📷 requireFace:', requireFace)
+
+    if (requireFace && !value.faceImage) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'Foto facial é obrigatória para este evento'
+      })
+    }
 
     // Get standCode from customData if it exists
     let finalStandCode = standCode || customData?.standCode || customData?.estande
@@ -248,8 +261,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Process face image and Azure data
     let encryptedFaceData = null
     let faceImageUrl = null
-    let captureQuality = 0.5 // Default quality
-    
+    let captureQuality = requireFace ? 0.5 : null // null when face not required
+
     // Extract quality score from face data
     if (faceData) {
       if (faceData.quality && typeof faceData.quality === 'number') {
