@@ -54,7 +54,7 @@ export default function ManageAdminsPage() {
     email: '',
     password: '',
     name: '',
-    role: 'ADMIN' as 'ADMIN' | 'SUPER_ADMIN'
+    role: 'ADMIN' as 'ADMIN' | 'SUPER_ADMIN' | 'OPERATOR'
   })
 
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function ManageAdminsPage() {
       if (response.ok) {
         alert('Admin criado com sucesso!')
         setShowCreateModal(false)
-        setNewAdmin({ email: '', password: '', name: '', role: 'ADMIN' })
+        setNewAdmin({ email: '', password: '', name: '', role: 'ADMIN' as 'ADMIN' | 'SUPER_ADMIN' | 'OPERATOR' })
         loadAdmins()
       } else {
         const error = await response.json()
@@ -293,6 +293,11 @@ export default function ManageAdminsPage() {
                       <h3 className="text-lg font-bold text-azul-marinho">
                         {admin.name}
                       </h3>
+                      {admin.role === 'OPERATOR' && (
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full font-semibold">
+                          🚗 OPERADOR
+                        </span>
+                      )}
                       {admin.role === 'SUPER_ADMIN' && (
                         <span className="px-2 py-0.5 bg-verde-agua/20 text-verde-agua-dark text-xs rounded-full font-semibold">
                           👑 SUPER ADMIN
@@ -558,11 +563,12 @@ export default function ManageAdminsPage() {
                 </label>
                 <select
                   value={newAdmin.role}
-                  onChange={(e) => setNewAdmin({ ...newAdmin, role: e.target.value as 'ADMIN' | 'SUPER_ADMIN' })}
+                  onChange={(e) => setNewAdmin({ ...newAdmin, role: e.target.value as 'ADMIN' | 'SUPER_ADMIN' | 'OPERATOR' })}
                   className="w-full px-3 py-2 border border-cinza-300 rounded-lg text-cinza-900 focus:ring-2 focus:ring-verde-agua focus:border-verde-agua bg-white"
                 >
                   <option value="ADMIN">Event Admin (acesso por evento)</option>
                   <option value="SUPER_ADMIN">Super Admin (acesso total)</option>
+                  <option value="OPERATOR">Operador (apenas controle de entrada/saída)</option>
                 </select>
               </div>
 
@@ -577,7 +583,7 @@ export default function ManageAdminsPage() {
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false)
-                    setNewAdmin({ email: '', password: '', name: '', role: 'ADMIN' })
+                    setNewAdmin({ email: '', password: '', name: '', role: 'ADMIN' as 'ADMIN' | 'SUPER_ADMIN' | 'OPERATOR' })
                   }}
                   className="flex-1 py-2 bg-cinza-200 text-cinza-800 rounded-lg font-semibold hover:bg-cinza-300"
                 >

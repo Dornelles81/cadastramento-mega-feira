@@ -70,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           email,
           password: hashedPassword,
           name,
-          role: role as 'ADMIN' | 'SUPER_ADMIN',
+          role: role as 'ADMIN' | 'SUPER_ADMIN' | 'OPERATOR',
           isActive: true
         }
       })
