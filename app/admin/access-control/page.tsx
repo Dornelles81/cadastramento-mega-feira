@@ -146,6 +146,23 @@ function AccessControlContent() {
     }
   }, [selectedEvent, turboMode])
 
+  // Auto-start camera for operators: triggers on mount, after event selection,
+  // and after clearing a result (participant/vehicle = null)
+  useEffect(() => {
+    if (
+      session?.user?.role === 'OPERATOR' &&
+      selectedEvent &&
+      !participant &&
+      !vehicle &&
+      !scannerActive &&
+      !scannerLoading &&
+      !loading
+    ) {
+      const timer = setTimeout(startScanner, 600)
+      return () => clearTimeout(timer)
+    }
+  }, [session?.user?.role, selectedEvent, participant, vehicle, scannerActive, scannerLoading, loading])
+
   const loadEvents = async () => {
     try {
       // Use admin API to get all events (not just public/active)
@@ -760,6 +777,192 @@ function AccessControlContent() {
   if (status !== 'authenticated') {
     return null
   }
+
+  // ── Simplified operator view ─────────────────────────────────────────────
+  if (session?.user?.role === 'OPERATOR') {
+    return (
+      <div className="h-screen bg-gray-900 flex flex-col overflow-hidden">
+        {/* Compact header */}
+        <div className="bg-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="min-w-0">
+            <p className="text-white font-bold text-sm truncate max-w-[180px]">
+              {selectedEvent?.name || 'Selecione o evento'}
+            </p>
+            <p className="text-gray-400 text-xs">{session.user.name}</p>
+          </div>
+          <select
+            value={selectedEvent?.id || ''}
+            onChange={(e) => {
+              const ev = events.find(x => x.id === e.target.value)
+              setSelectedEvent(ev || null)
+            }}
+            className="bg-gray-700 text-white text-xs px-2 py-1 rounded ml-2 shrink-0"
+          >
+            <option value="">Evento</option>
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>{ev.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Camera — fills remaining height */}
+        <div className="flex-1 relative bg-black min-h-0">
+          {!selectedEvent ? (
+            <div className="flex items-center justify-center h-full text-center px-8">
+              <div>
+                <div className="text-7xl mb-4">📋</div>
+                <p className="text-white text-lg font-semibold">Selecione um evento</p>
+              </div>
+            </div>
+          ) : !scannerActive && !scannerLoading ? (
+            <button
+              onClick={startScanner}
+              className="w-full h-full flex flex-col items-center justify-center text-white"
+            >
+              <div className="text-8xl mb-4">📷</div>
+              <p className="text-xl font-semibold">Toque para iniciar câmera</p>
+              <p className="text-sm text-gray-400 mt-2">Aponte para o QR Code</p>
+            </button>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+                onClick={() => videoRef.current?.play()}
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              {scannerLoading && !scannerActive && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                  <div className="text-center text-white">
+                    <div className="text-6xl animate-pulse mb-3">📷</div>
+                    <p className="text-lg">Iniciando câmera...</p>
+                    <p className="text-sm text-gray-400 mt-1">Permita o acesso quando solicitado</p>
+                  </div>
+                </div>
+              )}
+              {scannerActive && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-64 h-64 border-2 border-green-400 rounded-xl opacity-70 animate-pulse" />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Message overlay */}
+          {message && (
+            <div className={`absolute top-4 left-4 right-4 py-4 px-4 rounded-xl text-center font-bold text-xl shadow-xl ${
+              message.type === 'success' ? 'bg-green-500 text-white' :
+              message.type === 'error'   ? 'bg-red-500 text-white' :
+                                           'bg-blue-500 text-white'
+            }`}>
+              {message.text}
+            </div>
+          )}
+        </div>
+
+        {/* Result panel — appears after scan */}
+        {(participant || vehicle) && (
+          <div className={`shrink-0 p-4 border-t-4 ${
+            (accessStatus?.isInside || vehicleStatus?.isInside)
+              ? 'bg-amber-50 border-amber-400'
+              : 'bg-white border-gray-300'
+          }`}>
+            {/* Participant info */}
+            {participant && (
+              <div className="flex items-center gap-3 mb-3">
+                {participant.faceImageUrl ? (
+                  <img src={participant.faceImageUrl} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-gray-200 shrink-0" />
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-2xl shrink-0">👤</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 text-lg truncate">{participant.name}</p>
+                  <p className="text-sm text-gray-500">{accessStatus?.isInside ? '📍 DENTRO' : '📍 FORA'}</p>
+                  {participant.approvalStatus !== 'approved' && (
+                    <p className="text-xs text-red-600 font-semibold mt-0.5">⚠️ Não aprovado</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Vehicle info */}
+            {vehicle && (
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center text-3xl shrink-0">
+                  {vehicle.type === 'CAMINHÃO' ? '🚛' : vehicle.type === 'VAN' ? '🚐' : '🚗'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 text-xl font-mono">{vehicle.number}</p>
+                  <p className="text-sm text-gray-500">{vehicle.type} · {vehicleStatus?.isInside ? '📍 DENTRO' : '📍 FORA'}</p>
+                  {vehicle.plate && <p className="text-xs text-gray-400">{vehicle.plate}</p>}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons — participant */}
+            {participant && (
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCheckIn}
+                  disabled={loading || (!accessStatus?.canEnter && !forceEntry)}
+                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                    accessStatus?.canEnter || forceEntry
+                      ? 'bg-green-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {loading ? '⏳' : '➡️ ENTRADA'}
+                </button>
+                <button
+                  onClick={handleCheckOut}
+                  disabled={loading || (!accessStatus?.canExit && !forceEntry)}
+                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                    accessStatus?.canExit || forceEntry
+                      ? 'bg-orange-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {loading ? '⏳' : '⬅️ SAÍDA'}
+                </button>
+              </div>
+            )}
+
+            {/* Action buttons — vehicle */}
+            {vehicle && (
+              <div className="flex gap-3">
+                <button
+                  onClick={handleVehicleCheckIn}
+                  disabled={loading || !vehicleStatus?.canEnter}
+                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                    vehicleStatus?.canEnter
+                      ? 'bg-green-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {loading ? '⏳' : '➡️ ENTRADA'}
+                </button>
+                <button
+                  onClick={handleVehicleCheckOut}
+                  disabled={loading || !vehicleStatus?.canExit}
+                  className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                    vehicleStatus?.canExit
+                      ? 'bg-orange-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-400'
+                  }`}
+                >
+                  {loading ? '⏳' : '⬅️ SAÍDA'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+  // ── End operator view ────────────────────────────────────────────────────
 
   return (
     <div className={`min-h-screen p-4 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
