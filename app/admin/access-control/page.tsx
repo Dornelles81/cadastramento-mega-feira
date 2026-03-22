@@ -164,6 +164,29 @@ function AccessControlContent() {
     }
   }, [session?.user?.role, participant, vehicle, scannerActive, scannerLoading, loading])
 
+  // Auto-clear blocked states for operators so camera restarts
+  useEffect(() => {
+    if (session?.user?.role !== 'OPERATOR') return
+    const blockedEntry = gateType === 'ENTRADA' && (
+      (participant && accessStatus?.isInside) ||
+      (vehicle && vehicleStatus?.isInside)
+    )
+    const blockedExit = gateType === 'SAÍDA' && (
+      (participant && !accessStatus?.isInside) ||
+      (vehicle && !vehicleStatus?.isInside)
+    )
+    if (blockedEntry || blockedExit) {
+      const timer = setTimeout(() => {
+        setParticipant(null)
+        setAccessStatus(null)
+        setVehicle(null)
+        setVehicleStatus(null)
+        setSearchInput('')
+      }, 2500)
+      return () => clearTimeout(timer)
+    }
+  }, [participant, vehicle, accessStatus, vehicleStatus, gateType, session?.user?.role])
+
   const loadEvents = async () => {
     try {
       // Use admin API to get all events (not just public/active)
