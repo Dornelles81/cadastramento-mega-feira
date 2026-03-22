@@ -165,8 +165,10 @@ function AccessControlContent() {
   }, [session?.user?.role, participant, vehicle, scannerActive, scannerLoading, loading])
 
   // Auto-clear blocked states for operators so camera restarts
+  // Only triggers when there is no success message (avoids false positive after check-in)
   useEffect(() => {
     if (session?.user?.role !== 'OPERATOR') return
+    if (message?.type === 'success') return  // registration just succeeded — ignore
     const blockedEntry = gateType === 'ENTRADA' && (
       (participant && accessStatus?.isInside) ||
       (vehicle && vehicleStatus?.isInside)
@@ -185,7 +187,7 @@ function AccessControlContent() {
       }, 2500)
       return () => clearTimeout(timer)
     }
-  }, [participant, vehicle, accessStatus, vehicleStatus, gateType, session?.user?.role])
+  }, [participant, vehicle, accessStatus, vehicleStatus, gateType, session?.user?.role, message?.type])
 
   const loadEvents = async () => {
     try {
