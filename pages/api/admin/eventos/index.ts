@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import { requireAuth, isSuperAdmin } from '../../../../lib/auth'
+import { prisma } from '../../../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * API: Listar todos os eventos (SUPER ADMIN apenas)
@@ -24,8 +23,9 @@ export default async function handler(
     // Require authentication
     const session = await requireAuth(req, res)
 
-    // Check if super admin
-    if (!isSuperAdmin(session)) {
+    // Allow SUPER_ADMIN and OPERATOR (operator needs event list for scanner)
+    const isOperator = session?.user?.role === 'OPERATOR'
+    if (!isSuperAdmin(session) && !isOperator) {
       return res.status(403).json({ error: 'Acesso negado. Apenas Super Admin.' })
     }
 
