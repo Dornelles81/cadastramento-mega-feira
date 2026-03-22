@@ -146,12 +146,10 @@ function AccessControlContent() {
     }
   }, [selectedEvent, turboMode])
 
-  // Auto-start camera for operators: triggers on mount, after event selection,
-  // and after clearing a result (participant/vehicle = null)
+  // Auto-start camera for operators: on mount and after each result is cleared
   useEffect(() => {
     if (
       session?.user?.role === 'OPERATOR' &&
-      selectedEvent &&
       !participant &&
       !vehicle &&
       !scannerActive &&
@@ -161,7 +159,7 @@ function AccessControlContent() {
       const timer = setTimeout(startScanner, 600)
       return () => clearTimeout(timer)
     }
-  }, [session?.user?.role, selectedEvent, participant, vehicle, scannerActive, scannerLoading, loading])
+  }, [session?.user?.role, participant, vehicle, scannerActive, scannerLoading, loading])
 
   const loadEvents = async () => {
     try {
@@ -805,50 +803,43 @@ function AccessControlContent() {
           </select>
         </div>
 
-        {/* Camera — fills remaining height */}
+        {/* Camera — always visible, fills remaining height */}
         <div className="flex-1 relative bg-black min-h-0">
-          {!selectedEvent ? (
-            <div className="flex items-center justify-center h-full text-center px-8">
-              <div>
-                <div className="text-7xl mb-4">📋</div>
-                <p className="text-white text-lg font-semibold">Selecione um evento</p>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+            onClick={() => videoRef.current?.play()}
+          />
+          <canvas ref={canvasRef} className="hidden" />
+
+          {/* Initializing overlay */}
+          {scannerLoading && !scannerActive && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center text-white">
+                <div className="text-6xl animate-pulse mb-3">📷</div>
+                <p className="text-lg">Iniciando câmera...</p>
+                <p className="text-sm text-gray-400 mt-1">Permita o acesso quando solicitado</p>
               </div>
             </div>
-          ) : !scannerActive && !scannerLoading ? (
-            <button
-              onClick={startScanner}
-              className="w-full h-full flex flex-col items-center justify-center text-white"
-            >
-              <div className="text-8xl mb-4">📷</div>
-              <p className="text-xl font-semibold">Toque para iniciar câmera</p>
-              <p className="text-sm text-gray-400 mt-2">Aponte para o QR Code</p>
-            </button>
-          ) : (
-            <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-                onClick={() => videoRef.current?.play()}
-              />
-              <canvas ref={canvasRef} className="hidden" />
-              {scannerLoading && !scannerActive && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                  <div className="text-center text-white">
-                    <div className="text-6xl animate-pulse mb-3">📷</div>
-                    <p className="text-lg">Iniciando câmera...</p>
-                    <p className="text-sm text-gray-400 mt-1">Permita o acesso quando solicitado</p>
-                  </div>
-                </div>
-              )}
-              {scannerActive && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-64 h-64 border-2 border-green-400 rounded-xl opacity-70 animate-pulse" />
-                </div>
-              )}
-            </>
+          )}
+
+          {/* Scanning frame */}
+          {scannerActive && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-64 h-64 border-2 border-green-400 rounded-xl opacity-70 animate-pulse" />
+            </div>
+          )}
+
+          {/* No event selected overlay */}
+          {scannerActive && !selectedEvent && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none">
+              <div className="text-center px-8">
+                <p className="text-white text-xl font-bold">Selecione um evento acima</p>
+              </div>
+            </div>
           )}
 
           {/* Message overlay */}
