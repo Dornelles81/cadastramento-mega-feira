@@ -959,76 +959,44 @@ function AccessControlContent() {
             )}
 
             {/* Action buttons — participant */}
-            {participant && (() => {
-              const blockedDoubleEntry = gateType === 'ENTRADA' && accessStatus?.isInside
-              const blockedNoEntry    = gateType === 'SAÍDA'   && !accessStatus?.isInside
-              if (blockedDoubleEntry) return (
-                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
-                  <p className="text-red-700 font-bold text-lg">🚫 DUPLA ENTRADA NEGADA</p>
-                  <p className="text-red-500 text-sm mt-1">Credencial já registrou entrada</p>
-                </div>
-              )
-              if (blockedNoEntry) return (
-                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
-                  <p className="text-red-700 font-bold text-lg">🚫 SAÍDA NEGADA</p>
-                  <p className="text-red-500 text-sm mt-1">Nenhuma entrada registrada</p>
-                </div>
-              )
-              return (
-                <div className="flex gap-3">
-                  {(!gateType || gateType === 'ENTRADA') && (
-                    <button onClick={handleCheckIn} disabled={loading || !accessStatus?.canEnter}
-                      className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                        accessStatus?.canEnter ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
-                      {loading ? '⏳' : '➡️ ENTRADA'}
-                    </button>
-                  )}
-                  {(!gateType || gateType === 'SAÍDA') && (
-                    <button onClick={handleCheckOut} disabled={loading || !accessStatus?.canExit}
-                      className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                        accessStatus?.canExit ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
-                      {loading ? '⏳' : '⬅️ SAÍDA'}
-                    </button>
-                  )}
-                </div>
-              )
-            })()}
+            {participant && (
+              <div className="flex gap-3">
+                {(!gateType || gateType === 'ENTRADA') && (
+                  <button onClick={handleCheckIn} disabled={loading || !accessStatus?.canEnter}
+                    className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                      accessStatus?.canEnter && !loading ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                    {loading ? '⏳' : accessStatus?.canEnter ? '➡️ ENTRADA' : '🔒 ENTRADA'}
+                  </button>
+                )}
+                {(!gateType || gateType === 'SAÍDA') && (
+                  <button onClick={handleCheckOut} disabled={loading || !accessStatus?.canExit}
+                    className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
+                      accessStatus?.canExit && !loading ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                    {loading ? '⏳' : accessStatus?.canExit ? '⬅️ SAÍDA' : '🔒 SAÍDA'}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Action buttons — vehicle */}
-            {vehicle && (() => {
-              const blockedDoubleEntry = gateType === 'ENTRADA' && vehicleStatus?.isInside
-              const blockedNoEntry    = gateType === 'SAÍDA'   && !vehicleStatus?.isInside
-              if (blockedDoubleEntry) return (
-                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
-                  <p className="text-red-700 font-bold text-lg">🚫 DUPLA ENTRADA NEGADA</p>
-                  <p className="text-red-500 text-sm mt-1">Veículo já registrou entrada</p>
-                </div>
-              )
-              if (blockedNoEntry) return (
-                <div className="bg-red-100 border-2 border-red-400 rounded-xl py-4 px-4 text-center">
-                  <p className="text-red-700 font-bold text-lg">🚫 SAÍDA NEGADA</p>
-                  <p className="text-red-500 text-sm mt-1">Nenhuma entrada registrada para este veículo</p>
-                </div>
-              )
-              return (
+            {vehicle && (
               <div className="flex gap-3">
                 {(!gateType || gateType === 'ENTRADA') && (
                   <button onClick={handleVehicleCheckIn} disabled={loading || !vehicleStatus?.canEnter}
                     className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                      vehicleStatus?.canEnter ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
-                    {loading ? '⏳' : '➡️ ENTRADA'}
+                      vehicleStatus?.canEnter && !loading ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                    {loading ? '⏳' : vehicleStatus?.canEnter ? '➡️ ENTRADA' : '🔒 ENTRADA'}
                   </button>
                 )}
                 {(!gateType || gateType === 'SAÍDA') && (
                   <button onClick={handleVehicleCheckOut} disabled={loading || !vehicleStatus?.canExit}
                     className={`flex-1 py-5 rounded-xl font-bold text-xl transition-all active:scale-95 ${
-                      vehicleStatus?.canExit ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
-                    {loading ? '⏳' : '⬅️ SAÍDA'}
+                      vehicleStatus?.canExit && !loading ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                    {loading ? '⏳' : vehicleStatus?.canExit ? '⬅️ SAÍDA' : '🔒 SAÍDA'}
                   </button>
                 )}
               </div>
-              )
-            })()}
+            )}
           </div>
         )}
       </div>
