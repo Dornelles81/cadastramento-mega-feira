@@ -17,7 +17,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const [credentials, event] = await Promise.all([
         prisma.vehicleCredential.findMany({
           where: { eventId, isActive: true },
-          orderBy: { number: 'asc' }
+          orderBy: { number: 'asc' },
+          select: {
+            id: true,
+            number: true,
+            type: true,
+            plate: true,
+            credentialPrinted: true,
+            credentialPrintedAt: true,
+          }
         }),
         prisma.event.findUnique({
           where: { id: eventId },

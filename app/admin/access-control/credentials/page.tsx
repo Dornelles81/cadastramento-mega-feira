@@ -41,6 +41,8 @@ interface VehicleCredential {
   eventCode: string
   plate?: string | null
   qrDataUrl?: string
+  credentialPrinted?: boolean
+  credentialPrintedAt?: string | null
 }
 
 // ─── QR Code generation ──────────────────────────────────────────────────────
@@ -287,6 +289,7 @@ export default function CredentialsPage() {
   const [editingPlateValue, setEditingPlateValue] = useState('')
   const [vehicleOrientations, setVehicleOrientations] = useState('')
   const [savingOrientations, setSavingOrientations] = useState(false)
+  const [vehiclePrintFilter, setVehiclePrintFilter] = useState<'all' | 'unprinted' | 'printed'>('all')
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -396,7 +399,9 @@ export default function CredentialsPage() {
         number: c.number,
         type: c.type,
         plate: c.plate,
-        eventCode: event.code
+        eventCode: event.code,
+        credentialPrinted: c.credentialPrinted ?? false,
+        credentialPrintedAt: c.credentialPrintedAt ?? null,
       })).sort((a: VehicleCredential, b: VehicleCredential) => {
         const numA = parseInt(a.number.replace(/\D/g, ''), 10) || 0
         const numB = parseInt(b.number.replace(/\D/g, ''), 10) || 0
@@ -507,10 +512,28 @@ export default function CredentialsPage() {
     }
   }
 
-  const handlePrintVehicles = async () => {
-    const targets = selectedVehicleIds.size > 0
-      ? vehicleCredentials.filter(v => selectedVehicleIds.has(v.id))
-      : vehicleCredentials
+  const handlePrintVehicles = async (forceAll = false, explicitTargets?: VehicleCredential[]) => {
+    let targets: VehicleCredential[]
+    if (explicitTargets) {
+      targets = explicitTargets
+    } else if (forceAll || selectedVehicleIds.size === 0) {
+      targets = vehicleCredentials
+    } else {
+      // Warn user: printing a subset causes blank labels between jobs on thermal printers
+      const total = vehicleCredentials.length
+      const selected = selectedVehicleIds.size
+      if (selected < total) {
+        const printAll = window.confirm(
+          `⚠️ Atenção: imprimir em lotes separados desperdiça etiquetas em branco!\n\n` +
+          `Você selecionou ${selected} de ${total} credencial(is).\n\n` +
+          `→ Clique em OK para imprimir TODAS (${total}) em um único PDF e evitar desperdício.\n` +
+          `→ Clique em Cancelar para imprimir apenas os ${selected} selecionados (pode gerar etiquetas em branco).`
+        )
+        targets = printAll ? vehicleCredentials : vehicleCredentials.filter(v => selectedVehicleIds.has(v.id))
+      } else {
+        targets = vehicleCredentials.filter(v => selectedVehicleIds.has(v.id))
+      }
+    }
     if (targets.length === 0) return
 
     try {
@@ -575,7 +598,26 @@ export default function CredentialsPage() {
       a.download = `credenciais-veiculos-${Date.now()}.pdf`
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 5000)
-      setMessage({ type: 'success', text: '✅ PDF baixado! Abra o arquivo e pressione Ctrl+P → Tamanho real → Margens = nenhuma.' })
+
+      // Mark targets as printed in the database
+      const ids = targets.map(v => v.id)
+      try {
+        await fetch('/api/admin/mark-vehicle-printed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vehicleIds: ids })
+        })
+        // Update local state
+        setVehicleCredentials(prev =>
+          prev.map(v => ids.includes(v.id) ? { ...v, credentialPrinted: true, credentialPrintedAt: new Date().toISOString() } : v)
+        )
+      } catch {
+        // Non-critical — PDF was already downloaded
+      }
+
+      const unprintedCount = vehicleCredentials.filter(v => !v.credentialPrinted && !ids.includes(v.id)).length
+      const resumeMsg = unprintedCount > 0 ? ` · ${unprintedCount} credencial(is) ainda não impressa(s).` : ' · Todas impressas!'
+      setMessage({ type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg} Pressione Ctrl+P → Tamanho real → Margens = nenhuma.` })
     } catch (err) {
       console.error('Erro ao gerar PDF de veículos:', err)
       alert('Erro ao gerar PDF.')
@@ -686,6 +728,13 @@ export default function CredentialsPage() {
 
   const selectedParticipants = participants.filter(p => selectedIds.has(p.id))
   const printTargets = selectedParticipants.length > 0 ? selectedParticipants : participants
+
+  const filteredVehicleCredentials = vehicleCredentials.filter(v => {
+    if (vehiclePrintFilter === 'unprinted') return !v.credentialPrinted
+    if (vehiclePrintFilter === 'printed') return v.credentialPrinted
+    return true
+  })
+  const unprintedVehicles = vehicleCredentials.filter(v => !v.credentialPrinted)
 
   if (status === 'loading') return null
 
@@ -989,26 +1038,70 @@ export default function CredentialsPage() {
                 {vehicleCredentials.length > 0 && (
                   <>
                     <button
-                      onClick={() => setSelectedVehicleIds(new Set(vehicleCredentials.map(v => v.id)))}
+                      onClick={() => setSelectedVehicleIds(new Set(filteredVehicleCredentials.map(v => v.id)))}
                       className="border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg text-sm"
                     >
-                      Selecionar todos ({vehicleCredentials.length})
+                      Selecionar visíveis ({filteredVehicleCredentials.length})
                     </button>
                     {selectedVehicleIds.size > 0 && (
                       <button onClick={() => setSelectedVehicleIds(new Set())} className="text-slate-500 hover:text-slate-700 text-sm px-2">
                         ✕ Limpar
                       </button>
                     )}
+                    {unprintedVehicles.length > 0 && (
+                      <button
+                        onClick={() => handlePrintVehicles(false, unprintedVehicles)}
+                        className="bg-violet-600 hover:bg-violet-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                        title="Continua de onde a bobina parou — imprime somente as ainda não impressas"
+                      >
+                        🔄 Continuar bobina ({unprintedVehicles.length} restantes)
+                      </button>
+                    )}
                     <button
-                      onClick={handlePrintVehicles}
-                      className="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                      onClick={() => handlePrintVehicles(true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                      title="Imprime todas em um único PDF — evita etiquetas em branco"
                     >
-                      🖨️ {selectedVehicleIds.size > 0 ? `Imprimir selecionados (${selectedVehicleIds.size})` : `Imprimir todos (${vehicleCredentials.length})`}
+                      🖨️ Imprimir TODAS ({vehicleCredentials.length})
                     </button>
+                    {selectedVehicleIds.size > 0 && (
+                      <button
+                        onClick={() => handlePrintVehicles(false)}
+                        className="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                      >
+                        🖨️ Imprimir selecionados ({selectedVehicleIds.size})
+                      </button>
+                    )}
                   </>
                 )}
               </div>
             </div>
+
+            {/* Print filter + status bar */}
+            {vehicleCredentials.length > 0 && (
+              <div className="mx-6 mt-3 flex flex-wrap items-center gap-3 no-print">
+                {/* Filter tabs */}
+                <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs font-semibold">
+                  {(['all', 'unprinted', 'printed'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setVehiclePrintFilter(f)}
+                      className={`px-3 py-1.5 ${vehiclePrintFilter === f ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      {f === 'all' && `Todas (${vehicleCredentials.length})`}
+                      {f === 'unprinted' && `Não impressas (${unprintedVehicles.length})`}
+                      {f === 'printed' && `Impressas (${vehicleCredentials.length - unprintedVehicles.length})`}
+                    </button>
+                  ))}
+                </div>
+                {/* Partial selection warning */}
+                {selectedVehicleIds.size > 0 && selectedVehicleIds.size < vehicleCredentials.length && (
+                  <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                    ⚠️ Seleção parcial pode desperdiçar etiquetas — prefira <strong>Continuar bobina</strong> ou <strong>Imprimir TODAS</strong>
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Vehicle message */}
             {message && (
@@ -1074,18 +1167,21 @@ export default function CredentialsPage() {
             ) : (
               <div className="p-6 no-print">
                 <p className="text-sm text-slate-500 mb-4">
-                  {vehicleCredentials.length} de {VEHICLE_LIMIT} credencial(is) · {selectedVehicleIds.size > 0 ? `${selectedVehicleIds.size} selecionada(s)` : 'Clique no card para selecionar'}
+                  {filteredVehicleCredentials.length === vehicleCredentials.length
+                    ? `${vehicleCredentials.length} de ${VEHICLE_LIMIT} credencial(is)`
+                    : `${filteredVehicleCredentials.length} de ${vehicleCredentials.length} visíveis`
+                  } · {selectedVehicleIds.size > 0 ? `${selectedVehicleIds.size} selecionada(s)` : 'Clique no card para selecionar'}
                   {vehicleCredentials.length >= VEHICLE_LIMIT && (
                     <span className="ml-2 text-red-600 font-medium">— Limite atingido</span>
                   )}
                 </p>
                 <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                  {vehicleCredentials.map(v => (
+                  {filteredVehicleCredentials.map(v => (
                     <div
                       key={v.id}
-                      className={`rounded-xl overflow-hidden transition-all ${selectedVehicleIds.has(v.id) ? 'ring-2 ring-amber-500 shadow-lg' : 'ring-1 ring-slate-200 hover:ring-amber-300 hover:shadow'}`}
+                      className={`rounded-xl overflow-hidden transition-all ${selectedVehicleIds.has(v.id) ? 'ring-2 ring-amber-500 shadow-lg' : v.credentialPrinted ? 'ring-1 ring-emerald-200 opacity-70 hover:opacity-100 hover:ring-emerald-400' : 'ring-1 ring-slate-200 hover:ring-amber-300 hover:shadow'}`}
                     >
-                      <div className={`h-1 ${selectedVehicleIds.has(v.id) ? 'bg-amber-500' : 'bg-transparent'}`} />
+                      <div className={`h-1 ${selectedVehicleIds.has(v.id) ? 'bg-amber-500' : v.credentialPrinted ? 'bg-emerald-400' : 'bg-transparent'}`} />
                       <div className="bg-white p-2 flex justify-center cursor-pointer" onClick={() => toggleVehicle(v.id)}>
                         <VehicleCredentialLabel credential={v} eventName={selectedEvent?.name || ''} orientations={vehicleOrientations || undefined} />
                       </div>
@@ -1123,8 +1219,8 @@ export default function CredentialsPage() {
                         </button>
                       </div>
 
-                      <div className={`text-xs text-center py-1 ${selectedVehicleIds.has(v.id) ? 'bg-amber-50 text-amber-700 font-medium' : 'bg-white text-slate-400'}`}>
-                        {selectedVehicleIds.has(v.id) ? '✓ Selecionado para impressão' : v.number}
+                      <div className={`text-xs text-center py-1 ${selectedVehicleIds.has(v.id) ? 'bg-amber-50 text-amber-700 font-medium' : v.credentialPrinted ? 'bg-emerald-50 text-emerald-600' : 'bg-white text-slate-400'}`}>
+                        {selectedVehicleIds.has(v.id) ? '✓ Selecionado para impressão' : v.credentialPrinted ? '✓ Impressa' : v.number}
                       </div>
                     </div>
                   ))}

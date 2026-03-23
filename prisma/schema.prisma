@@ -768,6 +768,11 @@ model VehicleCredential {
   // Status
   isActive Boolean @default(true)
 
+  // Print tracking
+  credentialPrinted   Boolean   @default(false)
+  credentialPrintedAt DateTime?
+  credentialPrintedBy String?
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -779,6 +784,7 @@ model VehicleCredential {
   @@index([eventId])
   @@index([plate])
   @@index([isActive])
+  @@index([credentialPrinted])
   @@map("vehicle_credentials")
 }
 
