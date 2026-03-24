@@ -539,10 +539,9 @@ export default function CredentialsPage() {
     try {
       const { jsPDF } = await import('jspdf')
       const evName = selectedEvent?.name || ''
-      // 102.6 × 39.9 mm = dimensões exatas do papel "Credencial" cadastrado no driver Elgin L42PRO FULL
-      // Isso garante que o Windows auto-seleciona o papel correto ao imprimir, evitando etiquetas em branco
-      const PW = 102.6
-      const PH = 39.9
+      // 80 × 40 mm — formato FEICAP 2026
+      const PW = 80
+      const PH = 40
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
       for (let i = 0; i < targets.length; i++) {
@@ -557,9 +556,9 @@ export default function CredentialsPage() {
         doc.setFontSize(8)
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(0, 0, 0)
-        const evLine = doc.splitTextToSize(evName.toUpperCase(), 46)[0]
+        const evLine = doc.splitTextToSize(evName.toUpperCase(), 38)[0]
         doc.text(evLine, 8, 9)
-        doc.text(v.number, 62, 9, { align: 'right' })
+        doc.text(v.number, 47, 9, { align: 'right' })
 
         // Big number
         doc.setFontSize(20)
@@ -581,17 +580,17 @@ export default function CredentialsPage() {
         if (vehicleOrientations) {
           doc.setFontSize(6)
           doc.setFont('helvetica', 'normal')
-          const orientLines = doc.splitTextToSize(vehicleOrientations, 54)
+          const orientLines = doc.splitTextToSize(vehicleOrientations, 38)
           const orientY = v.plate ? 39 : 37
           doc.text(orientLines.slice(0, 2), 8, orientY)
         }
 
-        // QR Code
+        // QR Code (x=49, y=5, 26×26mm) → borda direita em x=75mm, margem 5mm
         if (v.qrDataUrl) {
-          doc.addImage(v.qrDataUrl, 'PNG', 64, 3, 30, 30)
+          doc.addImage(v.qrDataUrl, 'PNG', 49, 5, 26, 26)
           doc.setFontSize(7)
           doc.setFont('helvetica', 'bold')
-          doc.text(v.number, 79, 37, { align: 'center' })
+          doc.text(v.number, 62, 36, { align: 'center' })
         }
       }
 
@@ -621,7 +620,7 @@ export default function CredentialsPage() {
 
       const unprintedCount = vehicleCredentials.filter(v => !v.credentialPrinted && !ids.includes(v.id)).length
       const resumeMsg = unprintedCount > 0 ? ` · ${unprintedCount} credencial(is) ainda não impressa(s).` : ' · Todas impressas!'
-      setMessage({ type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg} Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: Credencial → Escala: Tamanho real → Margens: Nenhuma.` })
+      setMessage({ type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg} Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: 80×40mm → Escala: Tamanho real → Margens: Nenhuma.` })
     } catch (err) {
       console.error('Erro ao gerar PDF de veículos:', err)
       alert('Erro ao gerar PDF.')
@@ -651,7 +650,7 @@ export default function CredentialsPage() {
 
   const clearSelection = () => setSelectedIds(new Set())
 
-  // ── Print via jsPDF — gera PDF 100×40mm com dimensões físicas fixas ────────
+  // ── Print via jsPDF — gera PDF 80×40mm com dimensões físicas fixas ─────────
   const handlePrint = async () => {
     if (templateStyle !== 'label') {
       window.print()
@@ -663,9 +662,9 @@ export default function CredentialsPage() {
 
       const evName = selectedEvent?.name || ''
 
-      // 102.6 × 39.9 mm = dimensões exatas do papel "Credencial" cadastrado no driver Elgin L42PRO FULL
-      const PW = 102.6
-      const PH = 39.9
+      // 80 × 40 mm — formato FEICAP 2026
+      const PW = 80
+      const PH = 40
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
       for (let i = 0; i < printTargets.length; i++) {
@@ -683,17 +682,17 @@ export default function CredentialsPage() {
         // ── Linha 1: nome do evento (esq) + #número (dir) ─────────────────
         doc.setFontSize(8)
         doc.setFont('helvetica', 'bold')
-        const evMaxW = p.credentialNumber ? 46 : 54
+        const evMaxW = p.credentialNumber ? 36 : 40
         const evLine = doc.splitTextToSize(evName.toUpperCase(), evMaxW)[0]
         doc.text(evLine, 8, 9)
         if (p.credentialNumber) {
-          doc.text(`#${p.credentialNumber}`, 62, 9, { align: 'right' })
+          doc.text(`#${p.credentialNumber}`, 47, 9, { align: 'right' })
         }
 
         // ── Linha 2+3: nome do participante (até 2 linhas, 16pt) ──────────
         doc.setFontSize(16)
         doc.setFont('helvetica', 'bold')
-        const nameLines = doc.splitTextToSize(p.name, 54)
+        const nameLines = doc.splitTextToSize(p.name, 40)
         doc.text(nameLines[0], 8, 19)
         const hasLine2 = nameLines.length >= 2
         if (hasLine2) doc.text(nameLines[1], 8, 26)
@@ -702,16 +701,16 @@ export default function CredentialsPage() {
         if (standName) {
           doc.setFontSize(9)
           doc.setFont('helvetica', 'bold')
-          doc.text(doc.splitTextToSize(standName, 54)[0], 8, hasLine2 ? 34 : 28)
+          doc.text(doc.splitTextToSize(standName, 40)[0], 8, hasLine2 ? 34 : 28)
         }
 
-        // ── QR Code (x=64, y=3, 30×30mm) ─────────────────────────────────
+        // ── QR Code (x=49, y=5, 26×26mm) → borda direita em x=75mm, margem 5mm ─
         if (p.qrDataUrl) {
-          doc.addImage(p.qrDataUrl, 'PNG', 64, 3, 30, 30)
+          doc.addImage(p.qrDataUrl, 'PNG', 49, 5, 26, 26)
           if (p.credentialNumber) {
             doc.setFontSize(7)
             doc.setFont('helvetica', 'bold')
-            doc.text(`#${p.credentialNumber}`, 79, 37, { align: 'center' })
+            doc.text(`#${p.credentialNumber}`, 62, 36, { align: 'center' })
           }
         }
       }
@@ -725,7 +724,7 @@ export default function CredentialsPage() {
       setTimeout(() => URL.revokeObjectURL(url), 5000)
       setMessage({
         type: 'success',
-        text: '✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: Credencial → Escala: Tamanho real → Margens: Nenhuma → Imprimir'
+        text: '✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: 80×40mm → Escala: Tamanho real → Margens: Nenhuma → Imprimir'
       })
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
@@ -818,9 +817,9 @@ export default function CredentialsPage() {
         .info-value { font-size: 9px; color: #334155; }
         .qr-code { width: 44mm; height: 44mm; margin: 5mm 5mm 5mm 0; flex-shrink: 0; }
 
-        /* Label style — 100mm × 40mm — P&B sem foto */
+        /* Label style — 80mm × 40mm — P&B sem foto */
         .credential-card.label {
-          width: 100mm;
+          width: 80mm;
           height: 40mm;
           border: 1px solid #000;
           border-radius: 3px;
@@ -834,13 +833,13 @@ export default function CredentialsPage() {
           break-inside: avoid;
           box-sizing: border-box;
         }
-        .label-stripe { width: 4mm; background: #000; flex-shrink: 0; }
+        .label-stripe { width: 5mm; background: #000; flex-shrink: 0; }
         .label-info {
           flex: 1;
           display: flex;
           flex-direction: column;
           justify-content: center;
-          padding: 2.5mm 2mm 2.5mm 4mm;
+          padding: 2.5mm 2mm 2.5mm 3mm;
           gap: 1.5mm;
           overflow: hidden;
           min-width: 0;
@@ -869,8 +868,8 @@ export default function CredentialsPage() {
         .label-stand { font-size: 11px; font-weight: 600; color: #000; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .label-orientations { font-size: 7px; font-weight: 500; color: #000; margin: 0; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .label-stand-label { font-weight: 700; text-transform: uppercase; font-size: 8px; }
-        .label-qr-block { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 2mm 3mm; flex-shrink: 0; }
-        .label-qr { width: 34mm; height: 34mm; display: block; }
+        .label-qr-block { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 2mm 2.5mm; flex-shrink: 0; }
+        .label-qr { width: 30mm; height: 30mm; display: block; }
         .label-qr-number { font-size: 9px; font-weight: 900; color: #000; text-align: center; margin: 1mm 0 0; letter-spacing: 0.5px; }
         .vehicle-number { font-size: 22px !important; letter-spacing: 1px; }
 
@@ -924,7 +923,7 @@ export default function CredentialsPage() {
                 onClick={() => setTemplateStyle('label')}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${templateStyle === 'label' ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
               >
-                Etiqueta 10×4cm
+                Etiqueta 8×4cm
               </button>
               <button
                 onClick={() => setTemplateStyle('badge')}
