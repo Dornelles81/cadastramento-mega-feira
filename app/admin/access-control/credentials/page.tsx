@@ -539,10 +539,14 @@ export default function CredentialsPage() {
     try {
       const { jsPDF } = await import('jspdf')
       const evName = selectedEvent?.name || ''
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 40] })
+      // 102.6 × 39.9 mm = dimensões exatas do papel "Credencial" cadastrado no driver Elgin L42PRO FULL
+      // Isso garante que o Windows auto-seleciona o papel correto ao imprimir, evitando etiquetas em branco
+      const PW = 102.6
+      const PH = 39.9
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
       for (let i = 0; i < targets.length; i++) {
-        if (i > 0) doc.addPage([100, 40], 'landscape')
+        if (i > 0) doc.addPage([PW, PH], 'landscape')
         const v = targets[i]
 
         // Stripe
@@ -617,7 +621,7 @@ export default function CredentialsPage() {
 
       const unprintedCount = vehicleCredentials.filter(v => !v.credentialPrinted && !ids.includes(v.id)).length
       const resumeMsg = unprintedCount > 0 ? ` · ${unprintedCount} credencial(is) ainda não impressa(s).` : ' · Todas impressas!'
-      setMessage({ type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg} Pressione Ctrl+P → Tamanho real → Margens = nenhuma.` })
+      setMessage({ type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg} Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: Credencial → Escala: Tamanho real → Margens: Nenhuma.` })
     } catch (err) {
       console.error('Erro ao gerar PDF de veículos:', err)
       alert('Erro ao gerar PDF.')
@@ -659,10 +663,13 @@ export default function CredentialsPage() {
 
       const evName = selectedEvent?.name || ''
 
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [100, 40] })
+      // 102.6 × 39.9 mm = dimensões exatas do papel "Credencial" cadastrado no driver Elgin L42PRO FULL
+      const PW = 102.6
+      const PH = 39.9
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
       for (let i = 0; i < printTargets.length; i++) {
-        if (i > 0) doc.addPage([100, 40], 'landscape')
+        if (i > 0) doc.addPage([PW, PH], 'landscape')
 
         const p = printTargets[i]
         const standName = p.stand?.name || ''
@@ -718,7 +725,7 @@ export default function CredentialsPage() {
       setTimeout(() => URL.revokeObjectURL(url), 5000)
       setMessage({
         type: 'success',
-        text: '✅ PDF baixado! Abra o arquivo e pressione Ctrl+P → Mais configurações → Margens = NENHUMA → desmarque CABEÇALHOS E RODAPÉS → Escala = Tamanho real → Imprimir'
+        text: '✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: Credencial → Escala: Tamanho real → Margens: Nenhuma → Imprimir'
       })
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
@@ -1143,8 +1150,9 @@ export default function CredentialsPage() {
             {/* Vehicle print instructions */}
             {vehicleCredentials.length > 0 && (
               <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm no-print">
-                <p className="font-bold text-amber-800 mb-1">🖨️ Impressão via PDF — Elgin L42 Pro Full (100×40mm)</p>
-                <p className="text-amber-700 text-xs">Ctrl+P → Tamanho real → Margens = Nenhuma → Desmarcar cabeçalhos/rodapés</p>
+                <p className="font-bold text-amber-800 mb-1">🖨️ Impressão — Elgin L42PRO FULL</p>
+                <p className="text-amber-700 text-xs">Ctrl+P → Impressora: <strong>Elgin L42PRO FULL</strong> → Tamanho do papel: <strong>Credencial</strong> → Escala: <strong>Tamanho real</strong> → Margens: <strong>Nenhuma</strong></p>
+                <p className="text-amber-600 text-xs mt-1">⚠️ Usar outro tamanho de papel (ex: 4×6) causa etiquetas em branco entre as impressões.</p>
               </div>
             )}
 
@@ -1312,16 +1320,16 @@ export default function CredentialsPage() {
         {/* Instruções Elgin L42 Pro */}
         {templateStyle === 'label' && (
           <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm no-print">
-            <p className="font-bold text-amber-800 mb-2">🖨️ Impressão via PDF — Elgin L42 Pro Full</p>
+            <p className="font-bold text-amber-800 mb-2">🖨️ Impressão via PDF — Elgin L42PRO FULL</p>
             <ol className="text-amber-700 space-y-1 list-decimal list-inside">
-              <li>Clique em <strong>Imprimir</strong> — um PDF de 100×40mm abrirá em nova aba</li>
-              <li>No PDF, pressione <strong>Ctrl+P</strong> (o diálogo de impressão abrirá automaticamente)</li>
-              <li>Selecione <strong>Elgin L42 Pro Full</strong> como impressora</li>
-              <li>Tamanho do papel: <strong>100 × 40 mm</strong> (crie este tamanho personalizado no driver se necessário)</li>
-              <li>Escala / Tamanho: selecione <strong>Tamanho real</strong> ou <strong>Actual size</strong> — <em>não use "Ajustar"</em></li>
-              <li>Margens: <strong>Nenhuma (0)</strong> · Desmarque cabeçalhos e rodapés</li>
+              <li>Clique em <strong>Imprimir</strong> — o PDF será baixado</li>
+              <li>Abra o PDF e pressione <strong>Ctrl+P</strong></li>
+              <li>Impressora: <strong>Elgin L42PRO FULL</strong></li>
+              <li>Tamanho do papel: <strong>Credencial</strong> — <em>obrigatório para evitar etiquetas em branco</em></li>
+              <li>Escala: <strong>Tamanho real</strong> (não use "Ajustar")</li>
+              <li>Margens: <strong>Nenhuma</strong> · Desmarque cabeçalhos e rodapés</li>
             </ol>
-            <p className="text-amber-600 mt-2 text-xs">💡 O PDF tem as dimensões físicas 100×40mm codificadas — garante impressão sem escala independente do driver.</p>
+            <p className="text-red-600 mt-2 text-xs font-medium">⚠️ Usar outro tamanho de papel (ex: 4×6, 4×4) faz a impressora avançar etiquetas em branco entre cada credencial.</p>
           </div>
         )}
 
