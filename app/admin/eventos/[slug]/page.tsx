@@ -1250,9 +1250,13 @@ export default function EventAdminPage() {
                             </div>
                           </button>
                         ) : (
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                          <button
+                            onClick={() => setViewingImage(participant)}
+                            className="w-8 h-8 md:w-10 md:h-10 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300 transition-colors"
+                            title="Ver detalhes e documentos"
+                          >
                             <span className="text-gray-400 text-xs">👤</span>
-                          </div>
+                          </button>
                         )}
                       </div>
                     </td>
@@ -1793,9 +1797,18 @@ export default function EventAdminPage() {
                   {/* Right Column - Documents */}
                   <div className="space-y-4">
                     <h4 className="font-semibold text-gray-800">📄 Documentos Enviados</h4>
-                    {viewingImage.documents && Object.keys(viewingImage.documents).length > 0 ? (
+                    {(() => {
+                      // Merge documents from both fields: documents and customData
+                      const docsFromField = viewingImage.documents || {}
+                      const docsFromCustomData = Object.fromEntries(
+                        Object.entries(viewingImage.customData || {}).filter(([, v]: [string, any]) =>
+                          v && typeof v === 'object' && v.imageData
+                        )
+                      )
+                      const allDocs = { ...docsFromCustomData, ...docsFromField }
+                      return Object.keys(allDocs).length > 0 ? (
                       <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                        {Object.entries(viewingImage.documents).map(([docType, docData]: [string, any]) => (
+                        {Object.entries(allDocs).map(([docType, docData]: [string, any]) => (
                           docData && (
                             <div key={docType} className="border rounded-lg p-3 hover:bg-gray-50">
                               <div className="flex items-start justify-between mb-2">
@@ -1853,7 +1866,8 @@ export default function EventAdminPage() {
                         <div className="text-3xl mb-2">📭</div>
                         <p>Nenhum documento enviado</p>
                       </div>
-                    )}
+                    )
+                    })()}
                   </div>
                 </div>
 
