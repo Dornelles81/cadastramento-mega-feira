@@ -87,10 +87,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       include: { eventConfigs: true }
     })
 
-    // If not found by slug, try by code (backward compatibility)
+    // If not found by slug, try by code (case-insensitive for backward compatibility)
     if (!event) {
-      event = await prisma.event.findUnique({
-        where: { code: eventCodeOrSlug.toUpperCase() },
+      event = await prisma.event.findFirst({
+        where: { code: { equals: eventCodeOrSlug, mode: 'insensitive' } },
         include: { eventConfigs: true }
       })
     }
