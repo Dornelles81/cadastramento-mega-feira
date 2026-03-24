@@ -1830,8 +1830,6 @@ export default function EventAdminPage() {
                                 {docData.imageData && (
                                   <button
                                     onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = docData.imageData;
                                       const mimeMatch = docData.imageData.match(/^data:([^;]+);/)
                                       const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg'
                                       const extMap: Record<string, string> = {
@@ -1839,8 +1837,15 @@ export default function EventAdminPage() {
                                         'image/gif': 'gif', 'image/webp': 'webp', 'application/pdf': 'pdf'
                                       }
                                       const ext = extMap[mime] || docData.fileName?.split('.').pop() || 'jpg'
-                                      link.download = `${viewingImage.name.replace(/\s/g, '_')}_${docType}.${ext}`;
-                                      link.click();
+                                      const base64 = docData.imageData.split(',')[1]
+                                      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+                                      const blob = new Blob([bytes], { type: mime })
+                                      const url = URL.createObjectURL(blob)
+                                      const link = document.createElement('a')
+                                      link.href = url
+                                      link.download = `${viewingImage.name.replace(/\s/g, '_')}_${docType}.${ext}`
+                                      link.click()
+                                      URL.revokeObjectURL(url)
                                     }}
                                     className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
                                   >
@@ -1853,7 +1858,13 @@ export default function EventAdminPage() {
                                   {docData.imageData.startsWith('data:application/pdf') ? (
                                     <div
                                       className="w-full h-40 bg-red-50 border border-red-200 rounded flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-red-100"
-                                      onClick={() => window.open(docData.imageData, '_blank')}
+                                      onClick={() => {
+                                        const base64 = docData.imageData.split(',')[1]
+                                        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+                                        const blob = new Blob([bytes], { type: 'application/pdf' })
+                                        const url = URL.createObjectURL(blob)
+                                        window.open(url, '_blank')
+                                      }}
                                       title="Clique para abrir o PDF"
                                     >
                                       <span className="text-4xl">📄</span>
