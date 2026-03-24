@@ -1832,7 +1832,14 @@ export default function EventAdminPage() {
                                     onClick={() => {
                                       const link = document.createElement('a');
                                       link.href = docData.imageData;
-                                      link.download = `${viewingImage.name.replace(/\s/g, '_')}_${docType}.jpg`;
+                                      const mimeMatch = docData.imageData.match(/^data:([^;]+);/)
+                                      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+                                      const extMap: Record<string, string> = {
+                                        'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
+                                        'image/gif': 'gif', 'image/webp': 'webp', 'application/pdf': 'pdf'
+                                      }
+                                      const ext = extMap[mime] || docData.fileName?.split('.').pop() || 'jpg'
+                                      link.download = `${viewingImage.name.replace(/\s/g, '_')}_${docType}.${ext}`;
                                       link.click();
                                     }}
                                     className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
@@ -1843,18 +1850,29 @@ export default function EventAdminPage() {
                               </div>
                               {docData.imageData && (
                                 <div className="mt-2">
-                                  <img 
-                                    src={docData.imageData}
-                                    alt={`${docType} de ${viewingImage.name}`}
-                                    className="w-full h-40 object-cover rounded border cursor-pointer hover:opacity-90"
-                                    onClick={() => {
-                                      const win = window.open();
-                                      if (win) {
-                                        win.document.write(`<img src="${docData.imageData}" style="width:100%;" />`);
-                                      }
-                                    }}
-                                    title="Clique para ampliar"
-                                  />
+                                  {docData.imageData.startsWith('data:application/pdf') ? (
+                                    <div
+                                      className="w-full h-40 bg-red-50 border border-red-200 rounded flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-red-100"
+                                      onClick={() => window.open(docData.imageData, '_blank')}
+                                      title="Clique para abrir o PDF"
+                                    >
+                                      <span className="text-4xl">📄</span>
+                                      <span className="text-sm text-red-600 font-medium">PDF — Clique para abrir</span>
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={docData.imageData}
+                                      alt={`${docType} de ${viewingImage.name}`}
+                                      className="w-full h-40 object-cover rounded border cursor-pointer hover:opacity-90"
+                                      onClick={() => {
+                                        const win = window.open();
+                                        if (win) {
+                                          win.document.write(`<img src="${docData.imageData}" style="max-width:100%;" />`);
+                                        }
+                                      }}
+                                      title="Clique para ampliar"
+                                    />
+                                  )}
                                 </div>
                               )}
                             </div>
