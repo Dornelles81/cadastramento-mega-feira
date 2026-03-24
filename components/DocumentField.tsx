@@ -158,11 +158,13 @@ export default function DocumentField({
         return
       }
 
-      // Check file format
-      const extension = file.name.split('.').pop()?.toLowerCase()
-      if (extension && !normalizedFormats.includes(extension)) {
-        setError(`Formato não aceito. Use: ${normalizedFormats.join(', ')}`)
-        return
+      // Check file format (only if formats are specified)
+      if (normalizedFormats.length > 0) {
+        const extension = file.name.split('.').pop()?.toLowerCase()
+        if (extension && !normalizedFormats.includes(extension)) {
+          setError(`Formato não aceito. Use: ${normalizedFormats.join(', ')}`)
+          return
+        }
       }
 
       const reader = new FileReader()
@@ -398,7 +400,7 @@ export default function DocumentField({
       />
 
       <div className="text-xs text-gray-500 text-center">
-        Formatos: {normalizedFormats.join(', ').toUpperCase()} • Máx: {maxSizeMB}MB
+        {normalizedFormats.length > 0 ? `Formatos: ${normalizedFormats.join(', ').toUpperCase()} • ` : ''}Máx: {maxSizeMB}MB
       </div>
     </div>
   )
