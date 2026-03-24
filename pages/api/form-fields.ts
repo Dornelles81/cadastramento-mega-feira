@@ -25,10 +25,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         select: { id: true, name: true, code: true, slug: true }
       })
 
-      // Se não encontrar pelo slug, tentar pelo code (maiúsculas)
+      // Se não encontrar pelo slug, tentar pelo code (case-insensitive)
       if (!event) {
-        event = await prisma.event.findUnique({
-          where: { code: eventCodeStr.toUpperCase() },
+        event = await prisma.event.findFirst({
+          where: { code: { equals: eventCodeStr, mode: 'insensitive' } },
           select: { id: true, name: true, code: true, slug: true }
         })
       }
