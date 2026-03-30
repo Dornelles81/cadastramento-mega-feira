@@ -90,8 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       orderBy: {
         createdAt: 'desc'
-      },
-      take: 100 // Limit to last 100 participants
+      }
     })
 
     console.log(`✅ Returning ${participants.length} participants`)
