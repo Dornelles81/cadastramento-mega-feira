@@ -143,7 +143,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
     stands: stats,
     total: stands.length,
     active: stands.filter(s => s.isActive).length,
-    full: stats.filter(s => s.isFull).length
+    full: stats.filter(s => s.isFull).length,
+    withoutRegistrations: stats.filter(s => s.currentCount === 0).length
   });
 }
 

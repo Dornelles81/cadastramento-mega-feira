@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Participant {
@@ -42,10 +42,21 @@ interface StandStats {
   total: number;
   active: number;
   full: number;
+  withoutRegistrations?: number;
+}
+
+function getOccupancyStatus(stand: Stand): { label: string; color: string; bg: string } {
+  const count = stand.currentCount ?? 0;
+  const pct = stand.usagePercentage ?? 0;
+  if (count === 0) return { label: 'Sem cadastro', color: 'text-gray-700', bg: 'bg-gray-100' };
+  if (pct >= 100) return { label: 'Completo', color: 'text-red-700', bg: 'bg-red-100' };
+  if (pct >= 50) return { label: 'Em andamento', color: 'text-blue-700', bg: 'bg-blue-100' };
+  return { label: 'Iniciado', color: 'text-yellow-700', bg: 'bg-yellow-100' };
 }
 
 export default function StandsManagementPage() {
   const router = useRouter();
+  const formRef = useRef<HTMLDivElement>(null);
   const [stands, setStands] = useState<Stand[]>([]);
   const [stats, setStats] = useState<StandStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +171,7 @@ export default function StandsManagementPage() {
           isActive: detailedStand.isActive
         });
         setShowForm(true);
+        setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
       } else {
         alert('Erro ao carregar detalhes do stand');
       }
@@ -327,7 +339,7 @@ export default function StandsManagementPage() {
 
           {/* Statistics */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <p className="text-sm text-blue-600 font-medium">Total de Stands</p>
                 <p className="text-3xl font-bold text-blue-900">{stats.total}</p>
@@ -335,6 +347,10 @@ export default function StandsManagementPage() {
               <div className="bg-green-50 p-4 rounded-lg">
                 <p className="text-sm text-green-600 font-medium">Stands Ativos</p>
                 <p className="text-3xl font-bold text-green-900">{stats.active}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600 font-medium">Sem Cadastro</p>
+                <p className="text-3xl font-bold text-gray-700">{stats.withoutRegistrations ?? 0}</p>
               </div>
               <div className="bg-red-50 p-4 rounded-lg">
                 <p className="text-sm text-red-600 font-medium">Stands Cheios</p>
@@ -435,7 +451,7 @@ export default function StandsManagementPage() {
 
         {/* Form */}
         {showForm && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div ref={formRef} className="bg-white rounded-lg shadow p-6 mb-6">
             <h2 className="text-xl font-bold mb-4">
               {editingStand ? 'Editar Stand' : 'Novo Stand'}
             </h2>
@@ -674,6 +690,7 @@ export default function StandsManagementPage() {
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Código</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Uso</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Progresso</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ocupação</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Responsável</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Ações</th>
@@ -710,6 +727,16 @@ export default function StandsManagementPage() {
                               {Math.round(stand.usagePercentage || 0)}%
                             </p>
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const occ = getOccupancyStatus(stand);
+                            return (
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${occ.bg} ${occ.color}`}>
+                                {occ.label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${

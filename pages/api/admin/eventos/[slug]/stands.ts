@@ -99,6 +99,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
   }
 
   // Listar todos os stands do evento
+  const { withParticipants } = req.query;
+
   const where: any = {
     eventId: eventId,
     // Excluir stands auto-criados por campos personalizados
@@ -118,7 +120,21 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
     include: {
       _count: {
         select: { participants: true }
-      }
+      },
+      ...(withParticipants === 'true' ? {
+        participants: {
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
+            email: true,
+            phone: true,
+            createdAt: true,
+            approvalStatus: true
+          },
+          orderBy: { name: 'asc' }
+        }
+      } : {})
     },
     orderBy: [
       { isActive: 'desc' },
@@ -146,7 +162,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
     stands: stats,
     total: stands.length,
     active: stands.filter(s => s.isActive).length,
-    full: stats.filter(s => s.isFull).length
+    full: stats.filter(s => s.isFull).length,
+    withoutRegistrations: stats.filter(s => s.currentCount === 0).length
   });
 }
 
