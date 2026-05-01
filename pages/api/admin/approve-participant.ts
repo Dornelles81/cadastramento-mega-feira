@@ -1,12 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 // import HikCentralPuppeteer from '../../../lib/hikcental/hikcentral-puppeteer'; // Disabled for Vercel compatibility
 import OptimusClient from '../../../lib/hikcental/optimus-client';
 import HikCentralISAPI from '../../../lib/hikcental/hikcentral-isapi';
 import HikCentralWebAPI from '../../../lib/hikcental/hikcentral-api';
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -282,6 +281,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error.message
     });
   } finally {
-    await prisma.$disconnect();
   }
 }

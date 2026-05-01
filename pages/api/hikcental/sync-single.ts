@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { HikCentralService } from '../../../lib/hikcental/service';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 const hikCentralService = new HikCentralService();
 
 export default async function handler(

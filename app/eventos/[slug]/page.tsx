@@ -60,6 +60,44 @@ interface RegistrationData {
   customData?: any
 }
 
+function StepIndicator({ current, requireFace = true }: {
+  current: 'consent' | 'personal' | 'capture'
+  requireFace?: boolean
+}) {
+  const allSteps = [
+    { id: 'consent', label: 'Termos' },
+    { id: 'personal', label: 'Dados' },
+    { id: 'capture', label: 'Foto' },
+  ]
+  const steps = requireFace ? allSteps : allSteps.slice(0, 2)
+  const currentIndex = steps.findIndex(s => s.id === current)
+  return (
+    <div className="flex items-center justify-center py-3 mb-1">
+      {steps.map((step, i) => (
+        <div key={step.id} className="flex items-center">
+          <div className="flex items-center gap-1.5">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+              i < currentIndex ? 'bg-verde-agua text-white'
+              : i === currentIndex ? 'bg-white text-azul-marinho'
+              : 'bg-white/20 text-white/50'
+            }`}>
+              {i < currentIndex ? '✓' : i + 1}
+            </div>
+            <span className={`text-xs transition-all ${
+              i === currentIndex ? 'text-white font-semibold'
+              : i < currentIndex ? 'text-verde-agua'
+              : 'text-white/40'
+            }`}>{step.label}</span>
+          </div>
+          {i < steps.length - 1 && (
+            <div className={`w-8 h-px mx-2 ${i < currentIndex ? 'bg-verde-agua' : 'bg-white/20'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function EventoPage() {
   const params = useParams()
   const router = useRouter()
@@ -89,6 +127,7 @@ export default function EventoPage() {
     successText: 'Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
     instructionsText: 'Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmacao'
   })
+  const [showInstructions, setShowInstructions] = useState(false)
 
   // Load event data on mount
   useEffect(() => {
@@ -403,122 +442,131 @@ export default function EventoPage() {
           </a>
         </div>
 
-        <div className="p-4 safe-area">
+        {/* Scrollable content with space for sticky button */}
+        <div className="p-4 safe-area pb-28">
           <div className="max-w-md mx-auto">
-            {/* Header with Event Info */}
-            <div className="text-center py-6">
-              <div className="mb-4 flex justify-center">
+            <StepIndicator current="consent" requireFace={event.config.requireFace} />
+
+            {/* Header compacto */}
+            <div className="text-center py-4">
+              <div className="mb-3 flex justify-center">
                 {event.config.logoUrl ? (
-                  <div className="bg-white rounded-2xl shadow-lg px-6 py-4 flex items-center justify-center" style={{ minWidth: '200px', maxWidth: '300px' }}>
+                  <div className="bg-white rounded-2xl shadow-lg px-5 py-3 flex items-center justify-center" style={{ minWidth: '160px', maxWidth: '260px' }}>
                     <img
                       src={event.config.logoUrl}
                       alt={event.name}
-                      className="max-h-24 w-auto object-contain"
-                      style={{ maxWidth: '260px' }}
+                      className="max-h-20 w-auto object-contain"
+                      style={{ maxWidth: '220px' }}
                     />
                   </div>
                 ) : (
                   <MegaFeiraLogo className="text-4xl" showTagline />
                 )}
               </div>
-              <h1 className="text-xl font-bold text-white mb-2">
-                {event.name}
-              </h1>
+              <h1 className="text-xl font-bold text-white mb-1">{event.name}</h1>
               {event.description && (
-                <p className="text-sm text-white/80 mb-2">
-                  {event.description}
-                </p>
+                <p className="text-sm text-white/70 mb-1">{event.description}</p>
               )}
-              <div className="text-xs text-white/60 space-y-1 mb-3">
-                <div>De {formatEventDate(event.startDate)} a {formatEventDate(event.endDate)}</div>
+              <div className="text-xs text-white/50">
+                {formatEventDate(event.startDate)} – {formatEventDate(event.endDate)}
               </div>
-              <div className="text-xs text-white/90 text-left bg-white/10 backdrop-blur-sm rounded-lg p-3 mb-3 border border-white/20">
-                <p className="mb-2">
-                  Com nosso aplicativo, voce tem acesso rapido e seguro ao evento.
-                  Atraves do reconhecimento facial e cadastro simplificado, garantimos:
-                </p>
-                <div className="space-y-1">
-                  <p><span className="text-verde-agua">✓</span> <strong className="text-white">Entrada ágil</strong> - Sem filas, sem papel</p>
-                  <p><span className="text-verde-agua">✓</span> <strong className="text-white">Segurança</strong> - Seus dados protegidos pela LGPD</p>
-                  <p><span className="text-verde-agua">✓</span> <strong className="text-white">Praticidade</strong> - Tudo na palma da sua mão</p>
-                </div>
-                <p className="mt-3 text-center font-semibold text-verde-agua">
-                  Vamos comecar?
-                </p>
+            </div>
+
+            {/* Benefícios compactos */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4 border border-white/20">
+              <div className="space-y-2.5">
+                {[
+                  { icon: '⚡', label: 'Entrada ágil', desc: 'Sem filas, sem papel' },
+                  { icon: '🔒', label: 'Segurança LGPD', desc: 'Dados criptografados' },
+                  { icon: '📱', label: '100% Mobile', desc: 'Direto no seu celular' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center gap-3">
+                    <span className="text-xl w-7 text-center flex-shrink-0">{item.icon}</span>
+                    <div>
+                      <span className="text-white text-sm font-semibold">{item.label}</span>
+                      <span className="text-white/60 text-xs"> — {item.desc}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* Update Mode Banner */}
             {isUpdateMode && (
-              <div className="bg-azul-medio/20 border-2 border-azul-medio rounded-xl shadow-sm p-5 mb-6 backdrop-blur-sm">
-                <div className="text-center">
-                  <div className="text-3xl mb-2">🔄</div>
-                  <h3 className="text-lg font-bold text-white mb-2">
-                    Modo de Atualizacao
-                  </h3>
-                  <p className="text-sm text-white/80">
-                    Voce esta atualizando um cadastro existente.
-                    <br />
-                    Seus dados foram carregados automaticamente.
-                  </p>
-                </div>
+              <div className="bg-azul-medio/20 border-2 border-azul-medio rounded-xl p-4 mb-4 backdrop-blur-sm text-center">
+                <div className="text-2xl mb-1">🔄</div>
+                <h3 className="text-base font-bold text-white mb-1">Modo de Atualização</h3>
+                <p className="text-xs text-white/80">Você está atualizando um cadastro existente.</p>
               </div>
             )}
 
-            {/* Steps Guide */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-5 mb-6 border border-white/20">
-              <div
-                className="prose prose-sm max-w-none text-white/90 prose-headings:text-white prose-strong:text-verde-agua prose-p:text-white/80"
-                dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.instructionsText) }}
-              />
-            </div>
-
-            {/* Consent Checkbox */}
-            <div className="space-y-4">
-              <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20">
-                <label className="flex items-start space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    id="consent-checkbox"
-                    checked={consentChecked}
-                    className="mt-0.5 h-5 w-5 accent-verde-agua"
-                    onChange={(e) => setConsentChecked(e.target.checked)}
-                  />
-                  <span className="text-sm text-white/90 select-none">Li e aceito os termos de uso e politica de privacidade</span>
-                </label>
-
-                <div className="mt-3 text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowTerms(true)}
-                    className="text-xs text-verde-agua hover:text-verde-agua-light underline"
-                  >
-                    Ler termos completos
-                  </button>
-                </div>
+            {/* Instruções colapsáveis */}
+            <button
+              type="button"
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 mb-2 text-white text-sm font-medium hover:bg-white/15 transition-colors"
+            >
+              <span>📋 Como funciona o cadastro</span>
+              <span className="text-white/50 text-xs">{showInstructions ? '▲ fechar' : '▼ ver'}</span>
+            </button>
+            {showInstructions && (
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-3 border border-white/20">
+                <div
+                  className="prose prose-sm max-w-none text-white/90 prose-headings:text-white prose-strong:text-verde-agua prose-p:text-white/80"
+                  dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.instructionsText) }}
+                />
               </div>
+            )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (consentChecked) {
-                    handleConsentAccept()
-                  }
-                }}
-                disabled={!consentChecked}
-                className={`w-full py-4 rounded-lg font-semibold transition-all duration-200 shadow-md ${
-                  consentChecked
-                    ? 'bg-verde-agua text-white hover:bg-verde-agua-dark cursor-pointer glow-verde-agua'
-                    : 'bg-cinza-600 text-cinza-400 cursor-not-allowed opacity-60'
-                }`}
-              >
-                Aceitar e Continuar
-              </button>
+            {/* Checkbox de consentimento */}
+            <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20 mt-3">
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="consent-checkbox"
+                  checked={consentChecked}
+                  className="mt-0.5 h-5 w-5 accent-verde-agua flex-shrink-0"
+                  onChange={(e) => setConsentChecked(e.target.checked)}
+                />
+                <span className="text-sm text-white/90 select-none leading-relaxed">
+                  Li e aceito os termos de uso e política de privacidade
+                </span>
+              </label>
+              <div className="mt-2 pl-8">
+                <button
+                  type="button"
+                  onClick={() => setShowTerms(true)}
+                  className="text-xs text-verde-agua hover:text-verde-agua-light underline"
+                >
+                  Ler termos completos
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Terms Modal */}
+        {/* Botão CTA fixo na parte inferior */}
+        <div
+          className="fixed bottom-0 left-0 right-0 px-4 pt-4 bg-gradient-to-t from-azul-marinho via-azul-marinho/98 to-transparent"
+          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="max-w-md mx-auto">
+            <button
+              type="button"
+              onClick={() => consentChecked && handleConsentAccept()}
+              disabled={!consentChecked}
+              className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-lg ${
+                consentChecked
+                  ? 'bg-verde-agua text-white hover:bg-verde-agua-dark glow-verde-agua active:scale-95'
+                  : 'bg-white/10 text-white/40 cursor-not-allowed'
+              }`}
+            >
+              {consentChecked ? 'Aceitar e Continuar →' : 'Marque a caixa acima para continuar'}
+            </button>
+          </div>
+        </div>
+
+        {/* Modal de Termos */}
         {showTerms && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-azul-marinho rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden border border-white/20">
@@ -532,9 +580,7 @@ export default function EventoPage() {
                 <div className="space-y-4 text-sm text-white/90">
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">1. COLETA DE DADOS</h3>
-                    <p className="mb-2">
-                      Para garantir seu acesso rapido e seguro ao evento, coletamos:
-                    </p>
+                    <p className="mb-2">Para garantir seu acesso rapido e seguro ao evento, coletamos:</p>
                     <ul className="list-disc pl-5 space-y-1">
                       <li>Nome completo e CPF para identificacao</li>
                       <li>Telefone e e-mail para comunicacao</li>
@@ -542,12 +588,9 @@ export default function EventoPage() {
                       <li>Documentos quando solicitados pelo organizador</li>
                     </ul>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">2. USO DOS DADOS</h3>
-                    <p>
-                      Seus dados sao utilizados exclusivamente para:
-                    </p>
+                    <p>Seus dados sao utilizados exclusivamente para:</p>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                       <li>Controle de acesso ao evento via reconhecimento facial</li>
                       <li>Comunicacao sobre o evento</li>
@@ -555,12 +598,9 @@ export default function EventoPage() {
                       <li>Estatisticas internas (dados anonimizados)</li>
                     </ul>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">3. PROTECAO E SEGURANCA</h3>
-                    <p>
-                      Implementamos medidas tecnicas e organizacionais para proteger seus dados:
-                    </p>
+                    <p>Implementamos medidas tecnicas e organizacionais para proteger seus dados:</p>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                       <li>Criptografia de dados sensiveis</li>
                       <li>Acesso restrito e controlado</li>
@@ -568,37 +608,27 @@ export default function EventoPage() {
                       <li>Conformidade com a LGPD (Lei 13.709/2018)</li>
                     </ul>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">4. COMPARTILHAMENTO</h3>
-                    <p>
-                      Seus dados NAO sao vendidos ou compartilhados com terceiros para fins comerciais.
-                      Compartilhamos apenas quando:
-                    </p>
+                    <p>Seus dados NAO sao vendidos ou compartilhados com terceiros para fins comerciais. Compartilhamos apenas quando:</p>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                       <li>Exigido por lei ou ordem judicial</li>
                       <li>Necessario para a seguranca do evento</li>
                       <li>Com seu consentimento explicito</li>
                     </ul>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">5. RETENCAO E EXCLUSAO</h3>
-                    <p>
-                      Seus dados sao mantidos apenas pelo tempo necessario:
-                    </p>
+                    <p>Seus dados sao mantidos apenas pelo tempo necessario:</p>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                       <li>Dados do evento: 90 dias apos o termino</li>
                       <li>Exclusao automatica apos o periodo</li>
                       <li>Voce pode solicitar exclusao a qualquer momento</li>
                     </ul>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">6. SEUS DIREITOS</h3>
-                    <p>
-                      Conforme a LGPD, voce tem direito a:
-                    </p>
+                    <p>Conforme a LGPD, voce tem direito a:</p>
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                       <li>Acessar seus dados pessoais</li>
                       <li>Corrigir dados incorretos</li>
@@ -607,31 +637,20 @@ export default function EventoPage() {
                       <li>Portabilidade dos dados</li>
                     </ul>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">7. CONSENTIMENTO</h3>
-                    <p>
-                      Ao aceitar estes termos, voce autoriza expressamente a coleta e o tratamento
-                      dos seus dados pessoais e biometricos para as finalidades descritas.
-                      Este consentimento pode ser revogado a qualquer momento.
-                    </p>
+                    <p>Ao aceitar estes termos, voce autoriza expressamente a coleta e o tratamento dos seus dados pessoais e biometricos para as finalidades descritas. Este consentimento pode ser revogado a qualquer momento.</p>
                   </section>
-
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">8. CONTATO</h3>
-                    <p>
-                      Para duvidas ou solicitacoes sobre seus dados:
-                    </p>
+                    <p>Para duvidas ou solicitacoes sobre seus dados:</p>
                     <p className="mt-2">
                       <strong>E-mail:</strong> megafeira@megafeira.com.br<br/>
                       <strong>Telefone:</strong> (51) 99977-5388
                     </p>
                   </section>
-
                   <div className="mt-6 pt-4 border-t border-white/20">
-                    <p className="text-xs text-white/60 text-center">
-                      Ultima atualizacao: 18/08/2025
-                    </p>
+                    <p className="text-xs text-white/60 text-center">Ultima atualizacao: 18/08/2025</p>
                   </div>
                 </div>
               </div>
@@ -654,34 +673,32 @@ export default function EventoPage() {
   // Personal data step
   if (currentStep === 'personal') {
     return (
-      <div className="min-h-screen gradient-hero p-4 safe-area">
-        <div className="max-w-md mx-auto">
-          <div className="text-center py-6">
-            <div className="mb-4">
-              <MegaFeiraLogo className="text-3xl" />
+      <div className="min-h-screen gradient-hero">
+        <div className="p-4 safe-area pb-6">
+          <div className="max-w-md mx-auto">
+            <StepIndicator current="personal" requireFace={event.config.requireFace} />
+            <div className="text-center mb-4">
+              <h1 className="text-xl font-bold text-white">Dados Pessoais</h1>
+              <p className="text-sm text-white/70">
+                Cadastro em <strong className="text-verde-agua">{event.name}</strong>
+              </p>
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">
-              Dados Pessoais
-            </h1>
-            <p className="text-sm text-white/80">
-              Preencha seus dados para o cadastro em <strong className="text-verde-agua">{event.name}</strong>
-            </p>
-          </div>
 
-          <DynamicForm
-            onSubmit={handlePersonalDataSubmit}
-            onBack={() => setCurrentStep('consent')}
-            eventCode={event.code}
-            initialData={{
-              name: registrationData.name,
-              cpf: registrationData.cpf,
-              email: registrationData.email,
-              phone: registrationData.phone,
-              evento: event.code,
-              mesa: registrationData.customData?.mesa,
-              ...registrationData.customData
-            }}
-          />
+            <DynamicForm
+              onSubmit={handlePersonalDataSubmit}
+              onBack={() => setCurrentStep('consent')}
+              eventCode={event.code}
+              initialData={{
+                name: registrationData.name,
+                cpf: registrationData.cpf,
+                email: registrationData.email,
+                phone: registrationData.phone,
+                evento: event.code,
+                mesa: registrationData.customData?.mesa,
+                ...registrationData.customData
+              }}
+            />
+          </div>
         </div>
       </div>
     )
@@ -690,21 +707,15 @@ export default function EventoPage() {
   // Face capture step
   if (currentStep === 'capture') {
     return (
-      <div className="min-h-screen gradient-hero p-4 safe-area">
-        <div className="max-w-md mx-auto">
-          <div className="text-center py-6">
-            <div className="mb-4">
-              <MegaFeiraLogo className="text-3xl" />
+      <div className="min-h-screen gradient-hero">
+        <div className="p-4 safe-area pb-6">
+          <div className="max-w-md mx-auto">
+            <StepIndicator current="capture" requireFace={event.config.requireFace} />
+            <div className="text-center mb-3">
+              <h1 className="text-xl font-bold text-white">Foto para Credencial</h1>
+              <p className="text-sm text-white/70">Posicione seu rosto e tire a foto</p>
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">
-              Captura Facial
-            </h1>
-            <p className="text-sm text-white/80">
-              Tire sua foto para completar o cadastro
-            </p>
-          </div>
 
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
             <UniversalFaceCapture
               onCapture={handleFaceCaptured}
               onBack={() => setCurrentStep('personal')}
@@ -718,49 +729,46 @@ export default function EventoPage() {
   // Success step
   if (currentStep === 'success') {
     return (
-      <div className="min-h-screen gradient-hero p-4 safe-area">
-        <div className="max-w-md mx-auto">
-          <div className="text-center py-6">
+      <div className="min-h-screen gradient-hero flex flex-col">
+        <div className="flex-1 p-4 safe-area flex flex-col items-center justify-center">
+          <div className="max-w-md w-full text-center">
             <div className="mb-4">
               <MegaFeiraLogo className="text-3xl" />
             </div>
-            <div className="text-5xl mb-3">{isUpdateMode ? '🔄' : '✅'}</div>
-            <h1 className="text-xl font-bold text-verde-agua mb-2">
-              {isUpdateMode ? 'Cadastro Atualizado!' : 'Cadastro Realizado!'}
-            </h1>
-            <p className="text-sm text-white/80">
-              Parabens, <strong className="text-white">{registrationData.name}</strong>!<br/>
-              {isUpdateMode
-                ? 'Seus dados foram atualizados com sucesso'
-                : `Seu cadastro para ${event.name} foi concluido com sucesso`}
-            </p>
-          </div>
 
-          <div className="space-y-4">
-            <div className="bg-verde/20 backdrop-blur-sm rounded-lg p-4 border border-verde/40">
-              <div
-                className="text-center text-white text-sm font-medium prose prose-sm max-w-none prose-headings:text-verde-agua"
-                dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.successText) }}
-              />
-            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-verde-agua/30 mb-6">
+              <div className="text-6xl mb-3">{isUpdateMode ? '🔄' : '🎉'}</div>
+              <h1 className="text-2xl font-bold text-verde-agua mb-2">
+                {isUpdateMode ? 'Cadastro Atualizado!' : 'Cadastro Realizado!'}
+              </h1>
+              <p className="text-sm text-white/80 mb-5">
+                Olá, <strong className="text-white">{registrationData.name}</strong>!<br/>
+                {isUpdateMode
+                  ? 'Seus dados foram atualizados com sucesso.'
+                  : `Seu cadastro para ${event.name} foi concluído.`}
+              </p>
 
-            <div className="space-y-3 pt-2">
-              <button
-                onClick={handleNewRegistration}
-                className="w-full py-4 bg-verde-agua text-white rounded-lg font-semibold hover:bg-verde-agua-dark transition-all duration-200 shadow-md glow-verde-agua"
-              >
-                Novo Cadastro
-              </button>
-
-              <div className="pt-2 text-center">
-                <a
-                  href="/admin"
-                  className="text-xs text-white/60 hover:text-white/80 transition-colors"
-                >
-                  Area Administrativa
-                </a>
+              <div className="bg-verde-agua/10 rounded-xl p-4 border border-verde-agua/20">
+                <div
+                  className="text-center text-white text-sm prose prose-sm max-w-none prose-headings:text-verde-agua"
+                  dangerouslySetInnerHTML={{ __html: formatTextWithMarkdown(textConfig.successText) }}
+                />
               </div>
             </div>
+
+            <button
+              onClick={handleNewRegistration}
+              className="w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-lg glow-verde-agua active:scale-95 mb-4"
+            >
+              Novo Cadastro
+            </button>
+
+            <a
+              href="/admin"
+              className="block text-xs text-white/40 hover:text-white/60 transition-colors"
+            >
+              Área Administrativa
+            </a>
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
+import { prisma } from '../../../lib/prisma'
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers
@@ -294,6 +293,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       error: error.message
     });
   } finally {
-    await prisma.$disconnect();
   }
 }

@@ -383,7 +383,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   return (
     <div className="space-y-4">
-      <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-[4/3]">
+      <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[3/4]">
         {!capturedImage ? (
           <>
             <video
@@ -461,16 +461,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
       {/* Instructions */}
       {!capturedImage && (
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h3 className="font-medium text-blue-800 mb-2">📝 Dicas para melhor foto:</h3>
-          <ul className="text-sm text-blue-700 space-y-1">
+        <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+          <h3 className="font-semibold text-white text-sm mb-2">📝 Dicas para melhor foto:</h3>
+          <ul className="text-sm text-white/80 space-y-1">
             <li>• Centralize seu rosto no oval</li>
             <li>• Procure um local com boa iluminação</li>
             <li>• Evite contraluz (janela atrás)</li>
             <li>• Mantenha expressão neutra</li>
             <li>• Remova óculos escuros se possível</li>
           </ul>
-          <p className="text-xs text-blue-600 mt-2 font-semibold">
+          <p className="text-xs text-verde-agua mt-2 font-semibold">
             💡 Você pode capturar a foto mesmo se o oval estiver amarelo!
           </p>
         </div>
@@ -478,10 +478,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
       {/* Error/Info message */}
       {error && (
-        <div className={`px-4 py-3 rounded-lg ${
+        <div className={`px-4 py-3 rounded-xl ${
           error.includes('Use a câmera do seu celular')
-            ? 'bg-blue-50 border border-blue-200 text-blue-700'
-            : 'bg-red-50 border border-red-200 text-red-700'
+            ? 'bg-white/10 backdrop-blur-sm border border-azul-medio/40 text-white/90'
+            : 'bg-red-900/30 backdrop-blur-sm border border-red-400/40 text-red-200'
         }`}>
           <pre className="whitespace-pre-wrap font-sans text-sm">{error}</pre>
         </div>
@@ -496,12 +496,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               <button
                 onClick={handleCapture}
                 disabled={isCapturing}
-                className={`w-full py-4 rounded-lg font-semibold transition-colors shadow-md ${
+                className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-md active:scale-95 ${
                   faceDetected && !isCapturing
-                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    ? 'bg-verde-agua text-white hover:bg-verde-agua-dark glow-verde-agua'
                     : !isCapturing && allowManualCapture
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ? 'bg-azul-medio text-white hover:bg-azul-medio-dark'
+                    : 'bg-white/10 text-white/30 cursor-not-allowed'
                 }`}
               >
                 {isCapturing ? '⏳ Capturando...' :
@@ -525,14 +525,14 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full py-4 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md"
+                    className="w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-md active:scale-95 glow-verde-agua"
                   >
                     📸 Abrir Câmera e Tirar Foto
                   </button>
                 </div>
 
-                <div className="bg-green-50 p-3 rounded-lg text-center">
-                  <p className="text-xs text-green-700">
+                <div className="bg-verde-agua/10 p-3 rounded-xl text-center border border-verde-agua/20">
+                  <p className="text-xs text-white/80">
                     ✅ Este botão abrirá a câmera nativa do seu celular para tirar a foto
                   </p>
                 </div>
@@ -543,7 +543,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               <button
                 onClick={onBack}
                 disabled={isCapturing}
-                className="w-full py-4 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                className="w-full py-4 bg-white/10 text-white border border-white/20 rounded-xl font-semibold hover:bg-white/20 transition-all duration-200"
               >
                 ← Voltar
               </button>
@@ -553,11 +553,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           <>
             <button
               onClick={retryCapture}
-              className="w-full py-4 bg-yellow-500 text-white rounded-lg font-semibold hover:bg-yellow-600 transition-colors"
+              className="w-full py-4 bg-azul-medio text-white rounded-xl font-semibold hover:bg-azul-medio-dark transition-all duration-200"
             >
               🔄 Tirar Nova Foto
             </button>
-            <p className="text-center text-sm text-gray-600">
+            <p className="text-center text-sm text-white/60">
               Processando... Aguarde
             </p>
           </>

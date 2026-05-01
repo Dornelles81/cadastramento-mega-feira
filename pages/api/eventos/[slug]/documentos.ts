@@ -1,7 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../../../../lib/prisma'
 
 /**
  * API Pública: Buscar documentos configurados para o evento
@@ -72,6 +70,5 @@ export default async function handler(
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   } finally {
-    await prisma.$disconnect()
   }
 }

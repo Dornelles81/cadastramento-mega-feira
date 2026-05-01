@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import * as XLSX from 'xlsx'
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * Export API for external systems integration

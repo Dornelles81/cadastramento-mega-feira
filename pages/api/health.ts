@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../../lib/prisma'
 
 interface HealthResponse {
   status: 'healthy' | 'unhealthy'
@@ -67,7 +65,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     healthResponse.checks.database = 'error'
     healthResponse.status = 'unhealthy'
   } finally {
-    await prisma.$disconnect()
   }
 
   // Return appropriate HTTP status code

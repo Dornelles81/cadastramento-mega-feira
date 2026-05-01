@@ -23,11 +23,19 @@ interface Event {
   }
 }
 
+interface AccessStats {
+  currentInsideCount: number
+  totalEntries: number
+  totalExits: number
+  uniqueVisitors: number
+}
+
 export default function AdminDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [accessStats, setAccessStats] = useState<Record<string, AccessStats>>({})
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -41,22 +49,40 @@ export default function AdminDashboard() {
 
   const loadEvents = async () => {
     try {
-      // If super admin, fetch all events from API
+      let loadedEvents: Event[] = []
       if (session?.user?.role === 'SUPER_ADMIN') {
         const response = await fetch('/api/admin/eventos')
         if (response.ok) {
           const data = await response.json()
-          setEvents(data.events)
+          loadedEvents = data.events
+          setEvents(loadedEvents)
         }
       } else {
-        // Regular admin: use events from session
-        setEvents(session?.user?.events || [])
+        loadedEvents = session?.user?.events || []
+        setEvents(loadedEvents)
       }
+      // Fetch access stats for all events in parallel
+      loadAccessStats(loadedEvents)
     } catch (error) {
       console.error('Error loading events:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadAccessStats = async (eventsToLoad: Event[]) => {
+    const results = await Promise.allSettled(
+      eventsToLoad.map(ev =>
+        fetch(`/api/access/stats/${ev.slug}`).then(r => r.ok ? r.json() : null)
+      )
+    )
+    const statsMap: Record<string, AccessStats> = {}
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled' && result.value?.stats) {
+        statsMap[eventsToLoad[i].slug] = result.value.stats
+      }
+    })
+    setAccessStats(statsMap)
   }
 
   if (status === 'loading' || loading) {
@@ -213,12 +239,56 @@ export default function AdminDashboard() {
 
                   {/* Stats */}
                   <div className="mb-4 pb-4 border-b border-cinza-200">
-                    <div className="text-3xl font-bold text-verde-agua mb-1">
-                      {event._count?.participants || 0}
+                    {/* Cadastrados */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-2xl font-bold text-verde-agua leading-none">
+                          {event._count?.participants || 0}
+                        </div>
+                        <div className="text-xs text-cinza mt-0.5">Cadastrados</div>
+                      </div>
+                      {accessStats[event.slug] && (
+                        <div className="px-2 py-1 rounded-lg bg-orange-50 border border-orange-200 text-center">
+                          <div className="text-lg font-bold text-orange-600 leading-none">
+                            {accessStats[event.slug].currentInsideCount}
+                          </div>
+                          <div className="text-xs text-orange-500">Dentro agora</div>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-sm text-cinza">
-                      Participantes cadastrados
-                    </div>
+
+                    {/* Entradas / Saídas / Únicos */}
+                    {accessStats[event.slug] ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-center">
+                          <div className="text-base font-bold text-green-700 leading-none">
+                            {accessStats[event.slug].totalEntries}
+                          </div>
+                          <div className="text-xs text-green-600 mt-0.5">Entradas</div>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-center">
+                          <div className="text-base font-bold text-red-600 leading-none">
+                            {accessStats[event.slug].totalExits}
+                          </div>
+                          <div className="text-xs text-red-500 mt-0.5">Saídas</div>
+                        </div>
+                        <div className="bg-azul-marinho/5 border border-azul-marinho/20 rounded-lg p-2 text-center">
+                          <div className="text-base font-bold text-azul-marinho leading-none">
+                            {accessStats[event.slug].uniqueVisitors}
+                          </div>
+                          <div className="text-xs text-azul-marinho/70 mt-0.5">Únicos</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        {['Entradas', 'Saídas', 'Únicos'].map(label => (
+                          <div key={label} className="bg-cinza-50 border border-cinza-200 rounded-lg p-2 text-center animate-pulse">
+                            <div className="text-base font-bold text-cinza-300 leading-none">—</div>
+                            <div className="text-xs text-cinza-400 mt-0.5">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Permissions */}

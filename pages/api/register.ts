@@ -1,9 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 import Joi from 'joi'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 // Validation schema
 const registrationSchema = Joi.object({
@@ -183,6 +182,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Erro interno do servidor. Tente novamente.'
     })
   } finally {
-    await prisma.$disconnect()
   }
 }

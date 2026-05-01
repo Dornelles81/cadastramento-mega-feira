@@ -279,14 +279,14 @@ function AccessControlContent() {
         qrEventCode = parts[3] !== '-' ? parts[3] : null // Event code
       }
 
-      // Validate QR code event matches selected event
+      // Warn if QR event code doesn't match selected event, but proceed anyway.
+      // The backend validates by eventId, so mismatched codes from old/reprinted badges
+      // won't block legitimate participants.
       if (qrEventCode && selectedEvent && qrEventCode !== selectedEvent.code) {
         setMessage({
-          type: 'error',
-          text: `QR Code de outro evento (${qrEventCode}). Selecione o evento correto.`
+          type: 'info',
+          text: `Credencial com código "${qrEventCode}" — verificando no evento selecionado...`
         })
-        setLoading(false)
-        return
       }
 
       // Use fast API in turbo mode
@@ -316,6 +316,7 @@ function AccessControlContent() {
             totalEntries: 0,
             totalExits: 0
           })
+          setMessage(null)
         } else {
           setMessage({ type: 'error', text: 'Participante nao encontrado' })
           setParticipant(null)
@@ -334,6 +335,7 @@ function AccessControlContent() {
         if (response.ok) {
           setParticipant(data.participant)
           setAccessStatus(data.accessStatus)
+          setMessage(null)
         } else {
           setMessage({ type: 'error', text: data.message || 'Participante nao encontrado' })
           setParticipant(null)

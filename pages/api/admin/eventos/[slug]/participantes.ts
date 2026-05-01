@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import { requireEventAccess, createAuditLog } from '../../../../../lib/auth'
+import { prisma } from '../../../../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * API PROTEGIDA: Lista participantes de um evento específico
@@ -35,20 +34,32 @@ export default async function handler(
     )
 
     // ========================================================================
-    // QUERY: Buscar APENAS participantes deste evento
+    // QUERY: Buscar APENAS participantes deste evento (com paginação)
     // ========================================================================
-    const participants = await prisma.participant.findMany({
-      where: {
-        eventId: event.id, // ← ISOLAMENTO GARANTIDO
-        isDeleted: false
-      },
-      include: {
-        stand: true
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
+    const page = parseInt(req.query.page as string || '1', 10)
+    const limit = Math.min(parseInt(req.query.limit as string || '200', 10), 500)
+    const skip = (page - 1) * limit
+
+    const [participants, total] = await Promise.all([
+      prisma.participant.findMany({
+        where: {
+          eventId: event.id, // ← ISOLAMENTO GARANTIDO
+          isDeleted: false
+        },
+        select: {
+          id: true, name: true, cpf: true, email: true, phone: true,
+          createdAt: true, approvalStatus: true, approvedAt: true,
+          hikCentralSyncStatus: true, credentialNumber: true,
+          credentialPrinted: true, credentialPrintedAt: true,
+          checkedIn: true, checkedInAt: true, customData: true,
+          standId: true, stand: true, eventId: true
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip
+      }),
+      prisma.participant.count({ where: { eventId: event.id, isDeleted: false } })
+    ])
 
     // ========================================================================
     // AUDIT LOG: Registrar acesso aos dados
@@ -58,58 +69,22 @@ export default async function handler(
       eventId: event.id,
       action: 'VIEW_PARTICIPANTS',
       entityType: 'participant',
-      description: `Admin ${admin.name} visualizou ${participants.length} participantes do evento ${event.name}`,
-      metadata: {
-        count: participants.length,
-        eventSlug: slug
-      },
+      description: `Admin ${admin.name} visualizou participantes do evento ${event.name} (página ${page})`,
+      metadata: { count: participants.length, total, page, eventSlug: slug },
       severity: 'INFO'
     })
-
-    // ========================================================================
-    // CREDENTIAL PRINT STATUS: fetch via raw SQL (new fields)
-    // ========================================================================
-    let printStatusMap: Record<string, { credentialPrinted: boolean; credentialPrintedAt: Date | null }> = {}
-    try {
-      const ids = participants.map(p => p.id)
-      if (ids.length > 0) {
-        const rows = await prisma.$queryRawUnsafe<Array<{ id: string; credential_printed: boolean; credential_printed_at: Date | null }>>(
-          `SELECT id, credential_printed, credential_printed_at FROM participants WHERE id = ANY($1::uuid[])`,
-          ids
-        )
-        for (const row of rows) {
-          printStatusMap[row.id] = {
-            credentialPrinted: row.credential_printed,
-            credentialPrintedAt: row.credential_printed_at
-          }
-        }
-      }
-    } catch (_) {
-      // column may not exist yet in old deployments — ignore
-    }
 
     // ========================================================================
     // RESPONSE: Retornar dados
     // ========================================================================
     return res.status(200).json({
       success: true,
-      event: {
-        id: event.id,
-        slug: event.slug,
-        name: event.name,
-        code: event.code
-      },
-      participants: participants.map(p => ({
-        ...p,
-        // Remove dados sensíveis se necessário
-        faceData: undefined,
-        ...(printStatusMap[p.id] ?? {})
-      })),
-      total: participants.length,
-      admin: {
-        name: admin.name,
-        role: admin.role
-      }
+      event: { id: event.id, slug: event.slug, name: event.name, code: event.code },
+      participants,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      admin: { name: admin.name, role: admin.role }
     })
   } catch (error: any) {
     console.error('Error in /api/admin/eventos/[slug]/participantes:', error)

@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import { requireAuth, isSuperAdmin } from '../../../lib/auth'
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * API: Buscar logs de auditoria (SUPER ADMIN apenas)

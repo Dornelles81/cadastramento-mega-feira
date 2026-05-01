@@ -1,12 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../../../lib/prisma'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Check authentication
   const authHeader = req.headers.authorization
-  if (!authHeader || authHeader !== 'Bearer admin-token-mega-feira-2025') {
+  const validPassword = process.env.ADMIN_PASSWORD || 'admin123'
+  if (!authHeader || authHeader !== `Bearer ${validPassword}`) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
@@ -72,6 +71,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error fetching approval logs:', error)
     res.status(500).json({ error: 'Failed to fetch approval logs', details: error.message })
   } finally {
-    await prisma.$disconnect()
   }
 }

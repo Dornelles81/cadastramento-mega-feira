@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 // Encrypt sensitive data
 function encrypt(text: string): string {

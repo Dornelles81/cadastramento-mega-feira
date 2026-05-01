@@ -106,7 +106,7 @@ function HomePageContent() {
               <MegaFeiraLogo className="text-5xl" showTagline />
             </div>
             <h1 className="text-2xl font-bold text-white mb-3">
-              Bem-vindo ao Sistema de Cadastro
+              Bem-vindo ao Sistema de Credenciamento
             </h1>
             <p className="text-sm text-white/80 mb-4">
               Sua experiência em feiras e eventos começa aqui.

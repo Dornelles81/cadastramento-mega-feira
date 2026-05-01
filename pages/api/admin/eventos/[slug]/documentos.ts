@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import { requireAuth, isSuperAdmin } from '../../../../../lib/auth'
+import { prisma } from '../../../../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * API: Gerenciar configurações de documentos por evento
@@ -258,6 +257,5 @@ export default async function handler(
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   } finally {
-    await prisma.$disconnect()
   }
 }

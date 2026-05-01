@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PrismaClient } from '@prisma/client'
 import Joi from 'joi'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 // Query parameters validation
 const querySchema = Joi.object({
@@ -135,6 +134,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Erro ao consultar participantes'
     })
   } finally {
-    await prisma.$disconnect()
   }
 }

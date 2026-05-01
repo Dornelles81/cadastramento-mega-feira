@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import { prisma } from '../../../lib/prisma'
 
-const prisma = new PrismaClient();
 
 interface HikvisionUser {
   UserInfo: {
@@ -254,7 +253,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       details: error.message
     });
   } finally {
-    await prisma.$disconnect();
   }
 }
 
