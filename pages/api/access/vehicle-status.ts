@@ -15,8 +15,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const event = await prisma.event.findUnique({
-      where: { code: String(eventCode) },
+    const eventCodeStr = String(eventCode)
+    const event = await prisma.event.findFirst({
+      where: {
+        OR: [
+          { id: eventCodeStr },
+          { slug: eventCodeStr },
+          { code: eventCodeStr },
+          { code: { equals: eventCodeStr, mode: 'insensitive' } }
+        ]
+      },
       select: { id: true, name: true }
     })
 
