@@ -145,7 +145,6 @@ model EventAdmin {
   events       EventAdminAccess[]
   auditLogs    AuditLog[]
   approvalLogs ApprovalLog[]
-  standTokens  StandAccessToken[]
 
   @@index([email])
   @@index([role])
@@ -267,6 +266,12 @@ model Participant {
   deletedAt DateTime?
   deletedBy String?
 
+  // Stand credential lifecycle (ADENDO section 1) — occupancy source of truth
+  // is count(status = 'active') per stand
+  status    String    @default("active") // 'active' | 'removed'
+  removedAt DateTime?
+  removedBy String? // email of the stand responsible or admin
+
   // Data retention (LGPD)
   retentionDate DateTime? // Auto-delete after this date
 
@@ -274,9 +279,9 @@ model Participant {
   ivimsSync     Boolean   @default(false)
   ivimsSyncedAt DateTime? @db.Timestamp(6)
 
-  // iVMS face removal queue: set when remote removal fails on exclusion,
-  // reprocessed later without blocking the deletion flow
-  ivmsRemovalPending Boolean @default(false)
+  // Device removal queue (ADENDO section 4): set when the ISAPI deleteUser
+  // call fails on exclusion, reprocessed at the start of each sync
+  pendingDeviceRemoval Boolean @default(false)
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -374,9 +379,8 @@ model StandAccessToken {
   // SHA-256 hash of the raw token (base64url of 32 random bytes)
   tokenHash String @unique
 
-  // Admin who generated the token
-  createdById String?
-  createdBy   EventAdmin? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  // Id of the admin who generated the token (no FK per ADENDO section 1)
+  createdBy String?
 
   // Lifecycle
   createdAt  DateTime  @default(now())
@@ -536,8 +540,15 @@ model AuditLog {
   entityType String // participant, event, admin, stand, etc
   entityId   String?
 
-  // Actor type: 'admin' | 'responsavel_stand' (null for legacy admin-only logs)
-  actorType String?
+  // Stand delegated-access audit fields (ADENDO section 1).
+  // actorType is nullable (unlike the ADENDO) because legacy rows and the
+  // pre-existing admin audit call sites don't set it.
+  actorType           String? // 'stand_responsible' | 'admin'
+  actorIdentifier     String? // responsible's email or admin id/email
+  targetParticipantId String?
+  targetSnapshot      Json? // NON-sensitive data only (name, masked document, createdAt). NEVER biometrics.
+  reason              String?
+  ip                  String?
 
   // Admin who performed action
   adminId    String?
