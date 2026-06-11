@@ -1,19 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { invalidateStandCache } from '../../../lib/cache';
 import { prisma } from '../../../lib/prisma'
-
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 
 // API para gerenciamento de Stands (CRUD)
-export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
-  // Basic authentication check
-  const authHeader = req.headers.authorization;
-  const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
-  if (!authHeader || !authHeader.includes(validPassword)) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-
+async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   try {
     switch (req.method) {
       case 'GET':
@@ -122,6 +113,12 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
     include: {
       _count: {
         select: { participants: true }
+      },
+      accessTokens: {
+        where: { revokedAt: null },
+        select: { createdAt: true, expiresAt: true, lastUsedAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1
       }
     },
     orderBy: [
@@ -131,13 +128,20 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
   });
 
   // Calcular estatísticas
-  const stats = stands.map(stand => ({
-    ...stand,
-    currentCount: stand._count.participants,
-    availableSlots: stand.maxRegistrations - stand._count.participants,
-    usagePercentage: (stand._count.participants / stand.maxRegistrations) * 100,
-    isFull: stand._count.participants >= stand.maxRegistrations
-  }));
+  const stats = stands.map(({ accessTokens, ...stand }) => {
+    const activeToken = accessTokens[0];
+    const linkExpired = !!activeToken?.expiresAt && activeToken.expiresAt < new Date();
+    return {
+      ...stand,
+      currentCount: stand._count.participants,
+      availableSlots: stand.maxRegistrations - stand._count.participants,
+      usagePercentage: (stand._count.participants / stand.maxRegistrations) * 100,
+      isFull: stand._count.participants >= stand.maxRegistrations,
+      hasActiveLink: !!activeToken && !linkExpired,
+      linkGeneratedAt: activeToken?.createdAt ?? null,
+      linkLastUsedAt: activeToken?.lastUsedAt ?? null
+    };
+  });
 
   res.status(200).json({
     stands: stats,
@@ -343,3 +347,5 @@ export const config = {
     }
   }
 };
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

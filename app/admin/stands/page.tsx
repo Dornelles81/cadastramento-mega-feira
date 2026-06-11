@@ -29,6 +29,9 @@ interface Stand {
   responsiblePhone?: string;
   location?: string;
   isActive: boolean;
+  hasActiveLink?: boolean;
+  linkGeneratedAt?: string | null;
+  linkLastUsedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   participants?: Participant[];
@@ -85,13 +88,8 @@ export default function StandsManagementPage() {
   const loadStands = async () => {
     try {
       setLoading(true);
-      const password = localStorage.getItem('adminPassword') || 'admin123';
 
-      const response = await fetch('/api/admin/stands', {
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
-      });
+      const response = await fetch('/api/admin/stands');
 
       if (response.ok) {
         const data = await response.json();
@@ -111,7 +109,6 @@ export default function StandsManagementPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const password = localStorage.getItem('adminPassword') || 'admin123';
     const url = editingStand
       ? `/api/admin/stands?id=${editingStand.id}`
       : '/api/admin/stands';
@@ -122,8 +119,7 @@ export default function StandsManagementPage() {
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(formData)
       });
@@ -145,15 +141,9 @@ export default function StandsManagementPage() {
   };
 
   const handleEdit = async (stand: Stand) => {
-    const password = localStorage.getItem('adminPassword') || 'admin123';
-
     try {
       // Buscar detalhes completos do stand incluindo participantes
-      const response = await fetch(`/api/admin/stands?id=${stand.id}`, {
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
-      });
+      const response = await fetch(`/api/admin/stands?id=${stand.id}`);
 
       if (response.ok) {
         const detailedStand = await response.json();
@@ -184,14 +174,9 @@ export default function StandsManagementPage() {
   const handleDelete = async (standId: string) => {
     if (!confirm('Tem certeza que deseja deletar este stand?')) return;
 
-    const password = localStorage.getItem('adminPassword') || 'admin123';
-
     try {
       const response = await fetch(`/api/admin/stands?id=${standId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
+        method: 'DELETE'
       });
 
       if (response.ok) {
@@ -210,14 +195,11 @@ export default function StandsManagementPage() {
   const handleRemoveParticipant = async (participantId: string) => {
     if (!confirm('Tem certeza que deseja remover este participante do stand?')) return;
 
-    const password = localStorage.getItem('adminPassword') || 'admin123';
-
     try {
       const response = await fetch(`/api/admin/participants/${participantId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ standId: null })
       });
@@ -239,6 +221,52 @@ export default function StandsManagementPage() {
     }
   };
 
+  const [sendingLinkId, setSendingLinkId] = useState<string | null>(null);
+
+  const handleSendAccessLink = async (stand: Stand) => {
+    if (!stand.responsibleEmail) {
+      alert('Este stand não tem e-mail de responsável cadastrado. Edite o stand e informe o e-mail antes de gerar o link.');
+      return;
+    }
+    const action = stand.hasActiveLink ? 'reenviar (o link atual será invalidado)' : 'gerar e enviar';
+    if (!confirm(`Deseja ${action} o link de acesso para ${stand.responsibleEmail}?`)) return;
+
+    try {
+      setSendingLinkId(stand.id);
+      const response = await fetch(`/api/admin/stands/${stand.id}/access-link`, { method: 'POST' });
+      const data = await response.json();
+      if (response.ok) {
+        alert(`✅ Link enviado para ${data.sentTo}`);
+        loadStands();
+      } else {
+        alert(data.error || 'Erro ao enviar link de acesso');
+      }
+    } catch (error) {
+      console.error('Error sending access link:', error);
+      alert('Erro ao enviar link de acesso');
+    } finally {
+      setSendingLinkId(null);
+    }
+  };
+
+  const handleRevokeAccessLink = async (stand: Stand) => {
+    if (!confirm(`Revogar o link de acesso do stand ${stand.name}? O responsável perderá o acesso ao painel até um novo link ser enviado.`)) return;
+
+    try {
+      const response = await fetch(`/api/admin/stands/${stand.id}/access-link`, { method: 'DELETE' });
+      const data = await response.json();
+      if (response.ok) {
+        alert('🔒 Link revogado');
+        loadStands();
+      } else {
+        alert(data.error || 'Erro ao revogar link');
+      }
+    } catch (error) {
+      console.error('Error revoking access link:', error);
+      alert('Erro ao revogar link');
+    }
+  };
+
   const handleEditParticipant = (participantId: string) => {
     // Redirecionar para a página de admin com o participante selecionado
     router.push(`/admin?participantId=${participantId}`);
@@ -255,13 +283,8 @@ export default function StandsManagementPage() {
       const formData = new FormData();
       formData.append('file', importFile);
 
-      const token = sessionStorage.getItem('adminFieldsAuth') || localStorage.getItem('adminPassword') || 'admin123';
-
       const response = await fetch('/api/admin/import-stands', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         body: formData
       });
 
@@ -693,6 +716,7 @@ export default function StandsManagementPage() {
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Ocupação</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Responsável</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Link de Acesso</th>
                       <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Ações</th>
                     </tr>
                   </thead>
@@ -756,6 +780,33 @@ export default function StandsManagementPage() {
                           ) : (
                             <span className="text-gray-400 text-sm">-</span>
                           )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${
+                              stand.hasActiveLink ? 'bg-teal-100 text-teal-800' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {stand.hasActiveLink ? 'Link ativo' : 'Sem link'}
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSendAccessLink(stand)}
+                                disabled={sendingLinkId === stand.id || !stand.responsibleEmail}
+                                title={!stand.responsibleEmail ? 'Cadastre o e-mail do responsável primeiro' : undefined}
+                                className="text-teal-600 hover:text-teal-800 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {sendingLinkId === stand.id ? 'Enviando...' : stand.hasActiveLink ? 'Reenviar' : 'Enviar link'}
+                              </button>
+                              {stand.hasActiveLink && (
+                                <button
+                                  onClick={() => handleRevokeAccessLink(stand)}
+                                  className="text-orange-600 hover:text-orange-800 text-xs font-medium"
+                                >
+                                  Revogar
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
