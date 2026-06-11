@@ -145,6 +145,7 @@ model EventAdmin {
   events       EventAdminAccess[]
   auditLogs    AuditLog[]
   approvalLogs ApprovalLog[]
+  standTokens  StandAccessToken[]
 
   @@index([email])
   @@index([role])
@@ -269,6 +270,14 @@ model Participant {
   // Data retention (LGPD)
   retentionDate DateTime? // Auto-delete after this date
 
+  // iVMS-4200 AC sync
+  ivimsSync     Boolean   @default(false)
+  ivimsSyncedAt DateTime? @db.Timestamp(6)
+
+  // iVMS face removal queue: set when remote removal fails on exclusion,
+  // reprocessed later without blocking the deletion flow
+  ivmsRemovalPending Boolean @default(false)
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -340,6 +349,8 @@ model Stand {
 
   // Relations
   participants Participant[]
+  accessTokens StandAccessToken[]
+  auditLogs    AuditLog[]
 
   // @@unique([eventId, code]) // DISABLED FOR MIGRATION
   @@index([eventId])
@@ -347,6 +358,34 @@ model Stand {
   @@index([isActive])
   @@index([eventId, isActive])
   @@map("stands")
+}
+
+// Stand Access Token - delegated access via magic link
+// Only the SHA-256 hash of the token is stored; the plaintext token is
+// shown/sent once at generation time. One active token per stand
+// (regenerating revokes the previous one by setting revokedAt).
+model StandAccessToken {
+  id String @id @default(uuid())
+
+  // Stand association
+  standId String
+  stand   Stand  @relation(fields: [standId], references: [id], onDelete: Cascade)
+
+  // SHA-256 hash of the raw token (base64url of 32 random bytes)
+  tokenHash String @unique
+
+  // Admin who generated the token
+  createdById String?
+  createdBy   EventAdmin? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  // Lifecycle
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime? // NULL = no expiration (default: end of event)
+  revokedAt  DateTime? // NULL = active
+  lastUsedAt DateTime?
+
+  @@index([standId])
+  @@map("stand_access_tokens")
 }
 
 // ============================================================================
@@ -488,10 +527,17 @@ model AuditLog {
   eventId String?
   event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
+  // Stand context (delegated stand access flows)
+  standId String?
+  stand   Stand?  @relation(fields: [standId], references: [id], onDelete: SetNull)
+
   // Action details
-  action     String // CREATE, UPDATE, DELETE, LOGIN, EXPORT, APPROVE, etc
+  action     String // CREATE, UPDATE, DELETE, LOGIN, EXPORT, APPROVE, EXCLUSAO_CREDENCIADO, TOKEN_GERADO, TOKEN_REVOGADO, ACESSO_PAINEL, etc
   entityType String // participant, event, admin, stand, etc
   entityId   String?
+
+  // Actor type: 'admin' | 'responsavel_stand' (null for legacy admin-only logs)
+  actorType String?
 
   // Admin who performed action
   adminId    String?
@@ -517,6 +563,7 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([eventId])
+  @@index([standId, createdAt(sort: Desc)])
   @@index([adminId])
   @@index([action])
   @@index([entityType])
