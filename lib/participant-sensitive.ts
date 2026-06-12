@@ -42,9 +42,14 @@ export function extractUploadRefs(...sources: unknown[]): string[] {
   for (const src of sources) {
     if (src === null || src === undefined) continue
     const s = typeof src === 'string' ? src : JSON.stringify(src)
-    for (const m of s.matchAll(UPLOAD_REF_PATTERN)) refs.add(decodeURIComponent(m[1]))
+    // exec em loop (sem matchAll): compatível com o target antigo do tsconfig
+    const pattern = new RegExp(UPLOAD_REF_PATTERN.source, 'g')
+    let m: RegExpExecArray | null
+    while ((m = pattern.exec(s)) !== null) {
+      refs.add(decodeURIComponent(m[1]))
+    }
   }
-  return [...refs]
+  return Array.from(refs)
 }
 
 /**
