@@ -18,6 +18,7 @@ export interface ValidStandAccess {
     code: string
     location: string | null
     maxRegistrations: number
+    responsibleEmail: string | null
   }
   event: {
     id: string | null
@@ -48,6 +49,7 @@ export async function validateStandToken(rawToken: string): Promise<ValidStandAc
           code: true,
           location: true,
           maxRegistrations: true,
+          responsibleEmail: true,
           event: { select: { id: true, name: true, code: true, slug: true, endDate: true } }
         }
       }
@@ -70,7 +72,8 @@ export async function validateStandToken(rawToken: string): Promise<ValidStandAc
       name: tokenRow.stand.name,
       code: tokenRow.stand.code,
       location: tokenRow.stand.location,
-      maxRegistrations: tokenRow.stand.maxRegistrations
+      maxRegistrations: tokenRow.stand.maxRegistrations,
+      responsibleEmail: tokenRow.stand.responsibleEmail
     },
     event: {
       id: tokenRow.stand.event?.id ?? null,

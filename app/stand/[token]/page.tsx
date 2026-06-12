@@ -9,6 +9,7 @@ import {
   maskDocument
 } from '../../../lib/stand-access/validate'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
+import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
 
 // Painel do responsável do stand (SPEC seção 2.2) — acesso via link mágico.
 // Todas as queries são filtradas pelo standId derivado do token no servidor;
@@ -186,12 +187,19 @@ export default async function StandPanelPage({
                     <p className="font-medium text-gray-900 truncate">{p.name}</p>
                     <p className="text-sm text-gray-500">{maskDocument(p.cpf)}</p>
                   </div>
-                  <p className="text-xs text-gray-400 whitespace-nowrap">
-                    {new Intl.DateTimeFormat('pt-BR', {
-                      dateStyle: 'short',
-                      timeZone: 'America/Sao_Paulo'
-                    }).format(p.createdAt)}
-                  </p>
+                  <div className="flex flex-col items-end gap-1">
+                    <p className="text-xs text-gray-400 whitespace-nowrap">
+                      {new Intl.DateTimeFormat('pt-BR', {
+                        dateStyle: 'short',
+                        timeZone: 'America/Sao_Paulo'
+                      }).format(p.createdAt)}
+                    </p>
+                    <RemoveCredenciadoButton
+                      token={token}
+                      participantId={p.id}
+                      participantName={p.name}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
