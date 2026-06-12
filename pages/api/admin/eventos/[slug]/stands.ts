@@ -121,6 +121,12 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
       _count: {
         select: { participants: true }
       },
+      accessTokens: {
+        where: { revokedAt: null },
+        select: { createdAt: true, expiresAt: true, lastUsedAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      },
       ...(withParticipants === 'true' ? {
         participants: {
           select: {
@@ -143,13 +149,20 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
   });
 
   // Calcular estatísticas
-  const stats = stands.map(stand => ({
-    ...stand,
-    currentCount: stand._count.participants,
-    availableSlots: stand.maxRegistrations - stand._count.participants,
-    usagePercentage: (stand._count.participants / stand.maxRegistrations) * 100,
-    isFull: stand._count.participants >= stand.maxRegistrations
-  }));
+  const stats = stands.map(({ accessTokens, ...stand }) => {
+    const activeToken = accessTokens[0];
+    const linkExpired = !!activeToken?.expiresAt && activeToken.expiresAt < new Date();
+    return {
+      ...stand,
+      currentCount: stand._count.participants,
+      availableSlots: stand.maxRegistrations - stand._count.participants,
+      usagePercentage: (stand._count.participants / stand.maxRegistrations) * 100,
+      isFull: stand._count.participants >= stand.maxRegistrations,
+      hasActiveLink: !!activeToken && !linkExpired,
+      linkGeneratedAt: activeToken?.createdAt ?? null,
+      linkLastUsedAt: activeToken?.lastUsedAt ?? null
+    };
+  });
 
   // Get event info for the response
   const eventInfo = await prisma.event.findUnique({
