@@ -84,8 +84,29 @@ export default async function handler(
         autoApprove,
         enableCheckIn,
         enableQRCode,
-        successMessage
+        successMessage,
+        // Política de credenciais e substituições (Fase 7)
+        dayResetHour,
+        substitutionQuotaEnabled,
+        substitutionsPerSlot
       } = req.body
+
+      // Validação server-side da política (nunca confiar no client)
+      if (dayResetHour !== undefined) {
+        const h = Number(dayResetHour)
+        if (!Number.isInteger(h) || h < 0 || h > 23) {
+          return res.status(400).json({ error: 'dayResetHour deve ser um inteiro entre 0 e 23' })
+        }
+      }
+      if (substitutionQuotaEnabled !== undefined && typeof substitutionQuotaEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'substitutionQuotaEnabled deve ser booleano' })
+      }
+      if (substitutionsPerSlot !== undefined) {
+        const n = Number(substitutionsPerSlot)
+        if (!Number.isInteger(n) || n < 0) {
+          return res.status(400).json({ error: 'substitutionsPerSlot deve ser um inteiro >= 0' })
+        }
+      }
 
       // Find existing event
       const existingEvent = await prisma.event.findUnique({
@@ -114,9 +135,55 @@ export default async function handler(
           ...(status && { status }),
           ...(typeof isActive === 'boolean' && { isActive }),
           ...(typeof isPublic === 'boolean' && { isPublic }),
+          // Política de credenciais (Fase 7). Nota: alterar dayResetHour NÃO
+          // recalcula locks existentes — slotLockedUntil guarda o instante
+          // absoluto calculado na exclusão; o novo horário vale só para as
+          // próximas exclusões
+          ...(dayResetHour !== undefined && { dayResetHour: Number(dayResetHour) }),
+          ...(typeof substitutionQuotaEnabled === 'boolean' && { substitutionQuotaEnabled }),
+          ...(substitutionsPerSlot !== undefined && { substitutionsPerSlot: Number(substitutionsPerSlot) }),
           updatedAt: new Date()
         }
       })
+
+      // Mudança de política no meio de um evento precisa ficar rastreável:
+      // audit log EVENT_POLICY_CHANGED com valores anteriores e novos
+      const policyChanged =
+        (dayResetHour !== undefined && Number(dayResetHour) !== existingEvent.dayResetHour) ||
+        (typeof substitutionQuotaEnabled === 'boolean' &&
+          substitutionQuotaEnabled !== existingEvent.substitutionQuotaEnabled) ||
+        (substitutionsPerSlot !== undefined &&
+          Number(substitutionsPerSlot) !== existingEvent.substitutionsPerSlot)
+      if (policyChanged) {
+        await prisma.auditLog.create({
+          data: {
+            eventId: existingEvent.id,
+            action: 'EVENT_POLICY_CHANGED',
+            entityType: 'event',
+            entityId: existingEvent.id,
+            actorType: 'admin',
+            actorIdentifier: session.user?.email ?? null,
+            adminEmail: session.user?.email ?? null,
+            ip:
+              ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() ||
+              req.socket.remoteAddress ||
+              null,
+            userAgent: (req.headers['user-agent'] as string) ?? null,
+            previousData: {
+              dayResetHour: existingEvent.dayResetHour,
+              substitutionQuotaEnabled: existingEvent.substitutionQuotaEnabled,
+              substitutionsPerSlot: existingEvent.substitutionsPerSlot
+            },
+            newData: {
+              dayResetHour: updatedEvent.dayResetHour,
+              substitutionQuotaEnabled: updatedEvent.substitutionQuotaEnabled,
+              substitutionsPerSlot: updatedEvent.substitutionsPerSlot
+            },
+            description: `Política de credenciais/substituições do evento ${existingEvent.slug} alterada`,
+            severity: 'WARNING'
+          }
+        })
+      }
 
       // Update or create EventConfig
       if (logoUrl !== undefined || primaryColor || secondaryColor || accentColor ||

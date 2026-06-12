@@ -16,6 +16,9 @@ interface Event {
   status: string
   isActive: boolean
   isPublic: boolean
+  dayResetHour?: number
+  substitutionQuotaEnabled?: boolean
+  substitutionsPerSlot?: number
   eventConfigs?: {
     logoUrl?: string
     primaryColor?: string
@@ -65,7 +68,11 @@ export default function EditarEventoPage() {
     autoApprove: false,
     enableCheckIn: true,
     enableQRCode: true,
-    successMessage: ''
+    successMessage: '',
+    // Política de credenciais e substituições (Fase 7)
+    dayResetHour: 4,
+    substitutionQuotaEnabled: false,
+    substitutionsPerSlot: 1
   })
 
   useEffect(() => {
@@ -127,7 +134,10 @@ export default function EditarEventoPage() {
         autoApprove: event.eventConfigs?.autoApprove !== undefined ? event.eventConfigs.autoApprove : false,
         enableCheckIn: event.eventConfigs?.enableCheckIn !== undefined ? event.eventConfigs.enableCheckIn : true,
         enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true,
-        successMessage: event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.'
+        successMessage: event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.',
+        dayResetHour: event.dayResetHour ?? 4,
+        substitutionQuotaEnabled: event.substitutionQuotaEnabled ?? false,
+        substitutionsPerSlot: event.substitutionsPerSlot ?? 1
       })
       if (existingLogoUrl) setLogoPreview(existingLogoUrl)
 
@@ -588,6 +598,73 @@ export default function EditarEventoPage() {
                   <div className="text-sm text-gray-600">Cada participante recebe um QR code único</div>
                 </div>
               </label>
+            </div>
+          </div>
+
+          {/* Política de credenciais e substituições (Fase 7) */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-4">
+              🔁 Política de credenciais e substituições
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Horário da virada do dia operacional
+                </label>
+                <select
+                  value={formData.dayResetHour}
+                  onChange={(e) => setFormData({ ...formData, dayResetHour: parseInt(e.target.value, 10) })}
+                  className="w-full md:w-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{String(h).padStart(2, '0')}h</option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-600 mt-2">
+                  Vagas travadas por exclusão de participante que já acessou no dia são
+                  liberadas neste horário. Alterar o horário vale apenas para as próximas
+                  exclusões — vagas já travadas mantêm o horário com que foram criadas.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input
+                  type="checkbox"
+                  checked={formData.substitutionQuotaEnabled}
+                  onChange={(e) => setFormData({ ...formData, substitutionQuotaEnabled: e.target.checked })}
+                  className="w-5 h-5 text-purple-600 rounded"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">Limitar substituições durante o evento</div>
+                  <div className="text-sm text-gray-600">
+                    Cada vaga inclui um número de trocas; esgotado, o responsável do stand
+                    precisa solicitar à organização
+                  </div>
+                </div>
+              </label>
+
+              {formData.substitutionQuotaEnabled && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Substituições incluídas por vaga *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step={1}
+                    value={formData.substitutionsPerSlot}
+                    onChange={(e) =>
+                      setFormData({ ...formData, substitutionsPerSlot: Math.max(0, parseInt(e.target.value || '0', 10)) })
+                    }
+                    className="w-full md:w-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
+                  />
+                  <p className="text-sm text-gray-600 mt-2">
+                    Um stand com 3 vagas terá {3 * (formData.substitutionsPerSlot || 0)} substituições
+                    durante o evento. Exclusões antes do início do evento não consomem cota.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

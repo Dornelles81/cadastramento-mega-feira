@@ -8,6 +8,10 @@
  *   ocupada = (status='active' AND isDeleted=false)
  *             OR (status='removed' AND slotLockedUntil > now())
  *
+ * Sobre `dayResetHour`: o lock grava um instante ABSOLUTO (slotLockedUntil =
+ * próxima virada calculada na exclusão). Alterar o dayResetHour do evento NÃO
+ * recalcula locks existentes — vale apenas para exclusões futuras.
+ *
  * Sobre o cache `currentCount`: ele grava a contagem INCLUINDO locks no
  * momento da escrita, mas um slot travado "libera sozinho" quando
  * slotLockedUntil expira, sem evento de escrita. Por isso o cache serve
