@@ -9,6 +9,12 @@ import {
   deleteUploadFiles
 } from '../../lib/participant-sensitive'
 import { removeUserFromDevice } from '../../lib/ivms'
+import {
+  lastDayReset,
+  nextDayReset,
+  occupiedSlotsWhere,
+  formatRelease
+} from '../../lib/stand-access/occupancy'
 
 /**
  * Exclusão de credenciado pelo responsável do stand (SPEC seção 2.4).
@@ -27,6 +33,12 @@ const schema = Joi.object({
   participantId: Joi.string().uuid().required(),
   reason: Joi.string().max(500).allow('', null).optional()
 })
+
+class QuotaExceededError extends Error {
+  constructor(public quotaLimit: number) {
+    super('Cota de substituições esgotada')
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -81,22 +93,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const responsibleEmail = access.stand.responsibleEmail?.trim()
     const removedBy = responsibleEmail?.includes('@') ? responsibleEmail : 'responsavel-stand'
 
-    // Snapshot NÃO-sensível para a auditoria (nunca biometria)
-    const snapshot = {
-      name: participant.name,
-      document: maskDocument(participant.cpf),
-      registeredAt: participant.createdAt.toISOString()
-    }
+    // Fase 7: configuração do dia operacional e da cota de substituições
+    const event = access.event.id
+      ? await prisma.event.findUnique({
+          where: { id: access.event.id },
+          select: {
+            dayResetHour: true,
+            startDate: true,
+            substitutionQuotaEnabled: true,
+            substitutionsPerSlot: true
+          }
+        })
+      : null
+    const dayResetHour = event?.dayResetHour ?? 4
+    const now = new Date()
+    const sinceReset = lastDayReset(dayResetHour, now)
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM stands WHERE id = ${standId} FOR UPDATE`
+
+      // Cota de substituições (módulo opcional, Fase 7): exclusões antes do
+      // início do evento são livres (montagem de equipe); durante o evento
+      // consomem cota e, esgotada, o painel bloqueia (admin segue podendo)
+      const quotaActive =
+        !!event?.substitutionQuotaEnabled && now >= new Date(event.startDate)
+      if (quotaActive) {
+        const standRow = await tx.stand.findUnique({
+          where: { id: standId },
+          select: { substitutionsUsed: true, maxRegistrations: true }
+        })
+        const quotaLimit =
+          (standRow?.maxRegistrations ?? 0) * (event!.substitutionsPerSlot ?? 1)
+        if ((standRow?.substitutionsUsed ?? 0) >= quotaLimit) {
+          throw new QuotaExceededError(quotaLimit)
+        }
+      }
+
+      // Regra de ouro: vaga usada no dia não pode ser reutilizada no mesmo
+      // dia. Check-in no dia operacional corrente → o SLOT fica travado até
+      // a próxima virada (a pessoa perde o acesso físico imediatamente)
+      const checkinToday = await tx.accessLog.findFirst({
+        where: {
+          participantId: participant.id,
+          type: 'ENTRY',
+          createdAt: { gte: sinceReset }
+        },
+        select: { id: true }
+      })
+      const hadCheckinToday = !!checkinToday
+      const slotLockedUntil = hadCheckinToday ? nextDayReset(dayResetHour, now) : null
 
       await tx.participant.update({
         where: { id: participant.id },
         data: {
           status: 'removed',
-          removedAt: new Date(),
+          removedAt: now,
           removedBy,
+          slotLockedUntil,
           // LGPD: dado sensível não persiste após exclusão (mesmo conjunto
           // do expurgo automático)
           ...SENSITIVE_PARTICIPANT_CLEAR,
@@ -105,13 +158,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       })
 
-      const active = await tx.participant.count({
-        where: { standId, status: 'active', isDeleted: false }
+      // currentCount = cache de exibição; grava a contagem canônica
+      // (ativos + slots travados) no momento da escrita
+      const occupied = await tx.participant.count({
+        where: occupiedSlotsWhere(standId, now)
       })
-      await tx.stand.update({
-        where: { id: standId },
-        data: { currentCount: active }
-      })
+      const standData: any = { currentCount: occupied }
+      if (quotaActive) standData.substitutionsUsed = { increment: 1 }
+      await tx.stand.update({ where: { id: standId }, data: standData })
 
       await tx.auditLog.create({
         data: {
@@ -123,7 +177,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           actorType: 'stand_responsible',
           actorIdentifier: removedBy,
           targetParticipantId: participant.id,
-          targetSnapshot: snapshot,
+          targetSnapshot: {
+            name: participant.name,
+            document: maskDocument(participant.cpf),
+            registeredAt: participant.createdAt.toISOString(),
+            // Fase 7: rastro da regra anti-rotatividade
+            hadCheckinToday,
+            ...(slotLockedUntil ? { slotLockedUntil: slotLockedUntil.toISOString() } : {})
+          },
           reason: reason || null,
           ip,
           userAgent,
@@ -131,6 +192,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           severity: 'INFO'
         }
       })
+
+      if (quotaActive) {
+        await tx.auditLog.create({
+          data: {
+            eventId: access.event.id,
+            standId,
+            action: 'SUBSTITUTION_QUOTA_CONSUMED',
+            entityType: 'stand',
+            entityId: standId,
+            actorType: 'stand_responsible',
+            actorIdentifier: removedBy,
+            targetParticipantId: participant.id,
+            ip,
+            userAgent,
+            description: `Substituição consumida da cota do stand ${access.stand.code}`,
+            severity: 'INFO'
+          }
+        })
+      }
+
+      return { hadCheckinToday, slotLockedUntil }
     })
 
     // Arquivos físicos referenciados morrem junto com a referência; falha
@@ -166,10 +248,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       success: true,
-      message: 'Credenciado removido. A vaga foi liberada.',
+      message: result.slotLockedUntil
+        ? `Credenciado removido. Como ele já acessou o evento hoje, a vaga só estará disponível para novo cadastro a partir das ${formatRelease(result.slotLockedUntil)}.`
+        : 'Credenciado removido. A vaga foi liberada.',
+      hadCheckinToday: result.hadCheckinToday,
+      slotLockedUntil: result.slotLockedUntil,
       deviceRemoval: removedFromDevice ? 'done' : 'queued'
     })
   } catch (error: any) {
+    if (error instanceof QuotaExceededError) {
+      return res.status(403).json({
+        error: 'Quota exceeded',
+        message: `A cota de substituições do stand foi atingida (${error.quotaLimit}). Novas trocas devem ser solicitadas à organização do evento.`
+      })
+    }
     console.error('Stand removal error:', error)
     return res.status(500).json({
       error: 'Internal server error',

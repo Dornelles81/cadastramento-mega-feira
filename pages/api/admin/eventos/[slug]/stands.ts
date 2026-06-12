@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { invalidateStandCache } from '../../../../../lib/cache';
 import { requireAuth } from '../../../../../lib/auth';
 import { prisma } from '../../../../../lib/prisma'
+import { occupiedSlotsRelationWhere } from '../../../../../lib/stand-access/occupancy'
 
 
 // API para gerenciamento de Stands por Evento (CRUD)
@@ -119,9 +120,9 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
     where,
     include: {
       _count: {
-        // Ocupação considera apenas credenciados ativos (ADENDO seção 2)
+        // Ocupação canônica (Fase 7): ativos + slots travados até a virada
         select: {
-          participants: { where: { status: 'active', isDeleted: false } }
+          participants: { where: occupiedSlotsRelationWhere() }
         }
       },
       accessTokens: {
@@ -278,7 +279,7 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, eventId: str
     include: {
       _count: {
         select: {
-          participants: { where: { status: 'active', isDeleted: false } }
+          participants: { where: occupiedSlotsRelationWhere() }
         }
       }
     }

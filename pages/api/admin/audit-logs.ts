@@ -10,6 +10,8 @@ import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
  *   Filtros: action, standId, eventId, from, to (YYYY-MM-DD), severity
  *   Paginação: page (1-based), limit (default 100, máx 500)
  *   Exportação: format=csv aplica os mesmos filtros (máx 5000 linhas)
+ *   Relatório: report=substitutions → "Trocas por stand" (Fase 7), ordenado
+ *   por volume; stands no topo são candidatos a conversa com o promotor
  *
  * A tabela é append-only: esta API é somente leitura.
  */
@@ -94,9 +96,68 @@ function toCsv(logs: any[]): string {
   return '﻿' + [header.join(';'), ...rows].join('\r\n')
 }
 
+/** Fase 7 — visão "Trocas por stand" a partir dos logs PARTICIPANT_REMOVED. */
+async function substitutionReport(req: NextApiRequest, res: NextApiResponse) {
+  const where = buildWhere({ ...req.query, action: 'PARTICIPANT_REMOVED' })
+  const logs = await prisma.auditLog.findMany({
+    where,
+    select: {
+      standId: true,
+      targetSnapshot: true,
+      createdAt: true,
+      stand: { select: { name: true, code: true, maxRegistrations: true, substitutionsUsed: true } },
+      event: {
+        select: {
+          name: true,
+          slug: true,
+          startDate: true,
+          substitutionQuotaEnabled: true,
+          substitutionsPerSlot: true
+        }
+      }
+    }
+  })
+
+  const byStand = new Map<string, any>()
+  for (const log of logs) {
+    if (!log.standId) continue
+    const entry = byStand.get(log.standId) ?? {
+      standId: log.standId,
+      stand: log.stand,
+      event: log.event ? { name: log.event.name, slug: log.event.slug } : null,
+      totalRemovals: 0,
+      removalsDuringEvent: 0,
+      withCheckinToday: 0,
+      quota: log.event?.substitutionQuotaEnabled
+        ? {
+            used: log.stand?.substitutionsUsed ?? 0,
+            limit: (log.stand?.maxRegistrations ?? 0) * (log.event.substitutionsPerSlot ?? 1)
+          }
+        : null
+    }
+    entry.totalRemovals++
+    if (log.event?.startDate && log.createdAt >= log.event.startDate) {
+      entry.removalsDuringEvent++
+    }
+    if ((log.targetSnapshot as any)?.hadCheckinToday === true) {
+      entry.withCheckinToday++
+    }
+    byStand.set(log.standId, entry)
+  }
+
+  const report = Array.from(byStand.values()).sort(
+    (a, b) => b.totalRemovals - a.totalRemovals
+  )
+  return res.status(200).json({ success: true, report, totalStands: report.length })
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse, _session: Session) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  if (req.query.report === 'substitutions') {
+    return substitutionReport(req, res)
   }
 
   const where = buildWhere(req.query)

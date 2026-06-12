@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma'
 import { encryptString } from '../../lib/crypto'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
+import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
 
 /**
  * Cadastro de credenciado via link mágico do stand (SPEC seção 2.3).
@@ -43,7 +44,9 @@ function isValidCPF(cpf: string): boolean {
 }
 
 class StandFullError extends Error {
-  constructor() {
+  // nextRelease ≠ null indica que há slot(s) travado(s) pela regra
+  // anti-rotatividade (Fase 7) liberando na próxima virada
+  constructor(public nextRelease: Date | null) {
     super('Stand lotado')
   }
 }
@@ -139,15 +142,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ip = getClientIp(req)
     const userAgent = (req.headers['user-agent'] as string) || 'unknown'
 
-    // Transação com lock na linha do stand: valida vaga e grava atomicamente
+    // Transação com lock na linha do stand: valida vaga e grava atomicamente.
+    // A contagem usa a definição canônica de ocupação (Fase 7): ativos +
+    // slots travados por exclusão com check-in no dia — SEMPRE recontada
+    // aqui dentro (o currentCount é só cache de exibição)
     const participant = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM stands WHERE id = ${standId} FOR UPDATE`
 
-      const active = await tx.participant.count({
-        where: { standId, status: 'active', isDeleted: false }
+      const now = new Date()
+      const occupied = await tx.participant.count({
+        where: occupiedSlotsWhere(standId, now)
       })
-      if (active >= access.stand.maxRegistrations) {
-        throw new StandFullError()
+      if (occupied >= access.stand.maxRegistrations) {
+        // Distinguir lotado real de vaga travada: o responsável precisa
+        // entender quando a vaga libera (SPEC Fase 7, seção 4)
+        const nextLocked = await tx.participant.findFirst({
+          where: {
+            standId,
+            status: 'removed',
+            isDeleted: false,
+            slotLockedUntil: { gt: now }
+          },
+          orderBy: { slotLockedUntil: 'asc' },
+          select: { slotLockedUntil: true }
+        })
+        throw new StandFullError(nextLocked?.slotLockedUntil ?? null)
       }
 
       const created = await tx.participant.create({
@@ -172,10 +191,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       })
 
-      // currentCount é cache derivado da contagem de ativos (ADENDO seção 2)
+      // currentCount é cache de exibição: grava a contagem canônica
+      // (ativos + travados) no momento da escrita
       await tx.stand.update({
         where: { id: standId },
-        data: { currentCount: active + 1 }
+        data: { currentCount: occupied + 1 }
       })
 
       return created
@@ -193,6 +213,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   } catch (error: any) {
     if (error instanceof StandFullError) {
+      if (error.nextRelease) {
+        return res.status(409).json({
+          error: 'Slots locked',
+          message: `Stand sem vagas disponíveis no momento. Próxima liberação: ${formatRelease(error.nextRelease)}.`,
+          nextRelease: error.nextRelease
+        })
+      }
       return res.status(409).json({
         error: 'Stand full',
         message: 'Stand lotado. Para liberar uma vaga, o responsável precisa excluir um credenciado.'

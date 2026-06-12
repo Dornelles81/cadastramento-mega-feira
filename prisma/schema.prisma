@@ -68,6 +68,14 @@ model Event {
   // Vehicle access orientations (free text, per event)
   vehicleOrientations String?
 
+  // Operational day reset hour (Fase 7): slots locked by same-day check-in
+  // free up at this hour (America/Sao_Paulo)
+  dayResetHour Int @default(4)
+
+  // Optional substitution quota (Fase 7) — off by default, per event
+  substitutionQuotaEnabled Boolean @default(false)
+  substitutionsPerSlot     Int     @default(1)
+
   // Metadata
   metadata Json? // Additional custom fields
   tags     String[] // Tags for categorization
@@ -266,11 +274,16 @@ model Participant {
   deletedAt DateTime?
   deletedBy String?
 
-  // Stand credential lifecycle (ADENDO section 1) — occupancy source of truth
-  // is count(status = 'active') per stand
+  // Stand credential lifecycle (ADENDO section 1 + Fase 7) — occupancy:
+  // (status='active' AND isDeleted=false) OR (status='removed' AND slotLockedUntil > now)
   status    String    @default("active") // 'active' | 'removed'
   removedAt DateTime?
   removedBy String? // email of the stand responsible or admin
+
+  // Anti-rotatividade (Fase 7): set on removal when the participant had a
+  // check-in in the current operational day — the SLOT stays occupied until
+  // the next day reset (the person loses physical access immediately)
+  slotLockedUntil DateTime?
 
   // Data retention (LGPD)
   retentionDate DateTime? // Auto-delete after this date
@@ -329,6 +342,9 @@ model Stand {
   // Registration limits
   maxRegistrations Int @default(3)
   currentCount     Int @default(0)
+
+  // Substitution quota consumed during the event (Fase 7, optional module)
+  substitutionsUsed Int @default(0)
 
   // Contact info
   responsibleName  String?

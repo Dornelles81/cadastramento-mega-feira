@@ -4,6 +4,7 @@ import { prisma } from '../../../../lib/prisma'
 import { checkRateLimit } from '../../../../lib/rate-limit'
 import { validateStandToken } from '../../../../lib/stand-access/validate'
 import StandCadastroFlow from '../../../../components/stand/StandCadastroFlow'
+import { occupiedSlotsWhere, formatRelease } from '../../../../lib/stand-access/occupancy'
 
 // Cadastro de credenciado via link do stand (SPEC seção 2.3).
 // O stand vem exclusivamente do token validado no servidor.
@@ -38,9 +39,20 @@ export default async function StandCadastroPage({
   const access = await validateStandToken(token)
   if (!access) notFound()
 
-  const [activeCount, eventConfig] = await Promise.all([
-    prisma.participant.count({
-      where: { standId: access.stand.id, status: 'active', isDeleted: false }
+  const now = new Date()
+  // Ocupação canônica (Fase 7): ativos + slots travados por exclusão com
+  // check-in no dia contam como ocupados até a virada
+  const [occupiedCount, nextLocked, eventConfig] = await Promise.all([
+    prisma.participant.count({ where: occupiedSlotsWhere(access.stand.id, now) }),
+    prisma.participant.findFirst({
+      where: {
+        standId: access.stand.id,
+        status: 'removed',
+        isDeleted: false,
+        slotLockedUntil: { gt: now }
+      },
+      orderBy: { slotLockedUntil: 'asc' },
+      select: { slotLockedUntil: true }
     }),
     access.event.id
       ? prisma.eventConfig.findUnique({
@@ -58,7 +70,10 @@ export default async function StandCadastroPage({
         code: access.stand.code,
         location: access.stand.location,
         maxRegistrations: access.stand.maxRegistrations,
-        activeCount
+        activeCount: occupiedCount,
+        nextRelease: nextLocked?.slotLockedUntil
+          ? formatRelease(nextLocked.slotLockedUntil)
+          : null
       }}
       event={{
         name: access.event.name,

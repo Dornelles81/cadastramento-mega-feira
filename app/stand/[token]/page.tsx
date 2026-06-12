@@ -10,6 +10,12 @@ import {
 } from '../../../lib/stand-access/validate'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
 import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
+import {
+  lastDayReset,
+  nextDayReset,
+  occupiedSlotsWhere,
+  formatRelease
+} from '../../../lib/stand-access/occupancy'
 
 // Painel do responsável do stand (SPEC seção 2.2) — acesso via link mágico.
 // Todas as queries são filtradas pelo standId derivado do token no servidor;
@@ -53,22 +59,76 @@ export default async function StandPanelPage({
 
   await registerPanelAccess(access, { ip, userAgent })
 
-  const participants = await prisma.participant.findMany({
+  const now = new Date()
+  const eventConfig = access.event.id
+    ? await prisma.event.findUnique({
+        where: { id: access.event.id },
+        select: {
+          dayResetHour: true,
+          startDate: true,
+          substitutionQuotaEnabled: true,
+          substitutionsPerSlot: true
+        }
+      })
+    : null
+  const dayResetHour = eventConfig?.dayResetHour ?? 4
+
+  const [participants, lockedSlots, standQuota] = await Promise.all([
+    prisma.participant.findMany({
+      where: {
+        standId: access.stand.id,
+        status: 'active',
+        isDeleted: false
+      },
+      select: {
+        id: true,
+        name: true,
+        cpf: true,
+        createdAt: true,
+        faceImageUrl: true,
+        faceData: true
+      },
+      orderBy: { createdAt: 'desc' }
+    }),
+    // Slots travados pela regra anti-rotatividade (Fase 7)
+    prisma.participant.findMany({
+      where: {
+        standId: access.stand.id,
+        status: 'removed',
+        isDeleted: false,
+        slotLockedUntil: { gt: now }
+      },
+      select: { slotLockedUntil: true },
+      orderBy: { slotLockedUntil: 'asc' }
+    }),
+    prisma.stand.findUnique({
+      where: { id: access.stand.id },
+      select: { substitutionsUsed: true }
+    })
+  ])
+
+  // Quem já fez check-in no dia operacional corrente: a exclusão desses
+  // trava a vaga até a próxima virada — o modal avisa antes de confirmar
+  const checkinsToday = await prisma.accessLog.findMany({
     where: {
-      standId: access.stand.id,
-      status: 'active',
-      isDeleted: false
+      participantId: { in: participants.map((p) => p.id) },
+      type: 'ENTRY',
+      createdAt: { gte: lastDayReset(dayResetHour, now) }
     },
-    select: {
-      id: true,
-      name: true,
-      cpf: true,
-      createdAt: true,
-      faceImageUrl: true,
-      faceData: true
-    },
-    orderBy: { createdAt: 'desc' }
+    select: { participantId: true },
+    distinct: ['participantId']
   })
+  const checkedInIds = new Set(checkinsToday.map((c) => c.participantId))
+  const nextResetLabel = formatRelease(nextDayReset(dayResetHour, now))
+
+  const quotaEnabled =
+    !!eventConfig?.substitutionQuotaEnabled &&
+    now >= new Date(eventConfig.startDate)
+  const quotaLimit = quotaEnabled
+    ? access.stand.maxRegistrations * (eventConfig?.substitutionsPerSlot ?? 1)
+    : 0
+  const quotaUsed = standQuota?.substitutionsUsed ?? 0
+  const quotaExhausted = quotaEnabled && quotaUsed >= quotaLimit
 
   // Miniatura: decripta a biometria server-side (formato novo) ou usa o
   // data URL legado — nunca expõe o payload criptografado ao client
@@ -81,9 +141,15 @@ export default async function StandPanelPage({
   }))
 
   const count = participants.length
+  const lockedCount = lockedSlots.length
   const limit = access.stand.maxRegistrations
-  const pct = limit > 0 ? Math.min((count / limit) * 100, 100) : 100
-  const isFull = count >= limit
+  const occupied = count + lockedCount
+  const available = Math.max(limit - occupied, 0)
+  const pct = limit > 0 ? Math.min((occupied / limit) * 100, 100) : 100
+  const isFull = occupied >= limit
+  const earliestRelease = lockedSlots[0]?.slotLockedUntil
+    ? formatRelease(lockedSlots[0].slotLockedUntil)
+    : null
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -110,7 +176,7 @@ export default async function StandPanelPage({
               <span
                 className={`text-2xl font-bold ${isFull ? 'text-red-600' : 'text-gray-900'}`}
               >
-                {count}
+                {occupied}
               </span>{' '}
               / {limit} vagas
             </p>
@@ -124,14 +190,27 @@ export default async function StandPanelPage({
               }}
             />
           </div>
-          {isFull ? (
-            <p className="text-sm text-red-600 font-medium mt-3">
-              Stand lotado — para liberar uma vaga, exclua um credenciado.
+          {/* Três estados: ativos · liberando (travados) · disponíveis */}
+          <p className="text-sm text-gray-600 mt-3">
+            {count} ativo{count !== 1 ? 's' : ''}
+            {lockedCount > 0 && earliestRelease && (
+              <span className="text-amber-700">
+                {' '}· {lockedCount} vaga{lockedCount !== 1 ? 's' : ''} liberando às {earliestRelease}
+              </span>
+            )}
+            {' '}· {available} disponíve{available !== 1 ? 'is' : 'l'}
+          </p>
+          {isFull && (
+            <p className="text-sm text-red-600 font-medium mt-1">
+              {lockedCount > 0 && earliestRelease
+                ? `Stand sem vagas disponíveis no momento. Próxima liberação: ${earliestRelease}.`
+                : 'Stand lotado — para liberar uma vaga, exclua um credenciado.'}
             </p>
-          ) : (
-            <p className="text-sm text-gray-500 mt-3">
-              {limit - count} vaga{limit - count !== 1 ? 's' : ''} disponíve
-              {limit - count !== 1 ? 'is' : 'l'}.
+          )}
+          {quotaEnabled && (
+            <p className="text-xs text-gray-500 mt-2">
+              Substituições: {quotaUsed} de {quotaLimit}
+              {quotaExhausted && ' — cota esgotada; novas trocas devem ser solicitadas à organização'}
             </p>
           )}
 
@@ -198,6 +277,9 @@ export default async function StandPanelPage({
                       token={token}
                       participantId={p.id}
                       participantName={p.name}
+                      hasCheckinToday={checkedInIds.has(p.id)}
+                      nextResetLabel={nextResetLabel}
+                      quotaExhausted={quotaExhausted}
                     />
                   </div>
                 </li>

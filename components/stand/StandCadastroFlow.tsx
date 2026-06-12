@@ -19,7 +19,10 @@ interface StandCadastroFlowProps {
     code: string
     location: string | null
     maxRegistrations: number
+    /** Ocupação canônica: ativos + slots travados (Fase 7) */
     activeCount: number
+    /** Próxima liberação de slot travado, formatada (Fase 7) */
+    nextRelease?: string | null
   }
   event: {
     name: string
@@ -142,10 +145,22 @@ export default function StandCadastroFlow({ token, stand, event, requireFace }: 
       <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
         <div className="bg-white/10 backdrop-blur-sm rounded-xl p-8 max-w-md text-center border border-white/20">
           <div className="text-5xl mb-4">🎫</div>
-          <h1 className="text-2xl font-bold text-white mb-2">Stand Lotado</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            {stand.nextRelease ? 'Sem Vagas no Momento' : 'Stand Lotado'}
+          </h1>
           <p className="text-white/70 mb-6">
-            O stand <strong className="text-verde-agua">{stand.name}</strong> atingiu o limite de{' '}
-            {stand.maxRegistrations} credenciados. Fale com o responsável do stand para liberar uma vaga.
+            {stand.nextRelease ? (
+              <>
+                O stand <strong className="text-verde-agua">{stand.name}</strong> está sem vagas
+                disponíveis no momento. Próxima liberação:{' '}
+                <strong className="text-verde-agua">{stand.nextRelease}</strong>.
+              </>
+            ) : (
+              <>
+                O stand <strong className="text-verde-agua">{stand.name}</strong> atingiu o limite de{' '}
+                {stand.maxRegistrations} credenciados. Fale com o responsável do stand para liberar uma vaga.
+              </>
+            )}
           </p>
           <Link
             href={`/stand/${token}`}

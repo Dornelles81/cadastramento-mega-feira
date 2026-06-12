@@ -39,6 +39,16 @@ interface StandOption {
   code: string
 }
 
+interface SubstitutionRow {
+  standId: string
+  stand?: { name: string; code: string } | null
+  event?: { name: string; slug: string } | null
+  totalRemovals: number
+  removalsDuringEvent: number
+  withCheckinToday: number
+  quota?: { used: number; limit: number } | null
+}
+
 const ACTION_LABELS: Record<string, string> = {
   TOKEN_GENERATED: '🔗 Link gerado',
   TOKEN_REVOKED: '🔒 Link revogado',
@@ -77,6 +87,11 @@ export default function AuditLogsPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null)
+
+  // Fase 7: visão "Trocas por stand"
+  const [reportMode, setReportMode] = useState(false)
+  const [report, setReport] = useState<SubstitutionRow[]>([])
+  const [reportLoading, setReportLoading] = useState(false)
 
   // Filtros (SPEC: stand, ação e período)
   const [actionFilter, setActionFilter] = useState('all')
@@ -118,6 +133,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     loadLogs(1)
+    if (reportMode) loadReport()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionFilter, standFilter, fromDate, toDate])
 
@@ -130,6 +146,28 @@ export default function AuditLogsPage() {
 
   const exportCsv = () => {
     window.location.href = `/api/admin/audit-logs?${buildQuery({ format: 'csv' })}`
+  }
+
+  const loadReport = async () => {
+    try {
+      setReportLoading(true)
+      const qs = buildQuery({ report: 'substitutions' })
+      const response = await fetch(`/api/admin/audit-logs?${qs}`)
+      if (response.ok) {
+        const data = await response.json()
+        setReport(data.report || [])
+      }
+    } catch (error) {
+      console.error('Failed to load report:', error)
+    } finally {
+      setReportLoading(false)
+    }
+  }
+
+  const toggleReport = () => {
+    const next = !reportMode
+    setReportMode(next)
+    if (next) loadReport()
   }
 
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1)
@@ -154,19 +192,29 @@ export default function AuditLogsPage() {
                 ← Voltar
               </button>
               <button
-                onClick={exportCsv}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                title="Exporta com os filtros atuais aplicados"
+                onClick={toggleReport}
+                className={`px-4 py-2 rounded-lg text-white ${reportMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
               >
-                📥 Exportar CSV
+                {reportMode ? '← Voltar aos logs' : '🔁 Trocas por stand'}
               </button>
-              <button
-                onClick={() => loadLogs(page)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                disabled={loading}
-              >
-                🔄 Atualizar
-              </button>
+              {!reportMode && (
+                <>
+                  <button
+                    onClick={exportCsv}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                    title="Exporta com os filtros atuais aplicados"
+                  >
+                    📥 Exportar CSV
+                  </button>
+                  <button
+                    onClick={() => loadLogs(page)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    disabled={loading}
+                  >
+                    🔄 Atualizar
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -221,7 +269,62 @@ export default function AuditLogsPage() {
           </div>
         </div>
 
+        {/* Fase 7: visão Trocas por stand (anti-rotatividade) */}
+        {reportMode && (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
+            <div className="p-6 pb-2">
+              <h2 className="text-lg font-bold text-gray-800">🔁 Trocas por stand</h2>
+              <p className="text-sm text-gray-500">
+                Exclusões de credenciados por stand (respeitando os filtros de stand e período).
+                Stands no topo são os candidatos a conversa com o promotor.
+              </p>
+            </div>
+            {reportLoading ? (
+              <p className="p-6 text-gray-500">🔄 Carregando...</p>
+            ) : report.length === 0 ? (
+              <p className="p-6 text-gray-500">Nenhuma troca registrada para os filtros selecionados.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-700">Stand</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-700">Evento</th>
+                      <th className="text-right px-4 py-3 font-semibold text-gray-700">Exclusões</th>
+                      <th className="text-right px-4 py-3 font-semibold text-gray-700">Durante o evento</th>
+                      <th className="text-right px-4 py-3 font-semibold text-gray-700">Com check-in no dia</th>
+                      <th className="text-right px-4 py-3 font-semibold text-gray-700">Cota</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {report.map((row) => (
+                      <tr key={row.standId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <p className="text-gray-900">{row.stand?.name || row.standId}</p>
+                          {row.stand?.code && <p className="text-xs text-gray-500 font-mono">{row.stand.code}</p>}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{row.event?.name || '—'}</td>
+                        <td className="px-4 py-3 text-right font-semibold">{row.totalRemovals}</td>
+                        <td className="px-4 py-3 text-right">{row.removalsDuringEvent}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={row.withCheckinToday > 0 ? 'text-amber-700 font-semibold' : ''}>
+                            {row.withCheckinToday}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm">
+                          {row.quota ? `${row.quota.used} de ${row.quota.limit}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Resumo + paginação */}
+        {!reportMode && (
         <div className="bg-white rounded-lg shadow-sm p-4 mb-6 flex items-center justify-between flex-wrap gap-2">
           <p className="text-gray-600">
             <strong>{total}</strong> registro{total !== 1 ? 's' : ''}
@@ -247,8 +350,10 @@ export default function AuditLogsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Tabela */}
+        {!reportMode && (
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -313,6 +418,7 @@ export default function AuditLogsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Modal de detalhes */}
         {selectedLog && (

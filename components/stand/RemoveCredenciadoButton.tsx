@@ -11,11 +11,20 @@ import { useRouter } from 'next/navigation'
 export default function RemoveCredenciadoButton({
   token,
   participantId,
-  participantName
+  participantName,
+  hasCheckinToday = false,
+  nextResetLabel,
+  quotaExhausted = false
 }: {
   token: string
   participantId: string
   participantName: string
+  /** Fase 7: check-in no dia operacional corrente trava a vaga até a virada */
+  hasCheckinToday?: boolean
+  /** Próxima virada formatada (ex.: "4h de 13/06/2026") */
+  nextResetLabel?: string
+  /** Cota de substituições esgotada: trocas só via organização */
+  quotaExhausted?: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -35,6 +44,7 @@ export default function RemoveCredenciadoButton({
       const data = await response.json().catch(() => ({}))
       if (response.ok) {
         setOpen(false)
+        if (data.slotLockedUntil) alert(data.message)
         router.refresh()
       } else {
         setError(data.message || 'Erro ao excluir credenciado')
@@ -44,6 +54,22 @@ export default function RemoveCredenciadoButton({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Cota esgotada: o painel não executa a troca; orienta a falar com a
+  // organização (a exclusão via admin continua sempre possível)
+  if (quotaExhausted) {
+    return (
+      <button
+        onClick={() =>
+          alert('A cota de substituições do stand foi atingida. Novas trocas devem ser solicitadas à organização do evento.')
+        }
+        className="text-gray-400 text-xs font-medium whitespace-nowrap cursor-help"
+        title="Cota de substituições esgotada"
+      >
+        Excluir
+      </button>
+    )
   }
 
   return (
@@ -59,11 +85,22 @@ export default function RemoveCredenciadoButton({
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Excluir credenciado</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Remover <strong>{participantName}</strong> do stand? A vaga será liberada e os
-              dados biométricos serão apagados. Esta ação fica registrada na auditoria e não
-              pode ser desfeita.
+            <p className="text-sm text-gray-600 mb-3">
+              Remover <strong>{participantName}</strong> do stand? Os dados biométricos serão
+              apagados e a ação fica registrada na auditoria — não pode ser desfeita.
             </p>
+            {/* Consequência real sobre a vaga (Fase 7) — antes de confirmar */}
+            {hasCheckinToday ? (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                ⚠️ Este participante já acessou o evento hoje. A exclusão será efetivada
+                agora, mas a vaga só estará disponível para novo cadastro a partir das{' '}
+                <strong>{nextResetLabel}</strong>.
+              </p>
+            ) : (
+              <p className="text-sm text-teal-800 bg-teal-50 border border-teal-200 rounded-lg p-3 mb-4">
+                A vaga ficará disponível imediatamente para novo cadastro.
+              </p>
+            )}
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Motivo (opcional)
             </label>
