@@ -14,5 +14,7 @@ export const SENSITIVE_PARTICIPANT_CLEAR = {
   faceImageUrl: null,
   captureQuality: null,
   deviceInfo: null,
+  captureLocation: null,
+  browserInfo: null,
   documents: Prisma.DbNull
 } as const
