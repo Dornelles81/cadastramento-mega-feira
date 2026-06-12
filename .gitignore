@@ -52,8 +52,9 @@ Thumbs.db
 # Prisma
 /prisma/migrations/dev.db*
 
-# Logs
-logs
+# Logs (apenas na raiz — "logs" sem âncora engolia app/admin/logs e
+# app/admin/super/logs, deixando as páginas fora do repositório)
+/logs/
 *.log
 
 .vercel
