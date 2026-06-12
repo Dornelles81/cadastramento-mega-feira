@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
-import { SENSITIVE_PARTICIPANT_CLEAR } from '../../../lib/participant-sensitive'
+import {
+  SENSITIVE_PARTICIPANT_CLEAR,
+  extractUploadRefs,
+  deleteUploadFiles
+} from '../../../lib/participant-sensitive'
 
 /**
  * Expurgo LGPD — executado diariamente pelo Vercel Cron (vercel.json).
@@ -40,6 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       select: {
         id: true,
         eventId: true,
+        documents: true,
+        customData: true,
         event: { select: { name: true, slug: true } }
       }
     })
@@ -64,10 +70,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let purged = 0
 
     for (const p of expired) {
+      // Coleta as referências a arquivos ANTES de limpar — depois elas somem
+      const fileRefs = extractUploadRefs(p.documents, p.customData)
+
       await prisma.participant.update({
         where: { id: p.id },
         data: SENSITIVE_PARTICIPANT_CLEAR
       })
+
+      // Referência e arquivo morrem juntos; falha não bloqueia o expurgo,
+      // mas fica registrada para reprocessamento
+      const { failed } = await deleteUploadFiles(fileRefs)
+      if (failed.length > 0) {
+        await prisma.auditLog.create({
+          data: {
+            eventId: p.eventId,
+            action: 'UPLOAD_PURGE_FAILED',
+            entityType: 'participant',
+            entityId: p.id,
+            adminUser: 'system-cron',
+            description: 'Falha ao apagar arquivo físico de upload no expurgo — reprocessar',
+            metadata: { files: failed },
+            severity: 'WARNING'
+          }
+        })
+      }
 
       await prisma.auditLog.create({
         data: {

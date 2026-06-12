@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client'
+import { promises as fs } from 'fs'
+import path from 'path'
 
 /**
  * Conjunto único de campos sensíveis a limpar quando um participante é
@@ -25,3 +27,50 @@ export const SENSITIVE_PARTICIPANT_CLEAR = {
   documents: Prisma.DbNull,
   customData: Prisma.DbNull
 } as const
+
+// ── Arquivos físicos referenciados (uploads/) ───────────────────────────────
+// Campos custom tipo file gravam caminhos /api/uploads/<nome> em customData.
+// Ao limpar a referência, o arquivo precisa morrer junto: um documento cuja
+// referência sumiu é dado sensível órfão que nenhum expurgo futuro alcança.
+
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads')
+const UPLOAD_REF_PATTERN = /\/(?:api\/)?uploads\/([^"\\]+)/g
+
+/** Extrai nomes de arquivos de uploads referenciados em valores/JSONs. */
+export function extractUploadRefs(...sources: unknown[]): string[] {
+  const refs = new Set<string>()
+  for (const src of sources) {
+    if (src === null || src === undefined) continue
+    const s = typeof src === 'string' ? src : JSON.stringify(src)
+    for (const m of s.matchAll(UPLOAD_REF_PATTERN)) refs.add(decodeURIComponent(m[1]))
+  }
+  return [...refs]
+}
+
+/**
+ * Apaga os arquivos físicos de uploads. Nunca lança: falha não pode bloquear
+ * o expurgo/exclusão — o chamador registra `failed` para reprocessamento.
+ * Arquivo inexistente (ENOENT) conta como sucesso: é o estado desejado (em
+ * produção serverless os uploads nunca persistem em disco).
+ */
+export async function deleteUploadFiles(
+  filenames: string[]
+): Promise<{ deleted: string[]; failed: string[] }> {
+  const deleted: string[] = []
+  const failed: string[] = []
+  for (const name of filenames) {
+    const target = path.resolve(UPLOAD_DIR, name)
+    if (!target.startsWith(UPLOAD_DIR + path.sep)) {
+      failed.push(name) // path traversal — nunca apagar fora do diretório
+      continue
+    }
+    try {
+      await fs.unlink(target)
+      deleted.push(name)
+    } catch (e: any) {
+      if (e?.code === 'ENOENT') deleted.push(name)
+      else failed.push(name)
+    }
+  }
+  return { deleted, failed }
+}

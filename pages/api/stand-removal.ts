@@ -3,7 +3,11 @@ import Joi from 'joi'
 import { prisma } from '../../lib/prisma'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken, maskDocument } from '../../lib/stand-access/validate'
-import { SENSITIVE_PARTICIPANT_CLEAR } from '../../lib/participant-sensitive'
+import {
+  SENSITIVE_PARTICIPANT_CLEAR,
+  extractUploadRefs,
+  deleteUploadFiles
+} from '../../lib/participant-sensitive'
 import { removeUserFromDevice } from '../../lib/ivms'
 
 /**
@@ -56,7 +60,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // nunca confiar no client (SPEC 2.4)
     const participant = await prisma.participant.findFirst({
       where: { id: participantId, standId, status: 'active', isDeleted: false },
-      select: { id: true, name: true, cpf: true, createdAt: true }
+      select: {
+        id: true,
+        name: true,
+        cpf: true,
+        createdAt: true,
+        documents: true,
+        customData: true
+      }
     })
     if (!participant) {
       return res.status(404).json({
@@ -121,6 +132,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       })
     })
+
+    // Arquivos físicos referenciados morrem junto com a referência; falha
+    // não bloqueia a exclusão, mas fica registrada para reprocessamento
+    const fileRefs = extractUploadRefs(participant.documents, participant.customData)
+    const { failed: filesFailed } = await deleteUploadFiles(fileRefs)
+    if (filesFailed.length > 0) {
+      await prisma.auditLog.create({
+        data: {
+          eventId: access.event.id,
+          standId,
+          action: 'UPLOAD_PURGE_FAILED',
+          entityType: 'participant',
+          entityId: participant.id,
+          actorType: 'stand_responsible',
+          actorIdentifier: removedBy,
+          description: 'Falha ao apagar arquivo físico de upload na exclusão — reprocessar',
+          metadata: { files: filesFailed },
+          severity: 'WARNING'
+        }
+      })
+    }
 
     // Tentativa imediata de remover do dispositivo (fora da transação:
     // falha remota não pode desfazer a exclusão no sistema)
