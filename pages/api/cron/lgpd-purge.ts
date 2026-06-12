@@ -11,6 +11,9 @@ import { SENSITIVE_PARTICIPANT_CLEAR } from '../../../lib/participant-sensitive'
  * a exclusão completa da linha é decisão de política a aplicar futuramente.
  *
  * Proteção: o Vercel Cron envia "Authorization: Bearer ${CRON_SECRET}".
+ *
+ * Simulação: GET /api/cron/lgpd-purge?dryRun=1 (mesma autenticação) lista
+ * quantos registros seriam expurgados, por evento, sem alterar nada.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const cronSecret = process.env.CRON_SECRET
@@ -34,8 +37,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           { documents: { not: { equals: null } } }
         ]
       },
-      select: { id: true, eventId: true }
+      select: {
+        id: true,
+        eventId: true,
+        event: { select: { name: true, slug: true } }
+      }
     })
+
+    // Modo simulação: relata o que seria expurgado, sem alterar nada
+    if (req.query.dryRun === '1' || req.query.dryRun === 'true') {
+      const byEvent = new Map<string, { event: string; count: number }>()
+      for (const p of expired) {
+        const key = p.event?.slug ?? 'sem-evento'
+        const entry = byEvent.get(key) ?? { event: p.event?.name ?? '(sem evento)', count: 0 }
+        entry.count++
+        byEvent.set(key, entry)
+      }
+      return res.status(200).json({
+        dryRun: true,
+        total: expired.length,
+        byEvent: Object.fromEntries(byEvent),
+        executedAt: now.toISOString()
+      })
+    }
 
     let purged = 0
 
