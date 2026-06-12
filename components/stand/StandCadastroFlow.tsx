@@ -168,6 +168,13 @@ export default function StandCadastroFlow({ token, stand, event, requireFace }: 
           >
             Ver painel do stand
           </Link>
+          {/* A dúvida sobre a regra da virada surge principalmente aqui */}
+          <Link
+            href={`/stand/${token}/ajuda`}
+            className="block mt-3 text-sm text-white/60 hover:text-white underline"
+          >
+            Entenda como funcionam as vagas e as trocas
+          </Link>
         </div>
       </div>
     )

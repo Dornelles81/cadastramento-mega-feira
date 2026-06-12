@@ -155,15 +155,23 @@ export default async function StandPanelPage({
     <main className="min-h-screen bg-gray-50">
       {/* Header */}
       <header style={{ backgroundColor: NAVY }} className="px-4 py-6">
-        <div className="max-w-3xl mx-auto">
-          <p style={{ color: TEAL }} className="text-sm font-semibold">
-            {access.event.name}
-          </p>
-          <h1 className="text-2xl font-bold text-white mt-1">{access.stand.name}</h1>
-          <p className="text-sm text-gray-300 mt-1">
-            <code className="bg-white/10 px-2 py-0.5 rounded">{access.stand.code}</code>
-            {access.stand.location && <span className="ml-2">{access.stand.location}</span>}
-          </p>
+        <div className="max-w-3xl mx-auto flex items-start justify-between gap-3">
+          <div>
+            <p style={{ color: TEAL }} className="text-sm font-semibold">
+              {access.event.name}
+            </p>
+            <h1 className="text-2xl font-bold text-white mt-1">{access.stand.name}</h1>
+            <p className="text-sm text-gray-300 mt-1">
+              <code className="bg-white/10 px-2 py-0.5 rounded">{access.stand.code}</code>
+              {access.stand.location && <span className="ml-2">{access.stand.location}</span>}
+            </p>
+          </div>
+          <Link
+            href={`/stand/${token}/ajuda`}
+            className="flex-shrink-0 text-sm font-semibold px-3 py-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors whitespace-nowrap"
+          >
+            ❓ Como funciona
+          </Link>
         </div>
       </header>
 
