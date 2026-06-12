@@ -41,6 +41,21 @@ export default async function handler(
       return res.status(404).json({ error: 'Evento não encontrado' })
     }
 
+    // Eventos com stands reais usam acesso delegado: o cadastro público é
+    // desativado e passa a ocorrer apenas via link do responsável do stand
+    // (SPEC acesso-por-stand). Stands auto-criados por campos com limite não
+    // contam — são um mecanismo de capacidade, não expositores.
+    const realStandCount = await prisma.stand.count({
+      where: {
+        eventId: event.id,
+        isActive: true,
+        OR: [
+          { description: null },
+          { NOT: { description: { contains: 'Auto-criado pelo campo:' } } }
+        ]
+      }
+    })
+
     // Return public event data
     return res.status(200).json({
       success: true,
@@ -57,6 +72,7 @@ export default async function handler(
         status: event.status,
         isActive: event.isActive,
         isPublic: event.isPublic,
+        delegatedStandAccess: realStandCount > 0,
         organizerName: event.organizerName,
         organizerEmail: event.organizerEmail,
         organizerPhone: event.organizerPhone,

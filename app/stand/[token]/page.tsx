@@ -8,6 +8,7 @@ import {
   registerPanelAccess,
   maskDocument
 } from '../../../lib/stand-access/validate'
+import { getFaceImageDataUrl } from '../../../lib/face-image'
 
 // Painel do responsável do stand (SPEC seção 2.2) — acesso via link mágico.
 // Todas as queries são filtradas pelo standId derivado do token no servidor;
@@ -62,10 +63,21 @@ export default async function StandPanelPage({
       name: true,
       cpf: true,
       createdAt: true,
-      faceImageUrl: true
+      faceImageUrl: true,
+      faceData: true
     },
     orderBy: { createdAt: 'desc' }
   })
+
+  // Miniatura: decripta a biometria server-side (formato novo) ou usa o
+  // data URL legado — nunca expõe o payload criptografado ao client
+  const withPhotos = participants.map((p) => ({
+    id: p.id,
+    name: p.name,
+    cpf: p.cpf,
+    createdAt: p.createdAt,
+    photo: getFaceImageDataUrl(p)
+  }))
 
   const count = participants.length
   const limit = access.stand.maxRegistrations
@@ -154,13 +166,13 @@ export default async function StandPanelPage({
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {participants.map((p) => (
+              {withPhotos.map((p) => (
                 <li key={p.id} className="py-3 flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-                    {p.faceImageUrl ? (
+                    {p.photo ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={p.faceImageUrl}
+                        src={p.photo}
                         alt=""
                         className="w-full h-full object-cover"
                       />

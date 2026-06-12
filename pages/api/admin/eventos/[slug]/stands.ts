@@ -119,7 +119,10 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
     where,
     include: {
       _count: {
-        select: { participants: true }
+        // Ocupação considera apenas credenciados ativos (ADENDO seção 2)
+        select: {
+          participants: { where: { status: 'active', isDeleted: false } }
+        }
       },
       accessTokens: {
         where: { revokedAt: null },
@@ -129,6 +132,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
       },
       ...(withParticipants === 'true' ? {
         participants: {
+          where: { status: 'active', isDeleted: false },
           select: {
             id: true,
             name: true,
@@ -273,7 +277,9 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, eventId: str
     },
     include: {
       _count: {
-        select: { participants: true }
+        select: {
+          participants: { where: { status: 'active', isDeleted: false } }
+        }
       }
     }
   });

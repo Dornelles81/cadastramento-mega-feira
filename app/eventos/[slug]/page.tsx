@@ -34,6 +34,7 @@ interface EventConfig {
   currentCount: number
   status: string
   isActive: boolean
+  delegatedStandAccess?: boolean
   config: {
     logoUrl?: string
     primaryColor?: string
@@ -185,7 +186,12 @@ export default function EventoPage() {
       const notStarted = now < startDate
       const isFull = eventData.currentCount >= eventData.maxCapacity
 
-      if (eventData.status !== 'active') {
+      // Cadastro público desativado para eventos com acesso delegado por
+      // stand: o cadastro é feito pelo link enviado ao responsável
+      const updateMode = new URLSearchParams(window.location.search).has('update')
+      if (eventData.delegatedStandAccess && !updateMode) {
+        setEventError('O cadastro deste evento agora é feito pelo link enviado ao responsável do seu stand. Solicite o link a ele ou à organização do evento.')
+      } else if (eventData.status !== 'active') {
         if (isExpired) {
           setEventError('Este evento ja foi encerrado.')
         } else if (notStarted) {
@@ -406,10 +412,12 @@ export default function EventoPage() {
       <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
         <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-sm p-8 max-w-md text-center border border-white/20">
           <div className="text-6xl mb-4">
-            {eventError?.includes('esgotadas') ? '🎫' : eventError?.includes('encerrado') ? '⚠️' : '❌'}
+            {eventError?.includes('responsável do seu stand') ? '🔗' :
+             eventError?.includes('esgotadas') ? '🎫' : eventError?.includes('encerrado') ? '⚠️' : '❌'}
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">
-            {eventError?.includes('esgotadas') ? 'Vagas Esgotadas' :
+            {eventError?.includes('responsável do seu stand') ? 'Cadastro pelo Link do Stand' :
+             eventError?.includes('esgotadas') ? 'Vagas Esgotadas' :
              eventError?.includes('encontrado') ? 'Evento Nao Encontrado' :
              'Cadastro Indisponivel'}
           </h1>

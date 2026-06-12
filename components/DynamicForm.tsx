@@ -30,20 +30,15 @@ interface DynamicFormProps {
   onBack?: () => void
   eventCode?: string
   initialData?: any
+  /**
+   * Cadastro via link do stand: o stand é fixado pelo token validado no
+   * servidor — mostra um aviso no lugar do antigo seletor público de stands
+   * (removido conforme SPEC acesso-por-stand).
+   */
+  fixedStand?: { name: string; code: string; location?: string | null }
 }
 
-interface Stand {
-  id: string
-  name: string
-  code: string
-  description?: string
-  location?: string
-  maxRegistrations: number
-  currentCount: number
-  availableSlots: number
-}
-
-export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }: DynamicFormProps) {
+export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, fixedStand }: DynamicFormProps) {
   const [fields, setFields] = useState<FormField[]>([])
   const [documentFields, setDocumentFields] = useState<DocumentFieldConfig[]>([])
   const [formData, setFormData] = useState<any>(initialData || {})
@@ -51,13 +46,10 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState<any>({})
   const [uploadedFiles, setUploadedFiles] = useState<any>({})
-  const [stands, setStands] = useState<Stand[]>([])
-  const [loadingStands, setLoadingStands] = useState(true)
 
   useEffect(() => {
     loadFormFields()
     loadDocumentFields()
-    loadStands()
   }, [eventCode])
 
   useEffect(() => {
@@ -77,37 +69,6 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
     } catch (error) {
       console.error('Failed to load document fields:', error)
       setDocumentFields([])
-    }
-  }
-
-  const loadStands = async () => {
-    try {
-      setLoadingStands(true)
-      const response = await fetch(`/api/public/stands${eventCode ? `?eventCode=${eventCode}` : ''}`)
-      if (response.ok) {
-        const data = await response.json()
-        console.log('🏪 Stands loaded:', data.stands)
-        const loadedStands = (data.stands || []).sort((a: any, b: any) =>
-          a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
-        )
-        setStands(loadedStands)
-        // Pre-select first stand if none selected yet
-        if (loadedStands.length > 0) {
-          setFormData((prev: any) => {
-            if (!prev.standCode && !prev.estande) {
-              return { ...prev, standCode: loadedStands[0].code, estande: loadedStands[0].code }
-            }
-            return prev
-          })
-        }
-      } else {
-        setStands([])
-      }
-    } catch (error) {
-      console.error('Failed to load stands:', error)
-      setStands([])
-    } finally {
-      setLoadingStands(false)
     }
   }
 
@@ -274,18 +235,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
     const newErrors: any = {}
     let isValid = true
 
-    // Validate stand selection if stands are available
-    if (stands.length > 0 && !formData.standCode && !formData.estande) {
-      newErrors.standCode = 'Seleção de stand é obrigatória'
-      isValid = false
-    }
-
     fields.forEach(field => {
-      // Skip estande field as it's validated above
-      if (field.fieldName.toLowerCase() === 'estande') {
-        return
-      }
-
       if (field.required && !formData[field.fieldName]) {
         newErrors[field.fieldName] = `${field.label} é obrigatório`
         isValid = false
@@ -518,51 +468,30 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData }
         </div>
       ) : (
         <>
-          {/* Stand Selection - Required */}
-          {stands.length > 0 && (
-            <div className="bg-purple/20 border border-purple-light/30 rounded-lg p-4 mb-4">
-              <label className="block text-sm font-medium text-white mb-2">
-                Stand <span className="text-red-400">*</span>
-              </label>
-              <select
-                name="standCode"
-                value={formData.standCode || formData.estande || ''}
-                onChange={(e) => {
-                  // Update both standCode and estande fields for compatibility
-                  handleFieldChange('standCode', e.target.value)
-                  handleFieldChange('estande', e.target.value)
-                }}
-                required
-                className={`w-full px-4 py-3 border rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 ${
-                  errors.standCode ? 'border-red-400' : 'border-white/30'
-                }`}
-              >
-                {stands.map(stand => (
-                  <option key={stand.code} value={stand.code}>
-                    {stand.name}
-                    {stand.location && ` (${stand.location})`}
-                  </option>
-                ))}
-              </select>
-              {errors.standCode ? (
-                <p className="text-red-400 text-sm mt-2">{errors.standCode}</p>
-              ) : (
-                <p className="text-xs text-gray-400 mt-2">
-                  {formData.standCode ? (
-                    <span className="text-neon">✓ Seu registro será associado ao stand selecionado</span>
-                  ) : (
-                    <>Selecione o stand para o qual você foi convidado</>
-                  )}
-                </p>
-              )}
+          {/* Stand fixado pelo link de acesso — sem seleção pelo usuário */}
+          {fixedStand && (
+            <div className="bg-verde-agua/15 border border-verde-agua/40 rounded-lg p-4 mb-4">
+              <p className="text-sm font-medium text-white">
+                Stand: <strong className="text-verde-agua">{fixedStand.name}</strong>
+                {fixedStand.location && (
+                  <span className="text-white/60"> — {fixedStand.location}</span>
+                )}
+              </p>
+              <p className="text-xs text-white/60 mt-1">
+                Seu cadastro será vinculado automaticamente a este stand.
+              </p>
             </div>
           )}
 
           {/* Render text fields */}
           {fields
             .filter(field => {
-              // Skip "estande" field as it's already shown in the header section
-              if (field.fieldName.toLowerCase() === 'estande' && stands.length > 0) {
+              // No cadastro via link, campos de seleção de stand/capacidade
+              // não se aplicam — o stand vem do token validado no servidor
+              if (fixedStand && (
+                field.fieldName.toLowerCase() === 'estande' ||
+                field.validation?.hasLimits
+              )) {
                 return false
               }
               return true

@@ -22,6 +22,8 @@ export interface ValidStandAccess {
   event: {
     id: string | null
     name: string
+    code: string | null
+    slug: string | null
     endDate: Date | null
   }
 }
@@ -46,7 +48,7 @@ export async function validateStandToken(rawToken: string): Promise<ValidStandAc
           code: true,
           location: true,
           maxRegistrations: true,
-          event: { select: { id: true, name: true, endDate: true } }
+          event: { select: { id: true, name: true, code: true, slug: true, endDate: true } }
         }
       }
     }
@@ -73,6 +75,8 @@ export async function validateStandToken(rawToken: string): Promise<ValidStandAc
     event: {
       id: tokenRow.stand.event?.id ?? null,
       name: tokenRow.stand.event?.name ?? 'Mega Feira',
+      code: tokenRow.stand.event?.code ?? null,
+      slug: tokenRow.stand.event?.slug ?? null,
       endDate: tokenRow.stand.event?.endDate ?? null
     }
   }

@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../lib/prisma'
-import crypto from 'crypto'
 import Joi from 'joi'
+import { encryptString } from '../../lib/crypto'
+import { rateLimitOrReject } from '../../lib/rate-limit'
 
 // Simplified validation schema
 const registrationSchema = Joi.object({
@@ -41,30 +42,18 @@ function isValidCPF(cpf: string): boolean {
   return remainder === parseInt(numbers[10])
 }
 
-// Simplified encryption
-function simpleEncrypt(data: string): string {
-  const key = process.env.MASTER_KEY || 'default-key'
-  return crypto.createHash('sha256').update(data + key).digest('hex')
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  try {
-    console.log('📥 Received registration request:', req.body)
+  // Rate limit: 10 cadastros por IP a cada 10 minutos
+  if (!rateLimitOrReject(req, res, 'register', 10, 10 * 60 * 1000)) {
+    return
+  }
 
-    // Validate input
+  try {
+    // Validate input (não logar o body: contém CPF e imagem facial)
     const { error, value } = registrationSchema.validate(req.body)
     if (error) {
       console.log('❌ Validation failed:', error.details[0].message)
@@ -116,8 +105,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // Get standCode from customData if it exists
-    let finalStandCode = standCode || customData?.standCode || customData?.estande
+    // SPEC acesso-por-stand: stand real nunca é aceito do client — cadastro
+    // vinculado a stand acontece só via /api/stand-registration (token).
+    // Aqui permanece apenas o mecanismo de campos select com limite de vagas
+    // (stands auto-criados), que gera o código no servidor a partir do campo.
+    void standCode // aceito no schema por compatibilidade, mas ignorado
+    let finalStandCode: string | undefined
 
     // Load custom fields to check for fields with limits
     let customFields: any[] = []
@@ -171,9 +164,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('🏪 Final stand code:', finalStandCode)
 
-    // Clean CPF
+    // Clean CPF (não logar CPF: dado pessoal)
     const cleanCPF = cpf.replace(/\D/g, '')
-    console.log('🔍 Processing CPF:', cleanCPF)
 
     // Validate CPF
     if (!isValidCPF(cleanCPF)) {
@@ -212,7 +204,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         include: {
           _count: {
-            select: { participants: true }
+            // Ocupação considera apenas credenciados ativos (ADENDO seção 2)
+            select: {
+              participants: { where: { status: 'active', isDeleted: false } }
+            }
           }
         }
       })
@@ -293,33 +288,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     console.log('✅ Final capture quality:', captureQuality)
     
-    // Store full face image for recognition
-    if (faceImage && faceImage.includes(',')) {
-      try {
-        // Store the complete face image as data URL
-        faceImageUrl = faceImage
-        
-        // Encrypt only the biometric metadata
-        const dataToEncrypt = JSON.stringify({
-          azureData: faceData,
-          captureTimestamp: new Date().toISOString()
-        })
-        encryptedFaceData = Buffer.from(simpleEncrypt(dataToEncrypt))
-      } catch (err) {
-        console.log('⚠️ Face image processing failed, continuing without it')
-        encryptedFaceData = Buffer.from(simpleEncrypt('placeholder'))
-      }
-    } else if (faceImage) {
-      // If faceImage doesn't have data URL prefix, add it
-      faceImageUrl = `data:image/jpeg;base64,${faceImage}`
-      encryptedFaceData = Buffer.from(simpleEncrypt(JSON.stringify(faceData || {})))
-    } else {
-      encryptedFaceData = Buffer.from(simpleEncrypt('mock-data'))
+    // Criptografa a imagem facial (AES-256-GCM) — nunca armazenar plaintext
+    if (faceImage) {
+      const faceDataUrl = faceImage.includes(',')
+        ? faceImage
+        : `data:image/jpeg;base64,${faceImage}`
+      encryptedFaceData = encryptString(faceDataUrl)
+      faceImageUrl = null // imagem só é servida decriptada via /api/participant-image (autenticado)
     }
 
     // Separate documents from other custom data
     const { documents, ...otherCustomData } = customData || {}
-    
+
+    // LGPD: retenção de dados biométricos — expurgo 90 dias após o fim do evento
+    const retentionDays = parseInt(process.env.DATA_RETENTION_DAYS || '90', 10)
+    const retentionDate = new Date(event.endDate)
+    retentionDate.setDate(retentionDate.getDate() + retentionDays)
+
     // Create participant
     const participant = await prisma.participant.create({
       data: {
@@ -336,6 +321,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         consentAccepted: consent,
         consentIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown',
         consentDate: new Date(),
+        retentionDate,
         deviceInfo: req.headers['user-agent'] || 'unknown',
         documents: documents || {}, // Store documents separately
         customData: otherCustomData || {} // Store other custom fields
