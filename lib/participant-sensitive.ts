@@ -8,6 +8,12 @@ import { Prisma } from '@prisma/client'
  *
  * documents usa DbNull (não `{}`): o critério do expurgo seleciona
  * `documents != null`, e um objeto vazio re-selecionaria o registro todo dia.
+ *
+ * customData entra no expurgo (decisão de 2026-06-12): a trilha de auditoria
+ * que se mantém é quem (nome/CPF/contato) e com que base (consentimento) —
+ * cargo/empresa/placa e referências de documentos em campos custom são dados
+ * pessoais sem finalidade após o evento. O vínculo com o stand permanece
+ * relacional (standId), nada se perde para ocupação/relatórios.
  */
 export const SENSITIVE_PARTICIPANT_CLEAR = {
   faceData: null,
@@ -16,5 +22,6 @@ export const SENSITIVE_PARTICIPANT_CLEAR = {
   deviceInfo: null,
   captureLocation: null,
   browserInfo: null,
-  documents: Prisma.DbNull
+  documents: Prisma.DbNull,
+  customData: Prisma.DbNull
 } as const
