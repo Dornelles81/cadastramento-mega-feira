@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query
 
   if (!id || typeof id !== 'string') {
@@ -211,3 +212,4 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
     return res.status(500).json({ error: 'Failed to delete participant' })
   }
 }
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

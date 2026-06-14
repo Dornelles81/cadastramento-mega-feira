@@ -1,3 +1,4 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 
@@ -6,7 +7,7 @@ import { prisma } from '../../../lib/prisma'
  * Body: { vehicleCredentialId, eventId, gate?, operatorName?, forceExit? }
  * Registers vehicle exit. Blocks if vehicle has no registered entry (unless forceExit=true).
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const {
@@ -76,3 +77,5 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor((ms % 3600000) / 60000)
   return hours > 0 ? `${hours}h ${minutes}min` : `${minutes} min`
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

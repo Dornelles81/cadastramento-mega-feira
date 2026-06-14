@@ -1,7 +1,8 @@
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import HikCentralClient from '../../../lib/hikcental/hikcentral-client';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -71,3 +72,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

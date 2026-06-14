@@ -1,3 +1,4 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 
@@ -7,7 +8,7 @@ import { prisma } from '../../../lib/prisma'
  * POST /api/access/check-out
  * Body: { participantId, eventId, gate?, operatorName?, notes? }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -177,3 +178,5 @@ function formatDuration(ms: number): string {
   }
   return `${minutes} min`
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })
