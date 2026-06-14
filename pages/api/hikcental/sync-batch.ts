@@ -1,10 +1,11 @@
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { HikCentralService } from '../../../lib/hikcental/service';
 import { prisma } from '../../../lib/prisma'
 
 const hikCentralService = new HikCentralService();
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -14,11 +15,8 @@ export default async function handler(
   }
 
   try {
-    // Validate admin authentication
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    // Auth via withApiAuth(ADMIN_ROLES) no export — checagem interna
+    // "Bearer "-prefixo (bypassável) removida na consolidação de auth.
 
     const { participantIds, filters } = req.body;
 
@@ -122,3 +120,5 @@ export default async function handler(
     });
   }
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

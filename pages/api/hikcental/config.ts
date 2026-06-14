@@ -1,3 +1,4 @@
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import crypto from 'crypto';
 import { prisma } from '../../../lib/prisma'
@@ -27,15 +28,12 @@ function decrypt(text: string): string {
   return decrypted.toString();
 }
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Validate admin authentication
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Auth via withApiAuth(ADMIN_ROLES) no export — a checagem interna antiga
+  // (só prefixo "Bearer ", bypassável) foi removida na consolidação de auth.
 
   try {
     if (req.method === 'GET') {
@@ -235,3 +233,5 @@ export default async function handler(
     });
   }
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })
