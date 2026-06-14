@@ -1,5 +1,7 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
  * API: Register participant entry (check-in)
@@ -7,7 +9,7 @@ import { prisma } from '../../../lib/prisma'
  * POST /api/access/check-in
  * Body: { participantId, eventId, gate?, operatorName?, notes?, requirePreviousExit? }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -175,7 +177,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: participant.id,
         name: participant.name,
         cpf: participant.cpf,
-        faceImageUrl: participant.faceImageUrl,
+        faceImageUrl: getFaceImageDataUrl(participant), // decripta GCM ou usa legado
         stand: participant.stand?.name || participant.stand?.code,
         event: participant.event?.name
       }
@@ -189,3 +191,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

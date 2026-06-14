@@ -1,5 +1,7 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../../lib/face-image'
 
 /**
  * API: Get event access statistics
@@ -7,7 +9,7 @@ import { prisma } from '../../../../lib/prisma'
  * GET /api/access/stats/[eventId]
  * Returns real-time stats: current inside, total entries/exits, peak, etc.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -106,7 +108,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             id: true,
             name: true,
             cpf: true,
-            faceImageUrl: true
+            faceImageUrl: true,
+            faceData: true
           }
         }
       }
@@ -148,6 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name: true,
         cpf: true,
         faceImageUrl: true,
+        faceData: true,
         stand: {
           select: { name: true, code: true }
         }
@@ -187,14 +191,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: a.participant.id,
           name: a.participant.name,
           cpf: a.participant.cpf,
-          faceImageUrl: a.participant.faceImageUrl
+          faceImageUrl: getFaceImageDataUrl(a.participant) // decripta GCM ou usa legado
         }
       })),
       participantsInside: insideParticipants.map(p => ({
         id: p.id,
         name: p.name,
         cpf: p.cpf,
-        faceImageUrl: p.faceImageUrl,
+        faceImageUrl: getFaceImageDataUrl(p), // decripta GCM ou usa legado
         stand: p.stand?.name || p.stand?.code
       })),
       hourlyToday: {
@@ -212,3 +216,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

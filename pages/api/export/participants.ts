@@ -1,6 +1,8 @@
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import * as XLSX from 'xlsx'
 import { prisma } from '../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../lib/face-image'
 
 
 /**
@@ -23,9 +25,8 @@ import { prisma } from '../../../lib/prisma'
  * - page, limit: pagination (not used for Excel/PDF)
  */
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers for external system access
-  res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key')
 
@@ -98,6 +99,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return standCodes.includes(standCode)
       })
     }
+
+    // Normaliza a foto: os formatadores abaixo leem p.faceImageUrl como data
+    // URL. Cadastros novos guardam a imagem criptografada (GCM) em faceData e
+    // faceImageUrl=null — decripta server-side para que o export inclua a foto
+    // independentemente do formato de armazenamento (e null nos expurgados).
+    participants = participants.map(p => ({ ...p, faceImageUrl: getFaceImageDataUrl(p) }))
 
     // Get total count - use filtered participants length if stand filter is applied
     const totalCount = standFilter ? participants.length : await prisma.participant.count({ where })
@@ -375,3 +382,5 @@ function formatEventName(eventCode: string): string {
   }
   return eventNames[eventCode] || eventCode
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

@@ -1,5 +1,7 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
  * API: Fast participant status lookup
@@ -8,7 +10,7 @@ import { prisma } from '../../../lib/prisma'
  *
  * GET /api/access/fast-status?q=CPF_OR_ID&eventId=xxx
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -50,6 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name: true,
         cpf: true,
         faceImageUrl: true,
+        faceData: true, // decriptado server-side para a foto da portaria
         approvalStatus: true,
         eventId: true,
         stand: {
@@ -76,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id: participant.id,
       name: participant.name,
       cpf: participant.cpf,
-      photo: participant.faceImageUrl,
+      photo: getFaceImageDataUrl(participant), // decripta GCM ou usa legado
       stand: participant.stand?.name || participant.stand?.code,
       eventId: participant.eventId,
       status: participant.approvalStatus || 'pending',
@@ -93,3 +96,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Internal server error' })
   }
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

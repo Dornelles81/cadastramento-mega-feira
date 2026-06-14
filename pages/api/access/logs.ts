@@ -1,12 +1,14 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
  * API: Get access logs with filtering and export
  *
  * GET /api/access/logs?eventId=xxx&type=ENTRY|EXIT&from=date&to=date&format=json|csv
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -85,6 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             email: true,
             phone: true,
             faceImageUrl: true,
+            faceData: true, // decriptado server-side abaixo
             stand: {
               select: { code: true, name: true }
             }
@@ -170,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cpf: log.participant.cpf,
           email: log.participant.email,
           phone: log.participant.phone,
-          faceImageUrl: log.participant.faceImageUrl,
+          faceImageUrl: getFaceImageDataUrl(log.participant), // decripta GCM ou usa legado
           stand: log.participant.stand?.name || log.participant.stand?.code
         },
         event: {
@@ -192,3 +195,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await prisma.$disconnect()
   }
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

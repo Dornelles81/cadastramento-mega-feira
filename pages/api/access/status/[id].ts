@@ -1,5 +1,7 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../../lib/face-image'
 
 /**
  * API: Get participant access status
@@ -8,7 +10,7 @@ import { prisma } from '../../../../lib/prisma'
  * GET /api/access/status/[id]?eventId=xxx
  * Returns current status (inside/outside), last access, and history
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -123,7 +125,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cpf: participant.cpf,
         email: participant.email,
         phone: participant.phone,
-        faceImageUrl: participant.faceImageUrl,
+        faceImageUrl: getFaceImageDataUrl(participant), // decripta GCM ou usa legado
         approvalStatus: participant.approvalStatus || 'pending',
         isApproved
       },
@@ -194,3 +196,5 @@ function formatDuration(ms: number): string {
   }
   return `${minutes} min`
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

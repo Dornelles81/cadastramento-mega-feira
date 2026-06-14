@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { requireEventAccess, createAuditLog } from '../../../../../lib/auth'
 import { prisma } from '../../../../../lib/prisma'
+import { getFaceImageDataUrl } from '../../../../../lib/face-image'
 
 
 /**
@@ -52,7 +53,8 @@ export default async function handler(
           hikCentralSyncStatus: true, credentialNumber: true,
           credentialPrinted: true, credentialPrintedAt: true,
           checkedIn: true, checkedInAt: true, customData: true,
-          standId: true, stand: true, eventId: true
+          standId: true, stand: true, eventId: true,
+          faceImageUrl: true, faceData: true // foto p/ credencial; decriptada abaixo
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -77,10 +79,16 @@ export default async function handler(
     // ========================================================================
     // RESPONSE: Retornar dados
     // ========================================================================
+    // Decripta a foto server-side e nunca envia o blob criptografado ao client
+    const participantsOut = participants.map(({ faceData, ...p }) => ({
+      ...p,
+      faceImageUrl: getFaceImageDataUrl({ faceData, faceImageUrl: p.faceImageUrl })
+    }))
+
     return res.status(200).json({
       success: true,
       event: { id: event.id, slug: event.slug, name: event.name, code: event.code },
-      participants,
+      participants: participantsOut,
       total,
       page,
       totalPages: Math.ceil(total / limit),
