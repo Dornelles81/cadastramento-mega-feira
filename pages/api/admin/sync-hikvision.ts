@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import { prisma } from '../../../lib/prisma'
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 
 
 interface HikvisionUser {
@@ -29,16 +30,9 @@ interface HikvisionFaceData {
   faceData: string;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const authHeader = req.headers.authorization;
-  const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  
-  if (!authHeader || authHeader !== `Bearer ${validPassword}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const { participantIds, syncAll } = req.body;
@@ -263,3 +257,5 @@ export const config = {
     }
   }
 };
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES });

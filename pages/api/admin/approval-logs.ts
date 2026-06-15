@@ -1,14 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Check authentication
-  const authHeader = req.headers.authorization
-  const validPassword = process.env.ADMIN_PASSWORD || 'admin123'
-  if (!authHeader || authHeader !== `Bearer ${validPassword}`) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -73,3 +67,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } finally {
   }
 }
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

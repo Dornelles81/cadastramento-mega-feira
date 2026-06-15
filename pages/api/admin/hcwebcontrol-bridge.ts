@@ -1,10 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import { prisma } from '../../../lib/prisma'
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 
 
 // API Bridge para comunicação com HCWebControl
-export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
+async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   // Enable CORS for HCWebControl page
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -12,15 +13,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
-    return;
-  }
-
-  // Check authentication
-  const authHeader = req.headers.authorization;
-  const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  
-  if (!authHeader || !authHeader.includes(validPassword)) {
-    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
@@ -269,3 +261,5 @@ export const config = {
     }
   }
 };
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES });

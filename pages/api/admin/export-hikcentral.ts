@@ -4,8 +4,9 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -17,22 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Check admin authentication
-  // Allow access if coming from admin panel (check referer) or has valid auth header
-  const referer = req.headers.referer || '';
-  const host = req.headers.host || '';
-  const authHeader = req.headers.authorization;
-  const validPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
-  // Check if request is coming from admin pages or localhost
-  const isFromAdmin = referer.includes('/admin');
-  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-
-  // Allow if from admin, localhost, or has valid auth header
-  if (!isFromAdmin && !isLocalhost && (!authHeader || authHeader !== `Bearer ${validPassword}`)) {
-    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const format = req.query.format as string || 'excel';
@@ -262,3 +247,5 @@ export const config = {
     }
   }
 };
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES });

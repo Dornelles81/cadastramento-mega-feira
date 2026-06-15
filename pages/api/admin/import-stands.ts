@@ -2,9 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import xlsx from 'xlsx';
 import fs from 'fs';
-import crypto from 'crypto';
 import { prisma } from '../../../lib/prisma'
-
+import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 
 export const config = {
   api: {
@@ -12,41 +11,10 @@ export const config = {
   },
 };
 
-// Verify auth token
-function verifyToken(token: string): boolean {
-  try {
-    const SECRET_KEY = process.env.SECRET_KEY || 'mega-feira-secret-key-2025';
-    const now = Date.now();
-
-    // Check last 24 hours of possible tokens
-    for (let i = 0; i < 24; i++) {
-      const timestamp = Math.floor((now - (i * 60 * 60 * 1000)) / (60 * 60 * 1000));
-      const data = `${timestamp}-${SECRET_KEY}`;
-      const validToken = crypto.createHash('sha256').update(data).digest('hex');
-      if (token === validToken) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    return false;
-  }
-}
-
 // API to import stands from Excel
-export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
+async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
-  // Check authentication
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!token || !verifyToken(token)) {
-    res.status(401).json({ error: 'Não autorizado' });
     return;
   }
 
@@ -192,3 +160,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } finally {
   }
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })
