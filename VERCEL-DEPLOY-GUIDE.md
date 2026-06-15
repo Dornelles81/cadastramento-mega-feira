@@ -95,7 +95,7 @@ DPO_EMAIL = privacy@megafeira.com
 # Para HikCentral (não funcionará no Vercel cloud, apenas local)
 HIKVISION_DEVICE_IP = 192.168.1.20
 HIKVISION_USER = admin
-HIKVISION_PASSWORD = Index2016
+HIKVISION_PASSWORD = <senha-do-device>
 ```
 
 ### Como adicionar cada variável:

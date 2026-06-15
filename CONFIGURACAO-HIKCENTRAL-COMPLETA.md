@@ -7,14 +7,14 @@
 # HikCentral Professional Configuration
 HIKCENTAL_URL="http://localhost:80"
 HIKCENTAL_USERNAME="admin"
-HIKCENTAL_PASSWORD="Index2016"
+HIKCENTAL_PASSWORD="<senha-do-device>"
 ADMIN_PASSWORD="admin123"
 ```
 
 ### 2. **API de Sincronização** (`pages/api/admin/sync-hikcental.ts`)
 - URL Base: `http://localhost:80`
 - Endpoint: `/api/acs/v1/person/single/add`
-- Autenticação: Basic Auth (admin/Index2016)
+- Autenticação: Basic Auth (admin/<senha-do-device>)
 
 ### 3. **Interface Administrativa** (`app/admin/hikcental`)
 - URL de acesso: http://localhost:3001/admin/hikcental
@@ -81,7 +81,7 @@ O HikCentral Professional precisa estar instalado e rodando. Verifique:
 Execute este comando para descobrir a estrutura da API:
 ```bash
 # Teste manual com curl
-curl -u admin:Index2016 http://localhost:80/api/
+curl -u admin:<senha-do-device> http://localhost:80/api/
 ```
 
 #### **3. CONFIGURAR CREDENCIAIS CORRETAS**
@@ -159,7 +159,7 @@ Veja o console onde está rodando `npm run dev`
 curl http://localhost:80
 
 # Teste com autenticação
-curl -u admin:Index2016 http://localhost:80/api/
+curl -u admin:<senha-do-device> http://localhost:80/api/
 ```
 
 ### **Verificar banco de dados:**

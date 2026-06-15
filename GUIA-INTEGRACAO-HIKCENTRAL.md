@@ -11,7 +11,7 @@ Sincronizar automaticamente os dados dos participantes aprovados (incluindo foto
 ## ✅ Pré-requisitos
 
 1. **HikCentral Professional** instalado e rodando em `https://127.0.0.1`
-2. **Credenciais de acesso** ao HikCentral (padrão: admin/Index2016)
+2. **Credenciais de acesso** ao HikCentral (padrão: admin/<senha-do-device>)
 3. **Participantes aprovados** no sistema Mega Feira
 4. **Fotos faciais** capturadas durante o cadastro
 
@@ -120,7 +120,7 @@ hikcentral-photos-2025-10-01.zip
 # HikCentral Configuration
 HIKCENTAL_URL="https://127.0.0.1"
 HIKCENTAL_USERNAME="admin"
-HIKCENTAL_PASSWORD="Index2016"
+HIKCENTAL_PASSWORD="<senha-do-device>"
 HIKCENTAL_VALIDITY_DAYS="90"
 ```
 
