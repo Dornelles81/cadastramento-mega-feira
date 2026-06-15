@@ -1,8 +1,4 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-// import HikCentralPuppeteer from '../../../lib/hikcental/hikcentral-puppeteer'; // Disabled for Vercel compatibility
-import OptimusClient from '../../../lib/hikcental/optimus-client';
-import HikCentralISAPI from '../../../lib/hikcental/hikcentral-isapi';
-import HikCentralWebAPI from '../../../lib/hikcental/hikcentral-api';
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client';
 import { prisma } from '../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
@@ -41,144 +37,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       rejectionReason: action === 'reject' ? rejectionReason : null
     };
 
-    // If approved, send to HikCentral
-    if (action === 'approve') {
-      let syncSuccess = false;
-      let syncError = null;
-      let personId = null;
-
-      // Prepare person data
-      const personData = {
-        name: participant.name,
-        cpf: participant.cpf,
-        phone: participant.phone,
-        email: participant.email,
-        faceImageUrl: participant.faceImageUrl
-      };
-
-      // Try multiple integration methods
-      console.log('Attempting HikCentral integration...');
-
-      // Method 1: Browser automation (Puppeteer) - Disabled for Vercel compatibility
-      // try {
-      //   console.log('Trying browser automation...');
-      //   const puppeteer = new HikCentralPuppeteer();
-      //
-      //   const testResult = await puppeteer.testConnection();
-      //   if (testResult.success) {
-      //     const result = await puppeteer.addVisitor(personData);
-      //     personId = result.visitorId || personData.cpf.replace(/\D/g, '').substring(0, 8);
-      //
-      //     await puppeteer.disconnect();
-      //
-      //     syncSuccess = true;
-      //     console.log('User added via browser automation:', result);
-      //   }
-      // } catch (puppeteerError: any) {
-      //   console.log('Browser automation failed:', puppeteerError.message);
-      //   syncError = puppeteerError.message;
-      // }
-
-      // Method 1: Try Optimus Integration (primary method)
-      if (!syncSuccess) {
-        try {
-        console.log('Trying Optimus integration...');
-        const optimus = new OptimusClient();
-        
-        const testResult = await optimus.testConnection();
-        if (testResult.success) {
-          const userResult = await optimus.addPerson(personData);
-          personId = personData.cpf.replace(/\D/g, '').substring(0, 8);
-          
-          // Upload face if available
-          if (personData.faceImageUrl) {
-            try {
-              await optimus.uploadFace(personId, personData.faceImageUrl);
-            } catch (e) {
-              console.log('Face upload failed:', e);
-            }
-          }
-          
-          // Sync to devices
-          await optimus.syncToDevices(personId);
-          
-          syncSuccess = true;
-          console.log('User added via Optimus:', userResult);
-        }
-      } catch (optimusError: any) {
-        console.log('Optimus method failed:', optimusError.message);
-        syncError = optimusError.message;
-      }
-
-      }
-
-      // Method 3: Try ISAPI integration if previous methods failed
-      if (!syncSuccess) {
-        try {
-          console.log('Trying ISAPI integration...');
-          const isapi = new HikCentralISAPI();
-          
-          const testResult = await isapi.testConnection();
-          if (testResult.success) {
-            const userResult = await isapi.addUser(personData);
-            personId = personData.cpf.replace(/\D/g, '').substring(0, 8);
-            syncSuccess = true;
-            console.log('User added via ISAPI:', userResult);
-          }
-        } catch (isapiError: any) {
-          console.log('ISAPI method failed:', isapiError.message);
-          syncError = isapiError.message;
-        }
-      }
-
-      // Method 4: Try Web API integration if all previous methods failed
-      if (!syncSuccess) {
-        try {
-          console.log('Trying Web API integration...');
-          const webApi = new HikCentralWebAPI();
-          
-          const loginSuccess = await webApi.login('admin', 'Index2016');
-          if (loginSuccess) {
-            const addResult = await webApi.addPerson(personData);
-            personId = addResult.personId || personData.cpf.replace(/\D/g, '').substring(0, 8);
-            syncSuccess = true;
-            console.log('User added via Web API:', addResult);
-          }
-        } catch (webError: any) {
-          console.log('Web API method failed:', webError.message);
-          syncError = webError.message;
-        }
-      }
-
-      // Update sync status based on results
-      if (syncSuccess) {
-        updateData.hikCentralSyncStatus = 'synced';
-        updateData.hikCentralPersonId = personId;
-        updateData.hikCentralSyncedAt = new Date();
-        updateData.hikCentralErrorMsg = null;
-        
-        console.log('✅ HikCentral sync successful for:', participant.name);
-      } else {
-        // Still approve but mark sync as failed
-        updateData.hikCentralSyncStatus = 'failed';
-        updateData.hikCentralErrorMsg = syncError || 'Failed to sync with HikCentral Professional';
-        
-        console.error('❌ HikCentral sync failed for:', participant.name);
-        
-        // Create sync log
-        await prisma.hikCentralSyncLog.create({
-          data: {
-            participantId: participant.id,
-            syncType: 'individual',
-            syncStatus: 'failed',
-            syncDirection: 'upload',
-            errorMessage: syncError,
-            startedAt: new Date(),
-            completedAt: new Date()
-          }
-        });
-      }
-    }
+    // Sincronização biométrica com os terminais é feita pelo agente local
+    // (ParticipantTerminalSync), não mais inline aqui — ver device-integration-plan.
 
     // Update participant
     const updatedParticipant = await prisma.participant.update({
@@ -262,7 +122,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(200).json({
       success: true,
       participant: updatedParticipant,
-      hikvisionSync: updateData.hikCentralSyncStatus === 'synced' ? 'success' : 'failed',
+      hikvisionSync: 'pending',
       whatsappSent: whatsappSent,
       whatsappError: whatsappError
     });

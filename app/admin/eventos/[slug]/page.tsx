@@ -1043,13 +1043,6 @@ export default function EventAdminPage() {
                   📋 <span className="hidden sm:inline ml-1">QR CSV</span>
                 </a>
                 <a
-                  href={`/admin/eventos/${eventSlug}/hikcental`}
-                  className="inline-flex items-center px-3 py-2 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm"
-                  title="Integração com HikCentral - Exportar participantes para reconhecimento facial"
-                >
-                  🔗 <span className="hidden md:inline ml-1">HikCentral</span>
-                </a>
-                <a
                   href="/admin/logs"
                   className="inline-flex items-center px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
                   title="Ver logs de auditoria"
