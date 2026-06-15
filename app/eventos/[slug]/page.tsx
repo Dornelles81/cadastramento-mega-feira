@@ -124,6 +124,8 @@ export default function EventoPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUpdateMode, setIsUpdateMode] = useState(false)
   const [participantId, setParticipantId] = useState<string>('')
+  // Edição self-service por token (Grupo D): identidade vem do token, não do id
+  const [editToken, setEditToken] = useState<string>('')
   const [textConfig, setTextConfig] = useState({
     successText: 'Acesso Liberado!\n\nSeu cadastro foi realizado com sucesso.\nGuarde seu comprovante de registro.',
     instructionsText: 'Como Usar\n\n1. Leia e aceite os termos\n2. Preencha seus dados pessoais\n3. Capture sua foto\n4. Aguarde a confirmacao'
@@ -140,9 +142,15 @@ export default function EventoPage() {
   // Check for update mode
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const tokenParam = params.get('editToken')
     const updateId = params.get('update')
 
-    if (updateId && event) {
+    if (tokenParam && event) {
+      // Edição self-service via token (prova de posse) — identidade do token
+      setIsUpdateMode(true)
+      setEditToken(tokenParam)
+      loadParticipantDataByToken(tokenParam)
+    } else if (updateId && event) {
       console.log('Update mode detected for ID:', updateId)
       setIsUpdateMode(true)
       setParticipantId(updateId)
@@ -225,6 +233,33 @@ export default function EventoPage() {
       }
     } catch (error) {
       console.error('Failed to load text config:', error)
+    }
+  }
+
+  // Edição via token: get?token=, com a resposta mínima (sem foto/documentos,
+  // CPF mascarado). O CPF fica read-only no modo edição (update ignora CPF).
+  const loadParticipantDataByToken = async (token: string) => {
+    try {
+      const response = await fetch(`/api/participants/get?token=${encodeURIComponent(token)}`)
+      if (response.ok) {
+        const { participant } = await response.json()
+        setRegistrationData({
+          name: participant.name || '',
+          cpf: participant.cpfMasked || '',
+          email: participant.email || '',
+          phone: participant.phone || '',
+          eventCode: event?.code || participant.eventCode || '',
+          consent: true,
+          customData: { ...participant.customData, standCode: participant.standCode || '' }
+        } as any)
+        setConsentChecked(true)
+        setCurrentStep('personal')
+      } else {
+        alert('Link de edição inválido ou expirado. Peça um novo à organização.')
+      }
+    } catch (error) {
+      console.error('Error loading participant data (token):', error)
+      alert('Erro ao carregar dados. Tente novamente.')
     }
   }
 
@@ -328,9 +363,14 @@ export default function EventoPage() {
 
     try {
       const endpoint = isUpdateMode ? '/api/participants/update' : '/api/register-fixed'
-      const updatePayload = isUpdateMode
-        ? { ...payload, id: participantId, documents: registrationData.customData?.documents }
-        : payload
+      // Edição por token: identidade vem do token, NUNCA do id (buraco fechado)
+      const updatePayload = editToken
+        ? { token: editToken, name: payload.name, email: payload.email, phone: payload.phone,
+            faceImage: payload.faceImage, faceData: payload.faceData,
+            customData: payload.customData, documents: registrationData.customData?.documents }
+        : isUpdateMode
+          ? { ...payload, id: participantId, documents: registrationData.customData?.documents }
+          : payload
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -696,6 +736,7 @@ export default function EventoPage() {
               onSubmit={handlePersonalDataSubmit}
               onBack={() => setCurrentStep('consent')}
               eventCode={event.code}
+              cpfReadOnly={!!editToken}
               initialData={{
                 name: registrationData.name,
                 cpf: registrationData.cpf,

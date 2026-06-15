@@ -36,9 +36,14 @@ interface DynamicFormProps {
    * (removido conforme SPEC acesso-por-stand).
    */
   fixedStand?: { name: string; code: string; location?: string | null }
+  /**
+   * Edição self-service: CPF chega mascarado e read-only (o update ignora CPF).
+   * Desabilita o input e pula a validação de 11 dígitos para o valor mascarado.
+   */
+  cpfReadOnly?: boolean
 }
 
-export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, fixedStand }: DynamicFormProps) {
+export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, fixedStand, cpfReadOnly }: DynamicFormProps) {
   const [fields, setFields] = useState<FormField[]>([])
   const [documentFields, setDocumentFields] = useState<DocumentFieldConfig[]>([])
   const [formData, setFormData] = useState<any>(initialData || {})
@@ -242,7 +247,7 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
       }
 
       // Special validations
-      if (field.fieldName === 'cpf' && formData[field.fieldName]) {
+      if (field.fieldName === 'cpf' && !cpfReadOnly && formData[field.fieldName]) {
         const cpf = formData[field.fieldName].replace(/\D/g, '')
         if (cpf.length !== 11) {
           newErrors[field.fieldName] = 'CPF inválido'
@@ -412,6 +417,20 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
 
       case 'text':
         if (field.fieldName === 'cpf') {
+          if (cpfReadOnly) {
+            // Edição: CPF mascarado e não-editável (update ignora CPF)
+            return (
+              <input
+                type="text"
+                name={field.fieldName}
+                value={formData[field.fieldName] || ''}
+                disabled
+                readOnly
+                title="O CPF não pode ser alterado por este link"
+                className="w-full px-4 py-3 border border-white/20 rounded-lg text-base bg-gray-100 text-gray-500 cursor-not-allowed"
+              />
+            )
+          }
           return (
             <input
               type="text"

@@ -23,6 +23,14 @@ const nextConfig = {
         ],
       },
       {
+        // Edição self-service: dados pessoais atrás de link mágico — no-store
+        source: '/editar/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, max-age=0' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           {

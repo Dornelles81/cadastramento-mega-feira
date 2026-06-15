@@ -1,102 +1,88 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { encryptString } from '../../../lib/crypto'
+import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
+import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
 
+/**
+ * POST /api/participants/update
+ * Body: { token, name?, email?, phone?, faceImage?, faceData?, customData?, documents? }
+ *
+ * Atualização self-service do PRÓPRIO cadastro. O participantId vem
+ * EXCLUSIVAMENTE do token validado no servidor — qualquer `id` no body é
+ * IGNORADO (fecha o buraco original). Auditoria PARTICIPANT_SELF_UPDATE com
+ * throttle.
+ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  if (!rateLimitOrReject(req, res, 'participants-update', 10, 10 * 60 * 1000)) {
+    return
+  }
+
   try {
-    const {
-      id,
-      name,
-      email,
-      phone,
-      faceImage,
-      faceData,
-      customData,
-      documents
-    } = req.body
+    const { token, name, email, phone, faceImage, faceData, customData, documents } = req.body
 
-    console.log('🔄 Updating participant:', { id, name })
-
-    if (!id) {
-      return res.status(400).json({ error: 'ID is required' })
+    if (!token || typeof token !== 'string') {
+      return res.status(401).json({ error: 'Token de edição obrigatório' })
     }
 
-    // Check if participant exists
-    const existing = await prisma.participant.findUnique({
-      where: { id }
-    })
+    const access = await validateEditToken(token)
+    if (!access) {
+      return res.status(401).json({ error: 'Link de edição inválido ou expirado' })
+    }
 
+    // participantId SÓ do token; o `id` do body é ignorado de propósito
+    const participantId = access.participant.id
+
+    const existing = await prisma.participant.findUnique({ where: { id: participantId } })
     if (!existing) {
       return res.status(404).json({ error: 'Participant not found' })
     }
 
-    // Prepare update data
     const updateData: any = {}
-
-    // Only update fields that were provided
     if (name) updateData.name = name
     if (email !== undefined) updateData.email = email
     if (phone !== undefined) updateData.phone = phone
 
-    // Update face image if provided
+    // Foto: criptografada (AES-256-GCM), nunca plaintext
     if (faceImage) {
-      updateData.faceImageUrl = faceImage
+      const faceDataUrl = faceImage.includes(',')
+        ? faceImage
+        : `data:image/jpeg;base64,${faceImage}`
+      updateData.faceData = encryptString(faceDataUrl)
+      updateData.faceImageUrl = null
     }
-
-    // Update face data if provided
     if (faceData) {
       updateData.captureQuality = faceData.quality || faceData.qualityPercentage / 100
     }
-
-    // Update custom data (merge with existing)
     if (customData) {
-      const existingCustomData = (existing.customData as any) || {}
-      updateData.customData = {
-        ...existingCustomData,
-        ...customData
-      }
+      updateData.customData = { ...((existing.customData as any) || {}), ...customData }
     }
-
-    // Update documents (merge with existing)
     if (documents) {
-      const existingDocuments = (existing.documents as any) || {}
-      updateData.documents = {
-        ...existingDocuments,
-        ...documents
-      }
+      updateData.documents = { ...((existing.documents as any) || {}), ...documents }
     }
-
-    // Update timestamp
     updateData.updatedAt = new Date()
 
-    // Perform update
     const updated = await prisma.participant.update({
-      where: { id },
+      where: { id: participantId },
       data: updateData
     })
 
-    console.log('✅ Participant updated successfully:', updated.id)
+    await auditSelfUpdate(access, {
+      ip: getClientIp(req),
+      userAgent: (req.headers['user-agent'] as string) ?? null
+    })
 
     return res.status(200).json({
       success: true,
       message: 'Cadastro atualizado com sucesso!',
-      participant: {
-        id: updated.id,
-        name: updated.name,
-        cpf: updated.cpf
-      }
+      participant: { id: updated.id, name: updated.name }
     })
-
   } catch (error) {
-    console.error('❌ Error updating participant:', error)
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: 'Erro ao atualizar cadastro'
-    })
-  } finally {
-    await prisma.$disconnect()
+    console.error('Error updating participant (self):', error)
+    return res.status(500).json({ error: 'Internal server error', message: 'Erro ao atualizar cadastro' })
   }
 }
