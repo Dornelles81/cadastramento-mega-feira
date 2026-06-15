@@ -44,6 +44,10 @@ model Event {
   isActive Boolean @default(true)
   isPublic Boolean @default(true) // Public registration or invitation only
 
+  // Integração de terminais (Fase 0): se true, só participantes aprovados
+  // entram nos terminais; se false, o evento libera sem aprovação manual.
+  requiresApprovalForAccess Boolean @default(true)
+
   // Customization
   theme    Json? // { primaryColor, secondaryColor, logo, banner }
   settings Json? // { requireDocuments, autoApprove, notifyParticipants }
@@ -98,6 +102,8 @@ model Event {
   accessStats        AccessStats?
   vehicleCredentials VehicleCredential[]
   vehicleAccessLogs  VehicleAccessLog[]
+  terminals          Terminal[]
+  agentTokens        AgentToken[]
 
   @@index([slug])
   @@index([code])
@@ -257,6 +263,11 @@ model Participant {
   // Credential numbering
   credentialNumber String? // Sequential per event (e.g., "0042")
 
+  // Card number p/ terminal + QR do crachá (Fase 0: reservado; valor numérico
+  // dedicado sem relação com dado pessoal, atribuído na Fase 1). Unicidade por
+  // evento vem na Fase 1 quando a estratégia de valor for definida.
+  cardNumber String?
+
   // Credential print tracking
   credentialPrinted   Boolean   @default(false)
   credentialPrintedAt DateTime?
@@ -301,10 +312,11 @@ model Participant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  syncLogs     HikCentralSyncLog[]
-  approvalLogs ApprovalLog[]
-  accessLogs   AccessLog[]
-  editTokens   ParticipantEditToken[]
+  syncLogs       HikCentralSyncLog[]
+  approvalLogs   ApprovalLog[]
+  accessLogs     AccessLog[]
+  editTokens     ParticipantEditToken[]
+  terminalSyncs  ParticipantTerminalSync[]
 
   @@unique([eventId, cpf])
   @@index([eventId])
@@ -435,6 +447,96 @@ model ParticipantEditToken {
 
   @@index([participantId])
   @@map("participant_edit_tokens")
+}
+
+// ============================================================================
+// INTEGRAÇÃO DE TERMINAIS FACIAIS (Hikvision ISAPI, Fase 0)
+// ============================================================================
+
+// Terminal facial gerenciado pelo agente local. Lista configurável de N
+// terminais (adicionar/remover = config, não código). Senha do device em
+// AES-256-GCM (passwordEncrypted), decriptada só na nuvem; entregue ao agente
+// em runtime pelo endpoint autenticado.
+model Terminal {
+  id String @id @default(uuid())
+
+  // Escopo por evento (coerente com o token do agente por evento)
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  name      String // rótulo humano: "Catraca Entrada Principal"
+  ipAddress String
+  port      Int     @default(80)
+  useHttps  Boolean @default(false)
+  username  String  @default("admin")
+  passwordEncrypted Bytes? // senha do device, AES-256-GCM; nunca em claro/código
+
+  gate          String? // local/portão
+  capacityLimit Int     @default(5000) // capacidade de faces do DS-K1T671M-L
+
+  isActive   Boolean   @default(true)
+  lastSeenAt DateTime? // último contato bem-sucedido (heartbeat do agente)
+  lastError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syncStates ParticipantTerminalSync[]
+
+  @@index([eventId])
+  @@index([isActive])
+  @@map("terminals")
+}
+
+// Estado de sincronização POR participante POR terminal (substitui os flags
+// single-device legados). É a fila de trabalho do agente.
+model ParticipantTerminalSync {
+  id String @id @default(uuid())
+
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  terminalId String
+  terminal   Terminal @relation(fields: [terminalId], references: [id], onDelete: Cascade)
+
+  faceState    String @default("pending") // pending | synced | failed | na
+  cardState    String @default("pending") // pending | synced | failed
+  removalState String @default("none") // none | pending | removed | failed
+
+  syncedAt      DateTime?
+  removedAt     DateTime?
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime? // p/ backoff
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([participantId, terminalId])
+  @@index([terminalId, removalState]) // fila de remoção
+  @@index([terminalId, faceState]) // fila de inclusão
+  @@map("participant_terminal_sync")
+}
+
+// Token do agente local (revogável, escopo por evento). Mesmo padrão dos
+// demais tokens: só o hash SHA-256 é guardado; o claro aparece 1x na geração.
+model AgentToken {
+  id String @id @default(uuid())
+
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  tokenHash String  @unique
+  name      String // "PC Catraca — Evento X"
+  createdBy String? // admin que gerou
+
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  revokedAt  DateTime? // NULL = ativo (kill switch)
+  lastUsedAt DateTime?
+
+  @@index([eventId])
+  @@map("agent_tokens")
 }
 
 // ============================================================================
