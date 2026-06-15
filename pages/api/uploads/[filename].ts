@@ -4,21 +4,29 @@ import path from 'path'
 import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth'
 
 // Serve documentos enviados no cadastro (RG, CNH etc.) — conteúdo sensível,
-// somente autenticados. ATENÇÃO: ainda falta o fix de path traversal em
-// `path.join(..., filename)` (LFI) — pendente, tratar como follow-up imediato.
+// somente autenticados.
+const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads')
+
 function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
   const { filename } = req.query
-  
+
   if (!filename || typeof filename !== 'string') {
     return res.status(400).json({ error: 'Invalid filename' })
   }
 
-  const filePath = path.join(process.cwd(), 'uploads', filename)
-  
+  // Anti path traversal (LFI): aceitar apenas o nome-base (sem separadores de
+  // diretório) e validar que o caminho resolvido permanece dentro de UPLOAD_DIR.
+  // Bloqueia ../, caminhos absolutos, etc. — ex.: uploads/../../etc/passwd.
+  const safeName = path.basename(filename)
+  const filePath = path.resolve(UPLOAD_DIR, safeName)
+  if (safeName !== filename || !filePath.startsWith(UPLOAD_DIR + path.sep)) {
+    return res.status(400).json({ error: 'Invalid filename' })
+  }
+
   // Check if file exists
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File not found' })
