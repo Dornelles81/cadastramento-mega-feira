@@ -27,6 +27,18 @@ export interface HikvisionFace {
   };
 }
 
+// Credencial por instância — injetada por quem constrói o client (na nuvem, o
+// endpoint do agente decripta a senha do Terminal e a passa aqui). Este módulo
+// NÃO lê env de credencial, não toca Prisma e não conhece a MASTER_KEY: só faz
+// ISAPI/axios contra o IP informado.
+export interface HikvisionClientConfig {
+  ipAddress: string;
+  port?: number;      // default 80
+  useHttps?: boolean; // default false
+  username: string;
+  password: string;
+}
+
 export class HikvisionClient {
   private client: AxiosInstance;
   private digestAuth: DigestAuth | null = null;
@@ -34,10 +46,16 @@ export class HikvisionClient {
   private username: string;
   private password: string;
 
-  constructor() {
-    this.baseURL = `http://${process.env.HIKVISION_DEVICE_IP}`;
-    this.username = process.env.HIKVISION_USER || 'admin';
-    this.password = process.env.HIKVISION_PASSWORD || '';
+  constructor(config: HikvisionClientConfig) {
+    if (!config || !config.ipAddress) {
+      throw new Error('HikvisionClient requires a config with ipAddress');
+    }
+
+    const scheme = config.useHttps ? 'https' : 'http';
+    const port = config.port ?? 80;
+    this.baseURL = `${scheme}://${config.ipAddress}:${port}`;
+    this.username = config.username;
+    this.password = config.password;
 
     // Create digest auth instance
     try {
@@ -46,6 +64,12 @@ export class HikvisionClient {
       console.warn('DigestAuth initialization failed, will use basic auth only');
       this.digestAuth = null;
     }
+
+    // Terminais na LAN usam certificado self-signed; quando em HTTPS, não validar
+    // a cadeia (dispositivo local, não endpoint público).
+    const httpsAgent = config.useHttps
+      ? new (require('https').Agent)({ rejectUnauthorized: false })
+      : undefined;
 
     // Create axios instance (will try basic auth first)
     this.client = axios.create({
@@ -59,10 +83,7 @@ export class HikvisionClient {
         'Content-Type': 'application/json',
         'Accept': 'application/json, application/xml'
       },
-      // Handle self-signed certificates
-      httpsAgent: process.env.NODE_ENV === 'development' ? new (require('https').Agent)({
-        rejectUnauthorized: false
-      }) : undefined
+      httpsAgent
     });
   }
 
@@ -252,6 +273,58 @@ export class HikvisionClient {
       return response.data;
     } catch (error) {
       console.error('Error uploading face:', error);
+      throw error;
+    }
+  }
+
+  // Registra um cartão (credencial numérica) para um usuário já existente.
+  // O `cardNo` é o número que também será codificado no QR impresso (Fase 3).
+  // ISAPI: /ISAPI/AccessControl/CardInfo/Record.
+  //
+  // FASE 1 (terminal de bancada): validar o round-trip real — confirmar que o
+  // DS-K1T671M-L aceita exatamente este formato de CardInfo, qual `cardType` ele
+  // espera, e se o QR é derivado do `cardNo`. Aqui só montamos o payload e a auth.
+  async registerCard(employeeNo: string, cardNumber: string, cardType: string = 'normalCard') {
+    try {
+      const cardData = {
+        CardInfo: {
+          employeeNo,
+          cardNo: cardNumber,
+          cardType
+        }
+      };
+
+      // Try with digest auth first if available
+      if (this.digestAuth) {
+        try {
+          const response = await this.digestAuth.request({
+            method: 'POST',
+            url: `${this.baseURL}/ISAPI/AccessControl/CardInfo/Record?format=json`,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            data: cardData,
+            timeout: 30000
+          });
+
+          console.log('Card registered successfully with digest auth');
+          return response.data;
+        } catch (digestError: any) {
+          console.log('Digest auth failed for registerCard, trying basic auth...');
+        }
+      }
+
+      // Fallback to basic auth
+      const response = await this.client.post(
+        '/ISAPI/AccessControl/CardInfo/Record?format=json',
+        cardData
+      );
+
+      console.log('Card registered successfully with basic auth');
+      return response.data;
+    } catch (error) {
+      console.error('Error registering card:', error);
       throw error;
     }
   }

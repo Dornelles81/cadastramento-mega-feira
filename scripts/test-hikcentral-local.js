@@ -17,8 +17,8 @@ const configs = [
   { url: 'https://192.168.1.20:443', desc: 'HikCentral IP Local HTTPS' }
 ];
 
-const username = 'admin';
-const password = 'Index2016';
+const username = process.env.HIKCENTAL_USERNAME || 'admin';
+const password = process.env.HIKCENTAL_PASSWORD || '';
 
 async function testHikCentralConnection() {
   console.log('🔍 Testando conexões possíveis com HikCentral...');

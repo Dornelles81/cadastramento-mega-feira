@@ -1,6 +1,7 @@
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import HikvisionClient from '../../../lib/hikvision/client';
+import { legacyEnvConfig } from '../../../lib/hikvision/legacy-env';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -12,7 +13,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     console.log('Device IP:', process.env.HIKVISION_DEVICE_IP);
     console.log('User:', process.env.HIKVISION_USER);
     
-    const hikvision = new HikvisionClient();
+    const hikvision = new HikvisionClient(legacyEnvConfig());
     
     // Test 1: Get device info
     console.log('Getting device info...');

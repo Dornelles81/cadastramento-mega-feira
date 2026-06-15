@@ -40,7 +40,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Configuração do dispositivo Hikvision
   const HIKVISION_URL = `http://${process.env.HIKVISION_DEVICE_IP || '192.168.1.20'}`;
   const HIKVISION_USERNAME = process.env.HIKVISION_USER || 'admin';
-  const HIKVISION_PASSWORD = process.env.HIKVISION_PASSWORD || 'Index2016';
+  const HIKVISION_PASSWORD = process.env.HIKVISION_PASSWORD || '';
 
   try {
     let participants;

@@ -41,7 +41,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   
   const HIKCENTAL_URL = process.env.HIKCENTAL_URL || 'http://localhost:80';
   const HIKCENTAL_USERNAME = process.env.HIKCENTAL_USERNAME || 'admin';
-  const HIKCENTAL_PASSWORD = process.env.HIKCENTAL_PASSWORD || 'Index2016';
+  const HIKCENTAL_PASSWORD = process.env.HIKCENTAL_PASSWORD || '';
 
   try {
     let participants;

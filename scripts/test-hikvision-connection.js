@@ -2,9 +2,9 @@ const axios = require('axios');
 const https = require('https');
 
 // Configurações do dispositivo
-const HIKVISION_IP = '192.168.1.20';
-const HIKVISION_USER = 'admin';
-const HIKVISION_PASSWORD = 'Index2016';
+const HIKVISION_IP = process.env.HIKVISION_DEVICE_IP || '192.168.1.20';
+const HIKVISION_USER = process.env.HIKVISION_USER || 'admin';
+const HIKVISION_PASSWORD = process.env.HIKVISION_PASSWORD || '';
 
 // Ignorar certificado SSL autoassinado
 const httpsAgent = new https.Agent({

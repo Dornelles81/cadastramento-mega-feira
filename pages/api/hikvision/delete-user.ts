@@ -1,6 +1,7 @@
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import HikvisionClient from '../../../lib/hikvision/client';
+import { legacyEnvConfig } from '../../../lib/hikvision/legacy-env';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
@@ -17,7 +18,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    const hikvision = new HikvisionClient();
+    const hikvision = new HikvisionClient(legacyEnvConfig());
     
     console.log('Deleting user:', employeeNo);
     

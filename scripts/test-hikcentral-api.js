@@ -2,8 +2,8 @@ const axios = require('axios');
 
 // Configuração
 const HIKCENTAL_URL = 'http://localhost:80';
-const USERNAME = 'admin';
-const PASSWORD = 'Index2016';
+const USERNAME = process.env.HIKCENTAL_USERNAME || 'admin';
+const PASSWORD = process.env.HIKCENTAL_PASSWORD || '';
 
 // Dados de teste
 const testPerson = {

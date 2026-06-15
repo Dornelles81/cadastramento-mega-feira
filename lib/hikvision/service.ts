@@ -2,6 +2,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import HikvisionClient from './client';
+import { legacyEnvConfig } from './legacy-env';
 
 const prisma = new PrismaClient();
 
@@ -9,7 +10,8 @@ export class HikvisionService {
   private client: HikvisionClient;
 
   constructor() {
-    this.client = new HikvisionClient();
+    // LEGADO single-device: credencial vinda do env (ver legacy-env).
+    this.client = new HikvisionClient(legacyEnvConfig());
   }
 
   // Sync a single participant to Hikvision
