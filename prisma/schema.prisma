@@ -304,6 +304,7 @@ model Participant {
   syncLogs     HikCentralSyncLog[]
   approvalLogs ApprovalLog[]
   accessLogs   AccessLog[]
+  editTokens   ParticipantEditToken[]
 
   @@unique([eventId, cpf])
   @@index([eventId])
@@ -406,6 +407,34 @@ model StandAccessToken {
 
   @@index([standId])
   @@map("stand_access_tokens")
+}
+
+// Participant Edit Token - self-service edit via magic link (Grupo D).
+// Espelha StandAccessToken: só o hash SHA-256 do token é guardado; o token em
+// claro aparece uma vez na geração (link enviado ao participante). Prova de
+// posse para editar o PRÓPRIO cadastro sem auth de admin — get/update derivam
+// o participantId deste token, nunca do client. Reutilizável até expirar.
+model ParticipantEditToken {
+  id String @id @default(uuid())
+
+  // Participant association
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // SHA-256 hash of the raw token (base64url of 32 random bytes)
+  tokenHash String @unique
+
+  // Id/email do admin que gerou o link (sem FK, como StandAccessToken)
+  createdBy String?
+
+  // Lifecycle — expiresAt = fim do evento + 7d, piso 7d, teto 30d
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  revokedAt  DateTime? // NULL = ativo
+  lastUsedAt DateTime?
+
+  @@index([participantId])
+  @@map("participant_edit_tokens")
 }
 
 // ============================================================================
