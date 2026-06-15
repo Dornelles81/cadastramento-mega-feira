@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
@@ -409,6 +409,27 @@ export default function EventAdminPage() {
       case 'MEGA-FEIRA-2025': return 'Mega Feira 2025'
       default: return eventCode
     }
+  }
+
+  // Cache do link de edição por participante (ref, não estado: imune ao
+  // race dos setEditingParticipant subsequentes dos handlers).
+  const editLinkRef = useRef<{ id: string; url: string } | null>(null)
+
+  // Gera (uma vez por participante) o link de edição self-service tokenizado
+  // e o cacheia, evitando gerações múltiplas — cada geração revoga a anterior.
+  // Substitui o antigo `/?update=<id>` montado no cliente por uma prova de
+  // posse derivada de token validado no servidor.
+  const ensureEditLink = async (): Promise<string> => {
+    const pid = editingParticipant.id
+    if (editLinkRef.current?.id === pid) return editLinkRef.current.url
+    const res = await fetch(`/api/admin/participants/${pid}/edit-link`, { method: 'POST' })
+    if (!res.ok) {
+      alert('Erro ao gerar o link de edição. Tente novamente.')
+      throw new Error('edit-link failed')
+    }
+    const data = await res.json()
+    editLinkRef.current = { id: pid, url: data.url }
+    return data.url as string
   }
 
   const handleEdit = (participant: Participant) => {
@@ -1564,12 +1585,9 @@ export default function EventAdminPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const eventName = event?.name || 'evento'
-                          const baseUrl = (editingParticipant as any).useProductionUrl
-                            ? 'https://cadastramento-mega-feira.vercel.app'
-                            : window.location.origin
-                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          const updateUrl = await ensureEditLink()
                           const message = `Olá ${editingParticipant.name.split(' ')[0]}, detectamos um problema com a foto do seu cadastro na *${eventName}*.\n\n📸 Por favor, acesse o link abaixo para enviar uma nova foto:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
@@ -1579,12 +1597,9 @@ export default function EventAdminPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const eventName = event?.name || 'evento'
-                          const baseUrl = (editingParticipant as any).useProductionUrl
-                            ? 'https://cadastramento-mega-feira.vercel.app'
-                            : window.location.origin
-                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          const updateUrl = await ensureEditLink()
                           const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos de um novo documento para completar seu cadastro na *${eventName}*.\n\n📄 Por favor, acesse o link abaixo para enviar:\n\n${updateUrl}\n\nSeu cadastro será atualizado automaticamente.`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
@@ -1605,12 +1620,9 @@ export default function EventAdminPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const eventName = event?.name || 'evento'
-                          const baseUrl = (editingParticipant as any).useProductionUrl
-                            ? 'https://cadastramento-mega-feira.vercel.app'
-                            : window.location.origin
-                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                          const updateUrl = await ensureEditLink()
                           const message = `Olá ${editingParticipant.name.split(' ')[0]}, precisamos que você atualize alguns dados do seu cadastro na *${eventName}*.\n\n📝 Acesse o link abaixo:\n\n${updateUrl}\n\nObrigado!`
                           setEditingParticipant({...editingParticipant, whatsappMessage: message})
                         }}
@@ -1620,11 +1632,8 @@ export default function EventAdminPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          const baseUrl = (editingParticipant as any).useProductionUrl
-                            ? 'https://cadastramento-mega-feira.vercel.app'
-                            : window.location.origin
-                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                        onClick={async () => {
+                          const updateUrl = await ensureEditLink()
                           setEditingParticipant({...editingParticipant, whatsappMessage: updateUrl})
                         }}
                         className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded text-xs hover:bg-indigo-100 transition-colors"
@@ -1690,11 +1699,8 @@ export default function EventAdminPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          const baseUrl = (editingParticipant as any).useProductionUrl
-                            ? 'https://cadastramento-mega-feira.vercel.app'
-                            : window.location.origin
-                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                        onClick={async () => {
+                          const updateUrl = await ensureEditLink()
                           navigator.clipboard.writeText(updateUrl).then(() => {
                             alert('✅ Link copiado! Cole no WhatsApp ou onde desejar.')
                           }).catch(() => {
@@ -1707,11 +1713,8 @@ export default function EventAdminPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          const baseUrl = (editingParticipant as any).useProductionUrl
-                            ? 'https://cadastramento-mega-feira.vercel.app'
-                            : window.location.origin
-                          const updateUrl = `${baseUrl}/?update=${editingParticipant.id}`
+                        onClick={async () => {
+                          const updateUrl = await ensureEditLink()
                           window.open(updateUrl, '_blank')
                         }}
                         className="py-2 bg-purple-500 text-white rounded-lg text-xs font-semibold hover:bg-purple-600 transition-colors flex items-center justify-center gap-1"
