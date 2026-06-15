@@ -1,0 +1,114 @@
+/**
+ * GET /api/agent/work[?terminalId=&limit=]
+ *
+ * Trabalho pendente para o agente, escopado ao evento do token. É AQUI que a
+ * face é DECRIPTADA na nuvem (server-side, única vez que a MASTER_KEY é tocada
+ * neste fluxo): a resposta entrega a face já em claro (data URL base64), pronta
+ * para o agente enviar ao terminal — o PC do evento nunca decripta nada.
+ *
+ * Fonte: linhas ParticipantTerminalSync com estado pendente. Itens de PUSH
+ * (face/card) só são servidos se o participante ainda for elegível agora
+ * (status/isDeleted/face/approval) — não entregamos a face de quem deixou de
+ * ser elegível. Itens de REMOÇÃO são servidos independentemente.
+ *
+ * Read-only sobre o estado: a materialização das linhas (fan-out) é da Fase 2.
+ */
+import type { NextApiRequest, NextApiResponse } from 'next'
+import { prisma } from '../../../lib/prisma'
+import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
+import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { isEligible, deriveEmployeeNo } from '../../../lib/agent/eligibility'
+
+const DEFAULT_LIMIT = 50
+const MAX_LIMIT = 200
+
+async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentContext) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+  if (!agent.eventId) {
+    return res.status(200).json({ push: [], removals: [] })
+  }
+
+  const terminalId = typeof req.query.terminalId === 'string' ? req.query.terminalId : undefined
+  const limit = Math.min(
+    Number(req.query.limit) || DEFAULT_LIMIT,
+    MAX_LIMIT
+  )
+
+  // Só terminais do evento do token (e, se pedido, um terminal específico DENTRO
+  // do escopo — nunca de outro evento).
+  const rows = await prisma.participantTerminalSync.findMany({
+    where: {
+      terminal: {
+        eventId: agent.eventId,
+        ...(terminalId ? { id: terminalId } : {})
+      },
+      OR: [
+        { faceState: 'pending' },
+        { cardState: 'pending' },
+        { removalState: 'pending' }
+      ]
+    },
+    take: limit,
+    orderBy: { createdAt: 'asc' },
+    include: {
+      participant: {
+        select: {
+          id: true,
+          name: true,
+          cpf: true,
+          status: true,
+          isDeleted: true,
+          approvalStatus: true,
+          faceData: true,
+          faceImageUrl: true,
+          cardNumber: true,
+          credentialNumber: true,
+          event: { select: { requiresApprovalForAccess: true } }
+        }
+      }
+    }
+  })
+
+  const push: any[] = []
+  const removals: any[] = []
+
+  for (const row of rows) {
+    const p = row.participant
+    const employeeNo = deriveEmployeeNo(p)
+
+    if (row.removalState === 'pending') {
+      removals.push({ syncId: row.id, terminalId: row.terminalId, employeeNo })
+      // Remoção e push são mutuamente exclusivos por linha.
+      continue
+    }
+
+    const needFace = row.faceState === 'pending'
+    const needCard = row.cardState === 'pending'
+    if (!needFace && !needCard) continue
+
+    const requiresApproval = p.event?.requiresApprovalForAccess ?? true
+    if (!isEligible(p, { requiresApproval })) {
+      // Não elegível agora: não servimos a face. A reconciliação (virar remoção)
+      // é da Fase 2.
+      continue
+    }
+
+    push.push({
+      syncId: row.id,
+      terminalId: row.terminalId,
+      employeeNo,
+      name: p.name,
+      cardNumber: p.cardNumber, // pode ser null até a Fase 1 definir o valor
+      needFace,
+      needCard,
+      // Face decriptada na nuvem; null se não for necessária nesta linha.
+      face: needFace ? getFaceImageDataUrl(p) : null
+    })
+  }
+
+  return res.status(200).json({ push, removals })
+}
+
+export default withAgentAuth(handler)
