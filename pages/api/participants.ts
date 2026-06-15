@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import Joi from 'joi'
 import { prisma } from '../../lib/prisma'
+import { withApiAuth, ADMIN_ROLES } from '../../lib/api-auth'
 
 
 // Query parameters validation
@@ -36,7 +37,7 @@ function maskCPF(cpf: string): string {
   return `${cpf.slice(0, 3)}.***.***-${cpf.slice(-2)}`
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -129,10 +130,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     console.error('Participants query error:', error)
     
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Internal server error',
       message: 'Erro ao consultar participantes'
     })
   } finally {
   }
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

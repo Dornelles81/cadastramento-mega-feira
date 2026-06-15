@@ -1,3 +1,4 @@
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 
@@ -5,7 +6,7 @@ import { prisma } from '../../../lib/prisma'
  * GET /api/access/vehicle-status?number=V-001&eventCode=MEGA
  * Returns current inside status for a vehicle credential
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   const { number, eventCode } = req.query
@@ -73,3 +74,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: error.message })
   }
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

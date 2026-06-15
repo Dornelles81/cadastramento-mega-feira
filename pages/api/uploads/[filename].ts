@@ -1,8 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import fs from 'fs'
 import path from 'path'
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth'
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+// Serve documentos enviados no cadastro (RG, CNH etc.) — conteúdo sensível,
+// somente autenticados. ATENÇÃO: ainda falta o fix de path traversal em
+// `path.join(..., filename)` (LFI) — pendente, tratar como follow-up imediato.
+function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -48,3 +52,5 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const stream = fs.createReadStream(filePath)
   stream.pipe(res)
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

@@ -1,7 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+// Duplicado orfao de /api/participant-image (mesmo placeholder-p/-faceData,
+// quebrado p/ GCM). Sem consumidor — candidato a remocao. Auth por higiene.
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -60,3 +63,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Failed to fetch image' })
   }
 }
+
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

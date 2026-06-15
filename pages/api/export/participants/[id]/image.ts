@@ -1,4 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { withApiAuth, ADMIN_ROLES } from '../../../../../lib/api-auth'
+
+// STUB DE MOCK: getMockParticipants() retorna dados hardcoded (ids '1'/'2')
+// e da 404 p/ participantes reais — os 2 links de download no modal admin
+// NUNCA funcionaram. Auth adicionada por higiene; wiring p/ dados reais ou
+// remocao dos links e follow-up separado.
 
 // Mock data (in production this would be from database)
 const getMockParticipants = () => [
@@ -49,7 +55,7 @@ const getMockParticipants = () => [
   }
 ]
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -148,3 +154,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+export default withApiAuth(handler, { roles: ADMIN_ROLES })
