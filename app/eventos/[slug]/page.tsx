@@ -151,10 +151,9 @@ export default function EventoPage() {
       setEditToken(tokenParam)
       loadParticipantDataByToken(tokenParam)
     } else if (updateId && event) {
-      console.log('Update mode detected for ID:', updateId)
-      setIsUpdateMode(true)
-      setParticipantId(updateId)
-      loadParticipantData(updateId)
+      // Link ?update=<uuid> ANTIGO (sem token): NAO buscar PII nenhum.
+      // Redireciona para a pagina amigavel ANTES de qualquer query.
+      router.replace('/editar/expirado')
     }
   }, [event])
 
@@ -263,48 +262,8 @@ export default function EventoPage() {
     }
   }
 
-  const loadParticipantData = async (id: string) => {
-    try {
-      console.log('Loading participant data for ID:', id)
-      const response = await fetch(`/api/participants/get?id=${id}`)
-
-      if (response.ok) {
-        const { participant } = await response.json()
-        console.log('Loaded participant data:', participant)
-
-        const updatedData = {
-          name: participant.name || '',
-          cpf: participant.cpf || '',
-          email: participant.email || '',
-          phone: participant.phone || '',
-          eventCode: event?.code || participant.eventCode || '',
-          consent: true,
-          customData: {
-            ...participant.customData,
-            etapa: participant.customData?.etapa || '',
-            estande: participant.customData?.estande || '',
-            standCode: participant.standCode || participant.customData?.standCode || '',
-            mesa: participant.customData?.mesa || '',
-            documents: participant.documents || participant.customData?.documents || {}
-          }
-        }
-
-        if (participant.faceImageUrl) {
-          updatedData.faceImage = participant.faceImageUrl
-        }
-
-        setRegistrationData(updatedData)
-        setConsentChecked(true)
-        setCurrentStep('personal')
-      } else {
-        console.error('Failed to load participant data')
-        alert('Cadastro nao encontrado. Por favor, faca um novo cadastro.')
-      }
-    } catch (error) {
-      console.error('Error loading participant data:', error)
-      alert('Erro ao carregar dados. Por favor, tente novamente.')
-    }
-  }
+  // (loadParticipantData id-based removida no Grupo D parte 4: o caminho de
+  // leitura por id no cliente foi fechado; a edição usa loadParticipantDataByToken.)
 
   const handleConsentAccept = () => {
     setRegistrationData(prev => ({ ...prev, consent: true }))

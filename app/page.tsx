@@ -39,31 +39,12 @@ function HomePageContent() {
       return
     }
 
-    // Check for update parameter - redirect to participant's event page with update mode
+    // Link ?update=<uuid> ANTIGO (sem token de posse): nao buscar PII nenhum.
+    // Redireciona direto para a pagina amigavel, ANTES de qualquer query —
+    // a edicao agora exige o link tokenizado /editar/<token> (Grupo D).
     const updateId = searchParams.get('update')
     if (updateId) {
-      // Fetch participant data to get their event slug
-      fetch(`/api/participants/get?id=${updateId}`)
-        .then(response => {
-          if (response.ok) {
-            return response.json()
-          }
-          throw new Error('Participant not found')
-        })
-        .then(data => {
-          const participant = data.participant
-          if (participant?.eventSlug) {
-            // Redirect to the correct event page with update mode
-            router.replace(`/eventos/${participant.eventSlug}?update=${updateId}`)
-          } else {
-            console.error('Participant has no event slug')
-            setLoading(false)
-          }
-        })
-        .catch(error => {
-          console.error('Failed to load participant for update:', error)
-          setLoading(false)
-        })
+      router.replace('/editar/expirado')
       return
     }
 
