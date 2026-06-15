@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client';
 import { prisma } from '../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
+import { assignIdentityIfEligible } from '../../../lib/agent/identity'
 
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -45,6 +46,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       where: { id: participantId },
       data: updateData
     });
+
+    // Ao aprovar, o participante pode ter ficado elegível: atribui a identidade
+    // de terminal (employeeNo + cardNumber) se ainda não tiver. Idempotente e
+    // não-fatal (falha aqui não derruba a aprovação).
+    if (action === 'approve') {
+      try {
+        await assignIdentityIfEligible(participantId)
+      } catch (idErr) {
+        console.error('assignIdentityIfEligible falhou na aprovação:', idErr)
+      }
+    }
 
     // Create audit log
     await prisma.auditLog.create({

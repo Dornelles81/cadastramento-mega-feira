@@ -263,10 +263,16 @@ model Participant {
   // Credential numbering
   credentialNumber String? // Sequential per event (e.g., "0042")
 
-  // Card number p/ terminal + QR do crachá (Fase 0: reservado; valor numérico
-  // dedicado sem relação com dado pessoal, atribuído na Fase 1). Unicidade por
-  // evento vem na Fase 1 quando a estratégia de valor for definida.
-  cardNumber String?
+  // Card number p/ terminal + QR do crachá. Valor numérico dedicado, aleatório
+  // de 16 dígitos com dígito Luhn (sem relação com dado pessoal), atribuído na
+  // elegibilidade. Único globalmente.
+  cardNumber String? @unique
+
+  // Identificador do usuário no terminal (ISAPI employeeNo). Sequencial global
+  // dedicado (sequence participant_employee_no_seq), numérico padronizado em 8
+  // dígitos, atribuído na elegibilidade, IMUTÁVEL — é a chave de deleteUser, não
+  // pode mudar nem ser null para quem foi sincronizado. Único globalmente.
+  employeeNo String? @unique
 
   // Credential print tracking
   credentialPrinted   Boolean   @default(false)
