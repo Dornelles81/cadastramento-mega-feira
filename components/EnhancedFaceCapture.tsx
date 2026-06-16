@@ -284,7 +284,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   return (
     <div className="space-y-4">
-      <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[3/4]">
+      <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[3/4] max-h-[58vh] mx-auto">
         {!capturedImage ? (
           <>
             <video
@@ -344,8 +344,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         )}
       </div>
 
-      {/* Instruções */}
-      {!capturedImage && (
+      {/* Instruções — só quando o rosto NÃO está ok (quando verde, o foco é o
+          botão; as dicas só atrapalhariam e empurram o botão pra baixo da dobra). */}
+      {!capturedImage && !okState && (
         <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
           <h3 className="font-semibold text-white text-sm mb-2">📝 Dicas para melhor foto:</h3>
           <ul className="text-sm text-white/80 space-y-1">
@@ -371,7 +372,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         </div>
       )}
 
-      {/* Ações */}
+      {/* Ações — quando o rosto está ok as dicas somem (acima) e a câmera tem
+          altura limitada (max-h-[58vh]), então o botão de captura fica acima da
+          dobra mesmo em celulares baixos, sem precisar de posicionamento fixo. */}
       <div className="space-y-3">
         {!capturedImage ? (
           <>
