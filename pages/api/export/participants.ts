@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import * as XLSX from 'xlsx'
 import { prisma } from '../../../lib/prisma'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { deriveFaceStatus, faceStatusLabel } from '../../../lib/face/status'
 
 
 /**
@@ -157,7 +158,7 @@ function exportAsExcel(participants: any[], res: NextApiResponse) {
       'Telefone': p.phone || '-',
       'Stand': standCode,
       'Evento': formatEventName(p.eventCode),
-      'Qualidade da Captura': p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-',
+      'Status da Face': faceStatusLabel(p.faceInterocularPx),
       'Data de Cadastro': new Date(p.createdAt).toLocaleString('pt-BR'),
       'Consentimento': p.consentAccepted ? 'Sim' : 'Não',
       'Dispositivo': p.deviceInfo || '-',
@@ -206,7 +207,7 @@ function exportAsPDF(participants: any[], res: NextApiResponse) {
       <td>${p.phone || '-'}</td>
       <td>${standCode}</td>
       <td>${formatEventName(p.eventCode)}</td>
-      <td>${p.captureQuality ? `${Math.round(p.captureQuality * 100)}%` : '-'}</td>
+      <td>${faceStatusLabel(p.faceInterocularPx)}</td>
       <td>${new Date(p.createdAt).toLocaleDateString('pt-BR')}</td>
     </tr>
     `
@@ -248,7 +249,7 @@ function exportAsPDF(participants: any[], res: NextApiResponse) {
             <th>Telefone</th>
             <th>Stand</th>
             <th>Evento</th>
-            <th>Qualidade</th>
+            <th>Status da Face</th>
             <th>Data</th>
           </tr>
         </thead>
@@ -286,7 +287,7 @@ function exportAsUltrathink(participants: any[], includeImages: boolean, res: Ne
       registration_timestamp: p.createdAt,
       biometric_data: includeImages && p.faceImageUrl ? {
         image_base64: p.faceImageUrl,
-        image_quality: p.captureQuality,
+        face_interocular_px: p.faceInterocularPx,
         captured_at: p.createdAt
       } : null
     })),
@@ -355,7 +356,7 @@ function exportAsStandard(
       event: p.eventCode,
       registered_at: p.createdAt,
       has_face_image: !!p.faceImageUrl,
-      capture_quality: p.captureQuality,
+      face_status: deriveFaceStatus(p.faceInterocularPx),
       face_image: includeImages && p.faceImageUrl ? p.faceImageUrl : undefined
     })),
     pagination: {

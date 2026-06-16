@@ -256,38 +256,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Process face image and Azure data
     let encryptedFaceData = null
     let faceImageUrl = null
-    let captureQuality = requireFace ? 0.5 : null // null when face not required
+    // Medição REAL de face vinda do detector (MediaPipe) no momento da captura.
+    // Substitui o captureQuality fictício: null se o cliente não mediu (legado).
+    const faceInterocularPx =
+      faceData && typeof faceData.faceInterocularPx === 'number'
+        ? faceData.faceInterocularPx
+        : null
 
-    // Extract quality score from face data
-    if (faceData) {
-      if (faceData.quality && typeof faceData.quality === 'number') {
-        // Direct quality score from frontend
-        captureQuality = faceData.quality
-        console.log('📊 Face quality score from frontend:', captureQuality)
-      } else if (faceData.qualityPercentage) {
-        // Quality percentage from frontend
-        captureQuality = faceData.qualityPercentage / 100
-        console.log('📊 Face quality percentage:', faceData.qualityPercentage + '%')
-      } else if (faceData.faceQuality && faceData.faceQuality.score) {
-        // Azure Face API score
-        captureQuality = faceData.faceQuality.score
-        console.log('📊 Azure Face quality score:', captureQuality)
-      } else if (faceData.brightness) {
-        // Calculate quality based on brightness
-        const brightness = faceData.brightness
-        if (brightness >= 80 && brightness <= 160) {
-          captureQuality = 0.8
-        } else if (brightness >= 60 && brightness <= 180) {
-          captureQuality = 0.7
-        } else {
-          captureQuality = 0.6
-        }
-        console.log('📊 Quality based on brightness:', brightness, '→', captureQuality)
-      }
-    }
-    
-    console.log('✅ Final capture quality:', captureQuality)
-    
     // Criptografa a imagem facial (AES-256-GCM) — nunca armazenar plaintext
     if (faceImage) {
       const faceDataUrl = faceImage.includes(',')
@@ -317,7 +292,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         standId: standId, // Associate with stand if provided
         faceImageUrl: faceImageUrl, // Store complete face image
         faceData: encryptedFaceData,
-        captureQuality: captureQuality,
+        faceInterocularPx: faceInterocularPx,
         consentAccepted: consent,
         consentIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown',
         consentDate: new Date(),

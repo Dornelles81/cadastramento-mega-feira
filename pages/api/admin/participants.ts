@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma'
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
+import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -59,7 +60,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           eventCode: true,
           standId: true,
           consentAccepted: true,
-          captureQuality: true,
+          faceInterocularPx: true,
           faceImageUrl: true,
           // Não buscar faceData (binário pesado)
           customData: true,
@@ -92,8 +93,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         eventCode: p.eventCode,
         standId: p.standId,
         consentAccepted: p.consentAccepted,
-        captureQuality: p.captureQuality,
-        hasValidFace: !!p.faceImageUrl,
+        faceInterocularPx: p.faceInterocularPx,
+        faceStatus: deriveFaceStatus(p.faceInterocularPx),
+        hasValidFace: isValidFace(p.faceInterocularPx),
         faceImageUrl: p.faceImageUrl,
         customData: p.customData,
         documents: p.documents,

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import Joi from 'joi'
 import { prisma } from '../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../lib/api-auth'
+import { isValidFace } from '../../lib/face/status'
 
 
 // Query parameters validation
@@ -93,7 +94,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         phone: true,
         eventCode: true,
         createdAt: true,
-        captureQuality: true,
+        faceInterocularPx: true,
         faceData: false, // Don't return biometric data
       },
       orderBy: {
@@ -112,7 +113,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       phone: participant.phone || undefined,
       eventCode: participant.eventCode || '',
       registeredAt: participant.createdAt.toISOString(),
-      hasValidFace: (participant.captureQuality || 0) > 0.7
+      hasValidFace: isValidFace(participant.faceInterocularPx)
     }))
 
     const response: ParticipantListResponse = {

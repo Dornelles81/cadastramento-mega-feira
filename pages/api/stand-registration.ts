@@ -120,12 +120,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Biometria: criptografa a imagem (AES-256-GCM) — nunca armazenar plaintext
     let encryptedFaceData: Buffer | null = null
-    let captureQuality: number | null = requireFace ? 0.5 : null
-    if (faceData?.quality && typeof faceData.quality === 'number') {
-      captureQuality = faceData.quality
-    } else if (faceData?.qualityPercentage) {
-      captureQuality = faceData.qualityPercentage / 100
-    }
+    // Medição REAL do detector (MediaPipe); null se o cliente não mediu (legado).
+    const faceInterocularPx =
+      faceData && typeof faceData.faceInterocularPx === 'number'
+        ? faceData.faceInterocularPx
+        : null
     if (faceImage) {
       const dataUrl = faceImage.includes(',')
         ? faceImage
@@ -180,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           standId,
           faceImageUrl: null,
           faceData: encryptedFaceData,
-          captureQuality,
+          faceInterocularPx,
           consentAccepted: consent,
           consentIp: ip,
           consentDate: new Date(),

@@ -14,7 +14,8 @@ interface Participant {
   eventCode: string
   createdAt: string
   consentAccepted: boolean
-  captureQuality?: number
+  faceInterocularPx?: number | null
+  faceStatus?: 'unmeasured' | 'no_face' | 'too_small' | 'valid'
   hasValidFace: boolean
   faceImageUrl?: string
   faceImage?: string
@@ -452,7 +453,8 @@ export default function EventAdminPage() {
       eventCode: participant.eventCode || '',
       createdAt: participant.createdAt,
       consentAccepted: participant.consentAccepted,
-      captureQuality: participant.captureQuality,
+      faceInterocularPx: participant.faceInterocularPx,
+      faceStatus: participant.faceStatus,
       hasValidFace: participant.hasValidFace,
       faceImageUrl: participant.faceImageUrl,
       faceImage: participant.faceImage,
@@ -1226,7 +1228,7 @@ export default function EventAdminPage() {
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Stand</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Telefone</th>
-                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Qualidade</th>
+                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status da face</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Cadastrado em</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Ações</th>
                 </tr>
@@ -1323,10 +1325,14 @@ export default function EventAdminPage() {
                       ) : '-'}
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {participant.captureQuality ?
-                        `${Math.round(participant.captureQuality * 100)}%` :
-                        '-'
-                      }
+                      {(() => {
+                        const s = participant.faceStatus
+                        if (s === 'valid') return <span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">Válida</span>
+                        if (s === 'too_small') return <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700">Rosto pequeno</span>
+                        if (s === 'no_face') return <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">Sem rosto</span>
+                        // unmeasured/legado → NEUTRO, nunca inválido
+                        return <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">Não medida</span>
+                      })()}
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
@@ -1910,11 +1916,14 @@ export default function EventAdminPage() {
                           <span className="text-green-600">✅ Capturada com sucesso</span>
                         </div>
                         <div>
-                          <span className="font-medium text-gray-600">Qualidade:</span>
+                          <span className="font-medium text-gray-600">Status da face:</span>
                           <br />
-                          {viewingImage.captureQuality ? 
-                            `${Math.round(viewingImage.captureQuality * 100)}%` : 
-                            'Não disponível'}
+                          {viewingImage.faceStatus === 'valid' ? 'Válida'
+                            : viewingImage.faceStatus === 'too_small' ? 'Rosto pequeno'
+                            : viewingImage.faceStatus === 'no_face' ? 'Sem rosto'
+                            : 'Não medida'}
+                          {typeof viewingImage.faceInterocularPx === 'number' && viewingImage.faceInterocularPx > 0
+                            ? ` (${viewingImage.faceInterocularPx}px)` : ''}
                         </div>
                         <div>
                           <span className="font-medium text-gray-600">Registrado em:</span>

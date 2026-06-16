@@ -20,7 +20,7 @@ import path from 'path'
 export const SENSITIVE_PARTICIPANT_CLEAR = {
   faceData: null,
   faceImageUrl: null,
-  captureQuality: null,
+  faceInterocularPx: null,
   deviceInfo: null,
   captureLocation: null,
   browserInfo: null,

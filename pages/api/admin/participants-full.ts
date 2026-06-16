@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Check authentication
@@ -64,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         eventId: true,
         createdAt: true,
         consentAccepted: true,
-        captureQuality: true,
+        faceInterocularPx: true,
         faceImageUrl: true, // Foto legada (data URL em claro)
         faceData: true, // Foto nova (AES-256-GCM) — decriptada server-side abaixo, nunca enviada crua
         customData: true,
@@ -109,8 +110,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       eventSlug: participant.event?.slug || '',
       createdAt: participant.createdAt.toISOString(),
       consentAccepted: participant.consentAccepted,
-      captureQuality: participant.captureQuality || 0,
-      hasValidFace: (participant.captureQuality || 0) > 0.5,
+      faceInterocularPx: participant.faceInterocularPx,
+      faceStatus: deriveFaceStatus(participant.faceInterocularPx),
+      hasValidFace: isValidFace(participant.faceInterocularPx),
       faceImageUrl: getFaceImageDataUrl(participant) || '', // decripta GCM ou usa legado
       customData: participant.customData || {},
       documents: participant.documents || {},

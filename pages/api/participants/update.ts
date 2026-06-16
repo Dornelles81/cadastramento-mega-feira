@@ -55,8 +55,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updateData.faceData = encryptString(faceDataUrl)
       updateData.faceImageUrl = null
     }
-    if (faceData) {
-      updateData.captureQuality = faceData.quality || faceData.qualityPercentage / 100
+    if (faceData && typeof faceData.faceInterocularPx === 'number') {
+      updateData.faceInterocularPx = faceData.faceInterocularPx
     }
     if (customData) {
       updateData.customData = { ...((existing.customData as any) || {}), ...customData }

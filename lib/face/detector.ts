@@ -14,18 +14,13 @@ import type { FaceDetection, Results } from '@mediapipe/face_detection'
 
 const ASSET_BASE = '/mediapipe/face_detection/'
 
-/**
- * Gate de tamanho: interocular mínima (px) NA IMAGEM SUBMETIDA. Cravado em 60
- * pelo cross-check de calibração na bancada (Fatia 2): o terminal corta em ~w157
- * e o MediaPipe lê ~43–53px nesse ponto (régua diferente da do device + ruído
- * ±~10px). 60 fica ACIMA da zona de sobreposição (~41–53) com margem de ruído —
- * conservador: rosto distante pede "aproxime"; selfie normal lê 70–120px.
- *
- * FATIA 4 (upload): chamar detectFace 2–3× e usar a MEDIANA da interocular antes
- * de validar — uma leitura solta tem ruído ±~10px (na câmera ao vivo isso já se
- * dilui em vários frames).
- */
-export const MIN_INTEROCULAR_PX = 60
+// Gate de tamanho (interocular mínima em px na imagem submetida). Fonte única em
+// lib/face/status.ts (usado também pelos endpoints). Calibrado em 60 na bancada
+// (Fatia 2): acima da zona de sobreposição ~41–53 do MediaPipe com margem de ruído.
+// No upload (Fatia 4) medimos 2–3× + MEDIANA; na câmera ao vivo o ruído se dilui
+// em vários frames + histerese.
+import { MIN_INTEROCULAR_PX } from './status'
+export { MIN_INTEROCULAR_PX }
 
 export type FaceReason = 'noFace' | 'tooSmall' | 'ok'
 
