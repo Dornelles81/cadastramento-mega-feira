@@ -227,7 +227,13 @@ model Participant {
   // Facial data
   faceImageUrl   String? // NEON blob storage URL
   faceData       Bytes? // Encrypted biometric template
-  captureQuality Float? // Face detection quality score (0-1)
+  captureQuality Float? // LEGADO/fictício (0.7 fixo no upload) — será aposentado na Fatia 5; não usar para decisão
+  // Medição real de face do detector (MediaPipe) no momento da captura, espelhando
+  // o gate do terminal (pupilDistanceTooSmall). Fonte de verdade do hasValidFace:
+  //   null = não medido (legado, nunca passou pelo detector)
+  //   0    = medido, sem rosto detectável
+  //   >0   = distância interocular em px na imagem submetida (gate ≥50px)
+  faceInterocularPx Int?
 
   // Consent and compliance (LGPD)
   consentAccepted Boolean   @default(false)
