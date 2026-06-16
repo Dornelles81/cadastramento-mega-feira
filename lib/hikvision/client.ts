@@ -271,10 +271,18 @@ export class HikvisionClient {
     return this.request('POST', '/ISAPI/AccessControl/AcsEvent?format=json', { data: searchData, context: 'getAccessLogs' });
   }
 
-  // Open door remotely (pulso da catraca)
+  // Open door remotely (pulso da catraca).
+  // No K1T671M-L o RemoteControl/door é XML-only (ignora ?format=json e
+  // responde XML), então o corpo precisa ser XML: <RemoteControlDoor><cmd>…
+  // cmd ∈ open,close,alwaysOpen,alwaysClose; doorNo 1..1 (capabilities).
   async openDoor(doorNo: number = 1) {
-    const controlData = { RemoteControlDoor: { cmd: 'open', channelNo: doorNo } };
-    return this.request('PUT', `/ISAPI/AccessControl/RemoteControl/door/${doorNo}?format=json`, { data: controlData, context: 'openDoor' });
+    const xml = `<RemoteControlDoor><cmd>open</cmd><doorNo>${doorNo}</doorNo></RemoteControlDoor>`;
+    return this.request('PUT', `/ISAPI/AccessControl/RemoteControl/door/${doorNo}`, {
+      data: xml,
+      contentType: 'application/xml',
+      accept: 'application/xml',
+      context: 'openDoor'
+    });
   }
 }
 
