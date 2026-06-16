@@ -24,10 +24,15 @@ import { prisma } from '../lib/prisma'
 import { HikvisionClient } from '../lib/hikvision/client'
 import { DigestAuth } from '../lib/hikvision/digest-auth'
 import { revokeAgentToken } from '../lib/agent/tokens'
+import { generateCardNumber, luhnValid } from '../lib/agent/identity'
 
 function numOfFace(searchResult: any): number | string {
   const u = searchResult?.UserInfoSearch?.UserInfo?.[0]
   return u ? u.numOfFace : '(usuário não encontrado)'
+}
+function numOfCard(searchResult: any): number | string {
+  const u = searchResult?.UserInfoSearch?.UserInfo?.[0]
+  return u ? u.numOfCard : '(usuário não encontrado)'
 }
 
 const BASE = process.env.AGENT_TEST_BASE || 'http://localhost:3000'
@@ -144,7 +149,8 @@ async function main() {
     } else if (op === 'caps') {
       // capabilities da face (read-only) via credencial vinda do agente
       const d = new DigestAuth(agTerm.username, agTerm.password)
-      for (const path of ['/ISAPI/Intelligent/FDLib/capabilities?format=json', '/ISAPI/Intelligent/FDLib/FaceDataRecord/capabilities?format=json']) {
+      const capPaths = (process.env.BENCH_CAPS || '/ISAPI/Intelligent/FDLib/capabilities?format=json,/ISAPI/AccessControl/RemoteControl/door/1/capabilities?format=json,/ISAPI/AccessControl/RemoteControl/door/capabilities?format=json').split(',')
+      for (const path of capPaths) {
         console.log(`\n=== GET ${path} ===`)
         try {
           const r = await d.request({ method: 'GET', url: `http://${agTerm.ipAddress}:${agTerm.port}${path}`, headers: { Accept: 'application/json' }, timeout: 8000 })
@@ -184,16 +190,63 @@ async function main() {
       const search = await client.searchUsers(EMP)
       console.log('\n=== CONFIRMAÇÃO (searchUsers) ===')
       console.log(typeof search === 'string' ? search : JSON.stringify(search, null, 2))
+    } else if (op === 'registerCard') {
+      const EMP = process.env.BENCH_EMP || '99000001'
+      const card = process.env.BENCH_CARD || generateCardNumber()
+      console.log(`[registerCard] cardNo=${card} (16 díg, Luhn válido=${luhnValid(card)}) -> employeeNo ${EMP}`)
+      const before = await client.searchUsers(EMP)
+      console.log(`[antes] numOfCard = ${numOfCard(before)}`)
+      try {
+        const result = await client.registerCard(EMP, card)
+        console.log('\n=== RETORNO CRU DO DEVICE (registerCard) ===')
+        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2))
+      } catch (e: any) {
+        console.log('\n=== registerCard REJEITADO (sanitizado) ===')
+        console.log('message:', e?.message, '| device:', JSON.stringify(e?.deviceStatus))
+      }
+      const after = await client.searchUsers(EMP)
+      console.log(`\n[depois] numOfCard = ${numOfCard(after)}`)
     } else if (op === 'deleteUser') {
       const EMP = process.env.BENCH_EMP || '99000001'
+      // busca de card por employeeNo (CardInfo/Search) via credencial do agente
+      const d = new DigestAuth(agTerm.username, agTerm.password)
+      const cardMatches = async (emp: string) => {
+        const r = await d.request({
+          method: 'POST',
+          url: `http://${agTerm.ipAddress}:${agTerm.port}/ISAPI/AccessControl/CardInfo/Search?format=json`,
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          data: { CardInfoSearchCond: { searchID: '1', maxResults: 30, searchResultPosition: 0, EmployeeNoList: [{ employeeNo: emp }] } },
+          timeout: 8000
+        })
+        return r.data?.CardInfoSearch?.numOfMatches
+      }
+
       console.log(`\n[deleteUser] removendo employeeNo=${EMP} ...`)
-      const before = await client.searchUsers(EMP)
-      console.log(`[antes] numOfMatches = ${before?.UserInfoSearch?.numOfMatches}`)
+      const uBefore = await client.searchUsers(EMP)
+      const cBefore = await cardMatches(EMP)
+      console.log(`[antes] usuário numOfMatches=${uBefore?.UserInfoSearch?.numOfMatches} | numOfFace=${numOfFace(uBefore)} | numOfCard=${numOfCard(uBefore)} | CardInfo/Search numOfMatches=${cBefore}`)
+
       const result = await client.deleteUser(EMP)
       console.log('\n=== RETORNO CRU DO DEVICE (deleteUser) ===')
       console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2))
-      const after = await client.searchUsers(EMP)
-      console.log(`\n[depois] numOfMatches = ${after?.UserInfoSearch?.numOfMatches} (0 = removido)`)
+
+      const uAfter = await client.searchUsers(EMP)
+      const cAfter = await cardMatches(EMP)
+      console.log(`\n[depois] usuário numOfMatches=${uAfter?.UserInfoSearch?.numOfMatches} (0=removido) | CardInfo/Search numOfMatches=${cAfter} (0=card também removido)`)
+      const limpo = (uAfter?.UserInfoSearch?.numOfMatches === 0) && (cAfter === 0)
+      console.log(`>>> remoção COMPLETA (nem face nem card restam): ${limpo ? 'SIM ✓' : 'NÃO ✗'}`)
+    } else if (op === 'openDoor') {
+      const doorNo = Number(process.env.BENCH_DOOR || '1')
+      console.log(`[openDoor] disparando pulso na porta doorNo=${doorNo} (device tem 1 porta / electroLockNum=1) ...`)
+      try {
+        const result = await client.openDoor(doorNo)
+        console.log('\n=== RETORNO CRU DO DEVICE (openDoor) ===')
+        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2))
+        console.log(`\n>>> comando enviado para doorNo=${doorNo}. CONFIRMAÇÃO FÍSICA (relé/LED) é no terminal de bancada.`)
+      } catch (e: any) {
+        console.log('\n=== openDoor REJEITADO (sanitizado) ===')
+        console.log('message:', e?.message, '| device:', JSON.stringify(e?.deviceStatus))
+      }
     } else {
       console.log(`op desconhecida: ${op}`)
     }
