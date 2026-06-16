@@ -147,44 +147,65 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     setIsStreaming(false)
   }, [])
 
-  // ── Caminho de UPLOAD (mobile) — INTOCADO nesta fatia; será gateado na Fatia 4 ──
+  // ── Caminho de UPLOAD (mobile, o dominante) — agora GATEADO ──
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const input = event.target
+    const file = input.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      setError('❌ Por favor, selecione um arquivo de imagem.')
-      return
+      setError('❌ Por favor, selecione um arquivo de imagem.'); input.value = ''; return
     }
     if (file.size > 10 * 1024 * 1024) {
-      setError('❌ Imagem muito grande. Máximo 10MB.')
-      return
+      setError('❌ Imagem muito grande. Máximo 10MB.'); input.value = ''; return
     }
     const reader = new FileReader()
     reader.onload = (e) => {
       const imageData = e.target?.result as string
       const img = new Image()
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
         if (!ctx) return
+        // Redimensiona para ≤800px: ESTA é a imagem submetida E a medida (contrato
+        // da régua). NUNCA medir a original do celular (pode ser 3000px → escala
+        // errada do gate).
         let width = img.width
         let height = img.height
         const maxSize = 800
         if (width > maxSize || height > maxSize) {
-          if (width > height) { height = (height / width) * maxSize; width = maxSize }
-          else { width = (width / height) * maxSize; height = maxSize }
+          if (width > height) { height = Math.round((height / width) * maxSize); width = maxSize }
+          else { width = Math.round((width / height) * maxSize); height = maxSize }
         }
         canvas.width = width
         canvas.height = height
         ctx.drawImage(img, 0, 0, width, height)
+
+        // GATE: 3 medições + MEDIANA (imagem única é mais sujeita ao ruído que a
+        // câmera, que tem vários frames).
+        const reads: number[] = []
+        for (let i = 0; i < 3; i++) {
+          const m = await mpDetectFace(canvas)
+          reads.push(m.faceCount > 0 ? m.interocularPx : 0)
+        }
+        const ip = median(reads.filter(x => x > 0))
+        const v = validateFace({ faceCount: ip > 0 ? 1 : 0, interocularPx: ip })
+
+        if (!v.ok) {
+          // BLOQUEIO TOTAL: NÃO chama onCapture; mostra o motivo; limpa o input.
+          setError(v.reason === 'noFace'
+            ? '❌ Não detectei seu rosto na foto. Tire outra com o rosto bem visível e centralizado.'
+            : '❌ Rosto muito pequeno/distante. Aproxime o rosto — chegue mais perto na próxima foto.')
+          input.value = ''
+          return
+        }
+
         const processedImage = canvas.toDataURL('image/jpeg', 0.6)
         const faceData = {
-          brightness: 128,
-          timestamp: new Date().toISOString(),
-          quality: 0.7,
+          faceInterocularPx: ip, // medição real (≤800px), p/ a Fatia 5
+          faceDetected: true,
           resolution: `${width}x${height}`,
-          qualityPercentage: 70,
-          uploadedFile: true
+          uploadedFile: true,
+          timestamp: new Date().toISOString()
         }
         setCapturedImage(processedImage)
         setTimeout(() => { onCapture(processedImage, faceData) }, 500)

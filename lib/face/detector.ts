@@ -95,7 +95,7 @@ function intrinsicSize(el: HTMLImageElement | HTMLCanvasElement | HTMLVideoEleme
  * o gate de 60px foi calibrado nessa régua (~800px). Passar a original mudaria a
  * escala e quebraria o gate.
  */
-export async function detectFace(
+async function doDetect(
   image: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement
 ): Promise<FaceMeasurement> {
   const det = await getDetector()
@@ -106,6 +106,18 @@ export async function detectFace(
     _pending = resolve
     det.send({ image }).catch(() => { _pending = null; resolve({ faceCount: 0, interocularPx: 0 }) })
   })
+}
+
+// SERIALIZA as chamadas. O detector é singleton (um _pending por vez); chamadas
+// concorrentes (ex.: loop da câmera + upload, ou capturas em paralelo) clobravam
+// o _pending e TRAVAVAM a promise. A fila garante uma detecção por vez.
+let _chain: Promise<unknown> = Promise.resolve()
+export async function detectFace(
+  image: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement
+): Promise<FaceMeasurement> {
+  const p = _chain.then(() => doDetect(image), () => doDetect(image))
+  _chain = p.then(() => undefined, () => undefined)
+  return p
 }
 
 /** Aplica o gate espelhando o terminal: sem rosto / rosto pequeno / ok. */
