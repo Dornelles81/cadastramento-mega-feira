@@ -17,7 +17,7 @@ ls -la
 ### Testar Conexão
 ```bash
 # Via psql direto
-psql 'postgresql://neondb_owner:npg_6wlU4gjvVXKB@ep-crimson-math-adiziygs-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require' -c "SELECT 1;"
+psql 'postgresql://<user>:<senha>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require' -c "SELECT 1;"
 
 # Via API
 curl http://localhost:4000/health
@@ -268,8 +268,8 @@ docker build -t facial-system .
 # Criar .env.production
 cat > .env.production << EOF
 NODE_ENV=production
-DATABASE_URL="postgresql://neondb_owner:npg_6wlU4gjvVXKB@ep-crimson-math-adiziygs-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true"
-DIRECT_DATABASE_URL="postgresql://neondb_owner:npg_6wlU4gjvVXKB@ep-crimson-math-adiziygs.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL="postgresql://<user>:<senha>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require&pgbouncer=true"
+DIRECT_DATABASE_URL="postgresql://<user>:<senha>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require"
 EOF
 
 # Executar migrações em produção

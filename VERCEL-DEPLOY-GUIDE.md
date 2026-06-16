@@ -75,13 +75,15 @@ Isso gerará a URL definitiva:
 ### Variáveis Obrigatórias:
 
 ```env
-DATABASE_URL = postgresql://neondb_owner:npg_bim91SUWGAPJ@ep-wandering-waterfall-acykvygu-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+# Use a connection string do console do Neon. Pooled (-pooler) para DATABASE_URL,
+# direct (sem -pooler) para DIRECT_URL. NUNCA commitar a string real.
+DATABASE_URL = postgresql://<user>:<senha>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 
-DIRECT_URL = postgresql://neondb_owner:npg_bim91SUWGAPJ@ep-wandering-waterfall-acykvygu-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DIRECT_URL = postgresql://<user>:<senha>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 
-MASTER_KEY = a1b2c3d4e5f6789012345678901234567890abcd
+MASTER_KEY = <chave-de-32-caracteres-ou-mais>
 
-ADMIN_PASSWORD = admin123
+ADMIN_PASSWORD = <senha-admin-forte>
 ```
 
 ### Variáveis Opcionais (se quiser usar):

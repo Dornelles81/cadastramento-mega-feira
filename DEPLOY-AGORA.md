@@ -14,7 +14,7 @@
 - Project name: `cadastramento-mega-feira`
 - Import: `cadastramento-mega-feira` (da lista)
 - Environment Variables (já configuradas):
-  - DATABASE_URL: `postgresql://neondb_owner:npg_XkCr3ji9PmEF@ep-billowing-bonus-ac6p5rfo-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require`
+  - DATABASE_URL: `postgresql://<user>:<senha>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require&channel_binding=require`
   - DIRECT_DATABASE_URL: (mesma string)
   - MASTER_KEY: `MinhaChaveSecreteaDe32CaracteresAqui`
   - NEXTAUTH_SECRET: `OutraChaveSuperSecretaProdução2025`
