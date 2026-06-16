@@ -114,3 +114,33 @@ export function validateFace(m: FaceMeasurement, minPx: number = MIN_INTEROCULAR
   if (m.interocularPx < minPx) return { ok: false, reason: 'tooSmall', interocularPx: m.interocularPx }
   return { ok: true, reason: 'ok', interocularPx: m.interocularPx }
 }
+
+// ── Suavização do gate AO VIVO (câmera) ──────────────────────────────────────
+// O MediaPipe oscila ±~10px; perto do gate (60) o estado tremularia
+// (aproxime/ok/aproxime). Combinamos MEDIANA dos últimos N frames (mata o spike
+// solto) + HISTERESE (faixa morta 55–65): só vira 'ok' com mediana ≥65, só sai
+// de 'ok' com mediana <55. Funções PURAS, testáveis sem câmera.
+export const GATE_ENTER_PX = MIN_INTEROCULAR_PX + 5 // 65 — entra em ok
+export const GATE_EXIT_PX = MIN_INTEROCULAR_PX - 5  // 55 — sai de ok
+
+export function median(nums: number[]): number {
+  if (!nums.length) return 0
+  const s = [...nums].sort((a, b) => a - b)
+  const mid = Math.floor(s.length / 2)
+  return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2)
+}
+
+/**
+ * Próximo estado do gate ao vivo a partir do histórico de interoculares
+ * (0 = sem rosto naquele frame) e do estado anterior. Mediana dos últimos 5 +
+ * histerese. Evita que a mensagem fique "nervosa" no limiar.
+ */
+export function nextGateState(history: number[], prev: FaceReason): FaceReason {
+  const recent = history.slice(-5)
+  if (!recent.length) return 'noFace'
+  const noFace = recent.filter(x => x === 0).length
+  if (noFace > recent.length / 2) return 'noFace'
+  const m = median(recent.filter(x => x > 0))
+  if (prev === 'ok') return m < GATE_EXIT_PX ? 'tooSmall' : 'ok'
+  return m >= GATE_ENTER_PX ? 'ok' : 'tooSmall'
+}

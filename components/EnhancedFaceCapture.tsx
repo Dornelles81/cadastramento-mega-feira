@@ -1,169 +1,124 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
+import { detectFace as mpDetectFace, validateFace, nextGateState, median, type FaceReason } from '../lib/face/detector'
 
 interface EnhancedFaceCaptureProps {
   onCapture: (imageData: string, faceData?: any) => void
   onBack?: () => void
 }
 
+const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
+
 export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null) // overlay (oval)
+  const frameCanvasRef = useRef<HTMLCanvasElement | null>(null) // offscreen ~800px (submissão + detecção)
   const [isStreaming, setIsStreaming] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const [captureCountdown, setCaptureCountdown] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
-  const [faceDetected, setFaceDetected] = useState(false)
-  const [brightness, setBrightness] = useState(0)
+  const [gateState, setGateState] = useState<FaceReason>('noFace')
   const streamRef = useRef<MediaStream | null>(null)
-  const detectionIntervalRef = useRef<NodeJS.Timeout>()
-  const [allowManualCapture, setAllowManualCapture] = useState(false)
+  const detectionIntervalRef = useRef<ReturnType<typeof setInterval>>()
+  const historyRef = useRef<number[]>([]) // últimas interoculares (0 = sem rosto)
+  const gateStateRef = useRef<FaceReason>('noFace') // espelha gateState p/ o loop/captura
+  const detectingRef = useRef(false) // guarda contra detecção concorrente
   const [showUploadOption, setShowUploadOption] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Calculate quality score based on multiple factors - more lenient
-  const calculateQualityScore = (brightness: number, width: number, height: number): number => {
-    let score = 0.6 // Higher base score
-    
-    // Brightness score - more tolerant ranges
-    if (brightness >= 50 && brightness <= 200) {
-      score += 0.25
-    } else if (brightness >= 30 && brightness <= 240) {
-      score += 0.15
-    } else {
-      score += 0.05 // Still give some score even in poor lighting
+  // Desenha o frame atual do vídeo redimensionado para ≤800px (a MESMA imagem
+  // que será submetida) num canvas offscreen — contrato da régua do detector.
+  const buildFrameCanvas = (): HTMLCanvasElement | null => {
+    const video = videoRef.current
+    if (!video || !video.videoWidth) return null
+    let width = video.videoWidth
+    let height = video.videoHeight
+    const maxSize = 800
+    if (width > maxSize || height > maxSize) {
+      if (width > height) { height = Math.round((height / width) * maxSize); width = maxSize }
+      else { width = Math.round((width / height) * maxSize); height = maxSize }
     }
-    
-    // Resolution score
-    if (width >= 1280 && height >= 960) {
-      score += 0.15 // High resolution
-    } else if (width >= 640 && height >= 480) {
-      score += 0.1 // Medium resolution
-    } else {
-      score += 0.05 // Low resolution still gets some score
-    }
-    
-    return Math.min(score, 1.0) // Cap at 1.0
+    let c = frameCanvasRef.current
+    if (!c) { c = document.createElement('canvas'); frameCanvasRef.current = c }
+    c.width = width; c.height = height
+    const ctx = c.getContext('2d')
+    if (!ctx) return null
+    ctx.save(); ctx.scale(-1, 1); ctx.drawImage(video, -width, 0, width, height); ctx.restore()
+    return c
   }
 
-  // Simple face detection using canvas analysis
-  const detectFace = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return
-
+  // Desenha o oval-guia colorido pelo estado do gate.
+  const drawOval = (state: FaceReason) => {
     const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    
-    if (!ctx || video.videoWidth === 0) return
-
-    // Set canvas size
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    
-    // Draw current frame
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    
-    // Get image data for analysis
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    const data = imageData.data
-    
-    // Calculate average brightness
-    let totalBrightness = 0
-    let pixelCount = 0
-    
-    // Sample every 10th pixel for performance
-    for (let i = 0; i < data.length; i += 40) {
-      const r = data[i]
-      const g = data[i + 1]
-      const b = data[i + 2]
-      const brightness = (r + g + b) / 3
-      totalBrightness += brightness
-      pixelCount++
-    }
-    
-    const avgBrightness = totalBrightness / pixelCount
-    setBrightness(Math.round(avgBrightness))
-    
-    // Simple face detection based on center region analysis
-    const centerX = canvas.width / 2
-    const centerY = canvas.height / 2
-    const regionSize = Math.min(canvas.width, canvas.height) * 0.3
-    
-    // Check center region for face-like characteristics
-    const centerImageData = ctx.getImageData(
-      centerX - regionSize/2, 
-      centerY - regionSize/2, 
-      regionSize, 
-      regionSize
-    )
-    
-    // Analyze skin tone presence (very basic)
-    let skinPixels = 0
-    const centerData = centerImageData.data
-    
-    for (let i = 0; i < centerData.length; i += 4) {
-      const r = centerData[i]
-      const g = centerData[i + 1]
-      const b = centerData[i + 2]
-      
-      // More tolerant skin tone detection
-      // Accept wider range of colors
-      if (r > 60 && g > 30 && b > 15 &&
-          r > b &&
-          Math.abs(r - g) > 5) {
-        skinPixels++
-      }
-    }
-    
-    const skinPercentage = (skinPixels * 4) / centerData.length
-    
-    // More tolerant face detection
-    // Accept wider range of lighting conditions and lower skin percentage
-    const hasFace = avgBrightness > 30 && avgBrightness < 240 && skinPercentage > 0.05
-    setFaceDetected(hasFace)
-    
-    // Draw guide overlay
-    ctx.strokeStyle = hasFace ? '#00FF00' : '#FFFF00'
-    ctx.lineWidth = 3
-    ctx.setLineDash([10, 5])
-    
-    // Draw oval guide for face placement
+    const oc = canvasRef.current
+    if (!video || !oc || !video.videoWidth) return
+    oc.width = video.videoWidth; oc.height = video.videoHeight
+    const ctx = oc.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, oc.width, oc.height)
+    const color = state === 'ok' ? '#22c55e' : state === 'tooSmall' ? '#eab308' : '#ef4444'
+    ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.setLineDash([14, 9])
     ctx.beginPath()
-    ctx.ellipse(centerX, centerY * 0.9, regionSize * 0.8, regionSize * 1.1, 0, 0, 2 * Math.PI)
+    ctx.ellipse(oc.width / 2, oc.height * 0.45, oc.width * 0.30, oc.height * 0.34, 0, 0, 2 * Math.PI)
     ctx.stroke()
     ctx.setLineDash([])
+  }
+
+  // Loop de detecção ao vivo: mede no frame redimensionado, suaviza (mediana +
+  // histerese) e atualiza o estado do gate + o oval. Sem heurística de pele.
+  const runDetection = useCallback(async () => {
+    if (detectingRef.current) return
+    detectingRef.current = true
+    try {
+      const frame = buildFrameCanvas()
+      if (!frame) return
+      const m = await mpDetectFace(frame)
+      const hist = historyRef.current
+      hist.push(m.faceCount > 0 ? m.interocularPx : 0)
+      if (hist.length > 8) hist.shift()
+      const next = nextGateState(hist, gateStateRef.current)
+      if (next !== gateStateRef.current) { gateStateRef.current = next; setGateState(next) }
+      drawOval(next)
+    } catch {
+      // detector indisponível: mantém estado; o gate da captura ainda revalida
+    } finally {
+      detectingRef.current = false
+    }
   }, [])
 
-  // Start camera stream with HTTP detection
+  const startDetectionLoop = useCallback(() => {
+    if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
+    detectionIntervalRef.current = setInterval(runDetection, DETECT_MS)
+  }, [runDetection])
+
+  // Inicia a câmera (com detecção de HTTP → fallback p/ upload nativo)
   const startCamera = async () => {
     try {
       setError(null)
+      historyRef.current = []
+      gateStateRef.current = 'noFace'
+      setGateState('noFace')
 
-      // Check if running on HTTP (not localhost) - skip WebRTC camera
       const isHttp = window.location.protocol === 'http:' &&
-                     window.location.hostname !== 'localhost' &&
-                     window.location.hostname !== '127.0.0.1'
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1'
 
       if (isHttp) {
-        // In HTTP contexts, WebRTC getUserMedia is blocked by browsers
-        // Skip trying camera and go straight to file upload
         setError('📱 Use a câmera do seu celular!\n\n' +
-                 '👇 Toque no botão abaixo para tirar sua foto.\n\n' +
-                 '💡 O botão abrirá a câmera nativa do seu smartphone.')
+          '👇 Toque no botão abaixo para tirar sua foto.\n\n' +
+          '💡 O botão abrirá a câmera nativa do seu smartphone.')
         setShowUploadOption(true)
-        setAllowManualCapture(true)
         return
       }
 
-      // For HTTPS or localhost, try WebRTC camera
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
           width: { ideal: 1280, min: 640 },
           height: { ideal: 960, min: 480 },
-          aspectRatio: { ideal: 4/3 },
+          aspectRatio: { ideal: 4 / 3 },
           frameRate: { ideal: 30, min: 15 }
         },
         audio: false
@@ -173,91 +128,56 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         videoRef.current.srcObject = stream
         streamRef.current = stream
         setIsStreaming(true)
-
-        // Start face detection - check more frequently
-        detectionIntervalRef.current = setInterval(detectFace, 200)
-
-        // Enable manual capture after 3 seconds if face not detected
-        setTimeout(() => {
-          setAllowManualCapture(true)
-        }, 3000)
+        startDetectionLoop()
       }
     } catch (err: any) {
       console.error('Camera error:', err)
       setError('❌ Erro ao acessar câmera.\n\nUse o upload de foto abaixo.')
       setShowUploadOption(true)
-      setAllowManualCapture(true)
     }
   }
 
-  // Stop camera stream
   const stopCamera = useCallback(() => {
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current)
-    }
+    if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
+    if (videoRef.current) videoRef.current.srcObject = null
     setIsStreaming(false)
   }, [])
 
-  // Handle file upload from mobile camera
+  // ── Caminho de UPLOAD (mobile) — INTOCADO nesta fatia; será gateado na Fatia 4 ──
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
-
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('❌ Por favor, selecione um arquivo de imagem.')
       return
     }
-
-    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('❌ Imagem muito grande. Máximo 10MB.')
       return
     }
-
     const reader = new FileReader()
     reader.onload = (e) => {
       const imageData = e.target?.result as string
-
-      // Create image to check dimensions
       const img = new Image()
       img.onload = () => {
-        // Create canvas to convert to proper format
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
-
         if (!ctx) return
-
-        // Set reasonable size (max 800x800 to keep payload small)
         let width = img.width
         let height = img.height
         const maxSize = 800
-
         if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = (height / width) * maxSize
-            width = maxSize
-          } else {
-            width = (width / height) * maxSize
-            height = maxSize
-          }
+          if (width > height) { height = (height / width) * maxSize; width = maxSize }
+          else { width = (width / height) * maxSize; height = maxSize }
         }
-
         canvas.width = width
         canvas.height = height
         ctx.drawImage(img, 0, 0, width, height)
-
-        // Use 0.6 compression to keep payload under limits
         const processedImage = canvas.toDataURL('image/jpeg', 0.6)
-
-        // Send directly to parent without preview
         const faceData = {
           brightness: 128,
           timestamp: new Date().toISOString(),
@@ -266,106 +186,66 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           qualityPercentage: 70,
           uploadedFile: true
         }
-
         setCapturedImage(processedImage)
-
-        // Send to parent component
-        setTimeout(() => {
-          onCapture(processedImage, faceData)
-        }, 500)
+        setTimeout(() => { onCapture(processedImage, faceData) }, 500)
       }
-
       img.src = imageData
     }
-
     reader.readAsDataURL(file)
   }
 
-  // Capture photo
+  // Mensagem amigável por motivo (sem jargão técnico)
+  const friendly = (reason: FaceReason) =>
+    reason === 'noFace' ? 'Não detectei seu rosto. Centralize no oval.'
+      : reason === 'tooSmall' ? 'Aproxime o rosto e tente de novo.'
+        : ''
+
+  // Captura: SÓ procede com validateFace.ok. Não há "capturar mesmo assim".
   const handleCapture = async () => {
-    // Allow capture even without perfect face detection
-    // Just warn if conditions are not ideal
-    if (!faceDetected && brightness < 30) {
-      setError('Iluminação muito baixa. Tente melhorar a luz.')
-      // Don't return - allow capture anyway after warning
-    }
+    // dupla trava: o botão já só habilita em 'ok', mas revalidamos aqui também
+    if (gateStateRef.current !== 'ok' || isCapturing) return
+    if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current) // evita corrida no detector
 
     setIsCapturing(true)
     setCaptureCountdown(3)
-
-    // Countdown
     for (let i = 3; i > 0; i--) {
       setCaptureCountdown(i)
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(r => setTimeout(r, 1000))
     }
-
     setCaptureCountdown(null)
 
-    // Capture image
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
+    const frame = buildFrameCanvas() // frame de submissão ≤800px
+    if (!frame) { setIsCapturing(false); startDetectionLoop(); return }
 
-      if (ctx) {
-        // Resize to max 800px to prevent 413 errors
-        let width = video.videoWidth
-        let height = video.videoHeight
-        const maxSize = 800
-
-        if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = (height / width) * maxSize
-            width = maxSize
-          } else {
-            width = (width / height) * maxSize
-            height = maxSize
-          }
-        }
-
-        canvas.width = width
-        canvas.height = height
-
-        // Draw mirrored image
-        ctx.save()
-        ctx.scale(-1, 1)
-        ctx.drawImage(video, -width, 0, width, height)
-        ctx.restore()
-
-        // Apply gentle brightness adjustments only if really needed
-        if (brightness < 50) {
-          ctx.filter = 'brightness(1.2) contrast(1.05)'
-          ctx.drawImage(canvas, 0, 0)
-        } else if (brightness > 220) {
-          ctx.filter = 'brightness(0.95) contrast(1.05)'
-          ctx.drawImage(canvas, 0, 0)
-        }
-        // For normal lighting (50-220), don't apply any filters
-
-        // Use 0.7 quality - good balance between size and recognition accuracy
-        const imageData = canvas.toDataURL('image/jpeg', 0.7)
-        setCapturedImage(imageData)
-        stopCamera()
-        
-        // Prepare face data with improved quality calculation
-        const qualityScore = calculateQualityScore(brightness, canvas.width, canvas.height)
-        const faceData = {
-          brightness: brightness,
-          timestamp: new Date().toISOString(),
-          quality: qualityScore,
-          resolution: `${canvas.width}x${canvas.height}`,
-          qualityPercentage: Math.round(qualityScore * 100)
-        }
-        
-        // Send captured data
-        setTimeout(() => {
-          onCapture(imageData, faceData)
-        }, 1000)
-      }
+    // valida no frame capturado: 3 medições + mediana (mesmo critério do upload)
+    const reads: number[] = []
+    for (let i = 0; i < 3; i++) {
+      const m = await mpDetectFace(frame)
+      reads.push(m.faceCount > 0 ? m.interocularPx : 0)
     }
+    const ip = median(reads.filter(x => x > 0))
+    const v = validateFace({ faceCount: ip > 0 ? 1 : 0, interocularPx: ip })
+
+    if (!v.ok) {
+      // NÃO captura — feedback e volta ao preview
+      setError(friendly(v.reason))
+      setIsCapturing(false)
+      startDetectionLoop()
+      return
+    }
+
+    const imageData = frame.toDataURL('image/jpeg', 0.7)
+    setCapturedImage(imageData)
+    stopCamera()
+    const faceData = {
+      faceInterocularPx: ip, // medição real p/ a Fatia 5
+      faceDetected: true,
+      resolution: `${frame.width}x${frame.height}`,
+      timestamp: new Date().toISOString()
+    }
+    setTimeout(() => { onCapture(imageData, faceData) }, 800)
   }
 
-  // Retry capture
   const retryCapture = () => {
     setCapturedImage(null)
     setIsCapturing(false)
@@ -373,13 +253,13 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     startCamera()
   }
 
-  // Initialize on mount
   useEffect(() => {
     startCamera()
-    return () => {
-      stopCamera()
-    }
+    return () => { stopCamera() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopCamera])
+
+  const okState = gateState === 'ok'
 
   return (
     <div className="space-y-4">
@@ -394,89 +274,72 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               className="w-full h-full object-cover"
               style={{ transform: 'scaleX(-1)' }}
             />
-            
-            <canvas 
-              ref={canvasRef} 
-              className="absolute inset-0 w-full h-full pointer-events-none mix-blend-multiply opacity-50"
+
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full pointer-events-none"
               style={{ transform: 'scaleX(-1)' }}
             />
-            
-            {/* Status indicators */}
+
+            {/* Indicador de estado (suave, sem piscar — histerese no gate) */}
             {isStreaming && (
-              <div className="absolute top-4 left-4 right-4 flex justify-between">
+              <div className="absolute top-4 left-4 right-4 flex justify-center">
                 <div className="bg-black bg-opacity-50 rounded-lg px-3 py-2">
                   <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${faceDetected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+                    <div className={`w-2 h-2 rounded-full ${okState ? 'bg-green-500' : gateState === 'tooSmall' ? 'bg-yellow-500' : 'bg-red-500'}`} />
                     <span className="text-white text-xs">
-                      {faceDetected ? 'Rosto detectado' : 'Posicione seu rosto'}
+                      {okState ? 'Rosto OK ✓' : gateState === 'tooSmall' ? 'Aproxime o rosto' : 'Centralize seu rosto'}
                     </span>
                   </div>
                 </div>
-                
-                <div className="bg-black bg-opacity-50 rounded-lg px-3 py-2">
-                  <span className="text-white text-xs">
-                    💡 Luz: {brightness < 30 ? 'Muito Baixa' : brightness < 60 ? 'Baixa' : brightness > 200 ? 'Alta' : 'Boa'} ({brightness})
-                  </span>
-                </div>
               </div>
             )}
-            
-            {/* Center guide text */}
-            {isStreaming && !faceDetected && (
+
+            {/* Guia central enquanto não está ok */}
+            {isStreaming && !okState && (
               <div className="absolute bottom-4 left-0 right-0 text-center">
                 <span className="bg-black bg-opacity-50 text-white px-3 py-1 rounded text-sm">
-                  Centralize seu rosto no oval
+                  {gateState === 'tooSmall' ? 'Chegue mais perto da câmera' : 'Deixe seu rosto preencher o oval'}
                 </span>
               </div>
             )}
-            
-            {/* Countdown */}
+
             {captureCountdown && (
               <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                <div className="text-white text-6xl font-bold animate-pulse">
-                  {captureCountdown}
-                </div>
+                <div className="text-white text-6xl font-bold animate-pulse">{captureCountdown}</div>
               </div>
             )}
           </>
         ) : (
           <>
-            <img 
-              src={capturedImage} 
-              alt="Captured" 
-              className="w-full h-full object-cover"
-            />
+            <img src={capturedImage} alt="Captured" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
               <div className="bg-white rounded-lg p-4 text-center">
                 <div className="text-4xl mb-2">✅</div>
                 <p className="text-lg font-semibold text-gray-800">Foto capturada!</p>
-                <p className="text-sm text-gray-600 mt-1">
-                  Qualidade: {brightness > 60 && brightness < 180 ? 'Ótima' : 'Boa'}
-                </p>
               </div>
             </div>
           </>
         )}
       </div>
 
-      {/* Instructions */}
+      {/* Instruções */}
       {!capturedImage && (
         <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
           <h3 className="font-semibold text-white text-sm mb-2">📝 Dicas para melhor foto:</h3>
           <ul className="text-sm text-white/80 space-y-1">
-            <li>• Centralize seu rosto no oval</li>
+            <li>• Deixe seu rosto preencher o oval (chegue perto)</li>
             <li>• Procure um local com boa iluminação</li>
             <li>• Evite contraluz (janela atrás)</li>
             <li>• Mantenha expressão neutra</li>
-            <li>• Remova óculos escuros se possível</li>
           </ul>
           <p className="text-xs text-verde-agua mt-2 font-semibold">
-            💡 Você pode capturar a foto mesmo se o oval estiver amarelo!
+            💡 O botão libera quando o oval ficar verde.
           </p>
         </div>
       )}
 
-      {/* Error/Info message */}
+      {/* Erro/Info */}
       {error && (
         <div className={`px-4 py-3 rounded-xl ${
           error.includes('Use a câmera do seu celular')
@@ -487,31 +350,28 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         </div>
       )}
 
-      {/* Action buttons */}
+      {/* Ações */}
       <div className="space-y-3">
         {!capturedImage ? (
           <>
-            {/* Primary capture button - works with or without detection */}
+            {/* Captura: habilita SÓ com gate ok. Sem "capturar mesmo assim". */}
             {isStreaming && (
               <button
                 onClick={handleCapture}
-                disabled={isCapturing}
+                disabled={isCapturing || !okState}
                 className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-md active:scale-95 ${
-                  faceDetected && !isCapturing
+                  okState && !isCapturing
                     ? 'bg-verde-agua text-white hover:bg-verde-agua-dark glow-verde-agua'
-                    : !isCapturing && allowManualCapture
-                    ? 'bg-azul-medio text-white hover:bg-azul-medio-dark'
                     : 'bg-white/10 text-white/30 cursor-not-allowed'
                 }`}
               >
                 {isCapturing ? '⏳ Capturando...' :
-                 faceDetected ? '📸 Capturar Foto' :
-                 allowManualCapture ? '📸 Capturar Mesmo Assim' :
-                 '👤 Posicione seu rosto'}
+                  okState ? '📸 Capturar Foto' :
+                    gateState === 'tooSmall' ? '👤 Aproxime o rosto' :
+                      '👤 Centralize seu rosto'}
               </button>
             )}
 
-            {/* Upload option - shown when camera fails or as alternative */}
             {(showUploadOption || !isStreaming) && (
               <>
                 <div className="relative">
@@ -557,9 +417,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             >
               🔄 Tirar Nova Foto
             </button>
-            <p className="text-center text-sm text-white/60">
-              Processando... Aguarde
-            </p>
+            <p className="text-center text-sm text-white/60">Processando... Aguarde</p>
           </>
         )}
       </div>
