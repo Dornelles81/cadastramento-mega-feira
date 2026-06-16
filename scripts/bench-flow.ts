@@ -18,10 +18,17 @@
 import * as dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
+import fs from 'fs'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma'
 import { HikvisionClient } from '../lib/hikvision/client'
+import { DigestAuth } from '../lib/hikvision/digest-auth'
 import { revokeAgentToken } from '../lib/agent/tokens'
+
+function numOfFace(searchResult: any): number | string {
+  const u = searchResult?.UserInfoSearch?.UserInfo?.[0]
+  return u ? u.numOfFace : '(usuário não encontrado)'
+}
 
 const BASE = process.env.AGENT_TEST_BASE || 'http://localhost:3000'
 const DEVICE_IP = process.env.DEVICE_IP || '192.168.1.47'
@@ -78,7 +85,8 @@ async function main() {
     return
   }
 
-  if (!DEVICE_PASS) { console.error('DEVICE_PASS ausente no env. Abortando (não vou pedir senha em texto).'); process.exit(2) }
+  // DEVICE_PASS só é necessária no PRIMEIRO cadastro do terminal (ver abaixo);
+  // com o terminal já registrado, nenhum run precisa da senha em claro.
 
   // 1) Fixtures: evento de bancada + admin temporário
   const now = new Date()
@@ -98,12 +106,16 @@ async function main() {
     const list = await adminApi('GET', `/api/admin/terminals?eventId=${ev.id}`)
     let term = list.json?.terminals?.find((t: any) => t.ipAddress === DEVICE_IP)
     if (!term) {
+      // Só o cadastro inicial precisa da senha em claro (entra criptografada).
+      if (!DEVICE_PASS) throw new Error('terminal ainda não cadastrado: forneça DEVICE_PASS só nesta primeira vez')
       const created = await adminApi('POST', '/api/admin/terminals', { name: 'Bancada DS-K1T671M-L', ipAddress: DEVICE_IP, port: 80, useHttps: false, username: 'admin', password: DEVICE_PASS, eventId: ev.id, gate: 'Bancada' })
       term = created.json?.terminal
       console.log(`[crud] terminal criado: ${term.id} (hasPassword=${term.hasPassword})`)
     } else {
-      await adminApi('PUT', `/api/admin/terminals/${term.id}`, { password: DEVICE_PASS })
-      console.log(`[crud] terminal reutilizado: ${term.id} (senha atualizada/criptografada)`)
+      // Já cadastrado: NÃO precisa mais da senha em claro — a credencial vem
+      // decriptada do endpoint do agente. Só atualiza se DEVICE_PASS for passado.
+      if (DEVICE_PASS) { await adminApi('PUT', `/api/admin/terminals/${term.id}`, { password: DEVICE_PASS }); console.log(`[crud] terminal reutilizado: ${term.id} (senha re-criptografada)`) }
+      else console.log(`[crud] terminal reutilizado: ${term.id} (credencial já criptografada no banco; sem senha em claro neste run)`)
     }
 
     // 3) Token de agente (endpoint real)
@@ -129,6 +141,38 @@ async function main() {
       const search = await client.searchUsers(EMP)
       console.log(`\n=== RETORNO CRU (searchUsers ${EMP}) ===`)
       console.log(typeof search === 'string' ? search : JSON.stringify(search, null, 2))
+    } else if (op === 'caps') {
+      // capabilities da face (read-only) via credencial vinda do agente
+      const d = new DigestAuth(agTerm.username, agTerm.password)
+      for (const path of ['/ISAPI/Intelligent/FDLib/capabilities?format=json', '/ISAPI/Intelligent/FDLib/FaceDataRecord/capabilities?format=json']) {
+        console.log(`\n=== GET ${path} ===`)
+        try {
+          const r = await d.request({ method: 'GET', url: `http://${agTerm.ipAddress}:${agTerm.port}${path}`, headers: { Accept: 'application/json' }, timeout: 8000 })
+          console.log(typeof r.data === 'string' ? r.data.slice(0, 1600) : JSON.stringify(r.data).slice(0, 1600))
+        } catch (e: any) { console.log('falhou:', e?.response?.status || e?.code || e?.message) }
+      }
+    } else if (op === 'uploadFace') {
+      const EMP = process.env.BENCH_EMP || '99000001'
+      const facePath = process.env.BENCH_FACE
+      if (!facePath || !fs.existsSync(facePath)) throw new Error(`BENCH_FACE inválido: ${facePath}`)
+      const b64 = fs.readFileSync(facePath).toString('base64')
+      const dataUrl = `data:image/jpeg;base64,${b64}`
+      console.log(`[uploadFace] imagem=${facePath} (${(b64.length / 1024).toFixed(0)} KB base64) -> employeeNo ${EMP}`)
+
+      const before = await client.searchUsers(EMP)
+      console.log(`[antes] numOfFace = ${numOfFace(before)}`)
+
+      try {
+        const result = await client.uploadFace(EMP, dataUrl)
+        console.log('\n=== RETORNO CRU DO DEVICE (uploadFace) ===')
+        console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2))
+      } catch (e: any) {
+        console.log('\n=== uploadFace REJEITADO (sanitizado) ===')
+        console.log('message:', e?.message, '| device:', JSON.stringify(e?.deviceStatus))
+      }
+
+      const after = await client.searchUsers(EMP)
+      console.log(`\n[depois] numOfFace = ${numOfFace(after)}`)
     } else if (op === 'addUser') {
       const EMP = process.env.BENCH_EMP || '99000001'
       const payload = { employeeNo: EMP, name: 'BANCADA TESTE', userType: 'normal' as const, valid: { enable: true, beginTime: '2025-01-01T00:00:00', endTime: '2037-12-31T23:59:59' } }
@@ -140,6 +184,16 @@ async function main() {
       const search = await client.searchUsers(EMP)
       console.log('\n=== CONFIRMAÇÃO (searchUsers) ===')
       console.log(typeof search === 'string' ? search : JSON.stringify(search, null, 2))
+    } else if (op === 'deleteUser') {
+      const EMP = process.env.BENCH_EMP || '99000001'
+      console.log(`\n[deleteUser] removendo employeeNo=${EMP} ...`)
+      const before = await client.searchUsers(EMP)
+      console.log(`[antes] numOfMatches = ${before?.UserInfoSearch?.numOfMatches}`)
+      const result = await client.deleteUser(EMP)
+      console.log('\n=== RETORNO CRU DO DEVICE (deleteUser) ===')
+      console.log(typeof result === 'string' ? result : JSON.stringify(result, null, 2))
+      const after = await client.searchUsers(EMP)
+      console.log(`\n[depois] numOfMatches = ${after?.UserInfoSearch?.numOfMatches} (0 = removido)`)
     } else {
       console.log(`op desconhecida: ${op}`)
     }

@@ -2,6 +2,7 @@
 // For DS-K1T671M-L Face Recognition Terminal
 
 import axios, { AxiosInstance } from 'axios';
+import crypto from 'crypto';
 import { DigestAuth } from './digest-auth';
 
 export interface HikvisionUser {
@@ -120,19 +121,22 @@ export class HikvisionClient {
   private async request(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
-    opts: { data?: unknown; accept?: string; context: string }
+    opts: { data?: unknown; accept?: string; contentType?: string; context: string }
   ): Promise<any> {
     const accept = opts.accept ?? 'application/json, application/xml';
     const hasBody = opts.data !== undefined;
+    const contentType = opts.contentType ?? 'application/json';
 
     if (this.digestAuth) {
       try {
         const res = await this.digestAuth.request({
           method,
           url: `${this.baseURL}${path}`,
-          headers: { ...(hasBody ? { 'Content-Type': 'application/json' } : {}), Accept: accept },
+          headers: { ...(hasBody ? { 'Content-Type': contentType } : {}), Accept: accept },
           ...(hasBody ? { data: opts.data } : {}),
-          timeout: 30000
+          timeout: 30000,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity
         });
         return res.data;
       } catch (error) {
@@ -148,7 +152,9 @@ export class HikvisionClient {
         method,
         url: path,
         ...(hasBody ? { data: opts.data } : {}),
-        headers: { Accept: accept }
+        headers: { ...(hasBody ? { 'Content-Type': contentType } : {}), Accept: accept },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
       });
       return res.data;
     } catch (error) {
@@ -200,13 +206,37 @@ export class HikvisionClient {
     return this.request('POST', '/ISAPI/AccessControl/UserInfo/Record?format=json', { data: userData, context: 'addUser' });
   }
 
-  // Upload face data
-  async uploadFace(employeeNo: string, faceImage: string) {
+  // Upload face data.
+  //
+  // O DS-K1T671M-L (firmware V3.2.30) NÃO aceita base64-em-JSON no
+  // FaceDataRecord (rejeita com Invalid Content / faceLibType). O formato aceito
+  // é multipart/form-data: uma parte JSON (faceLibType/FDID/FPID) + uma parte
+  // binária com o JPEG. `faceImage` pode ser data URL, base64 puro ou já o JPEG.
+  async uploadFace(employeeNo: string, faceImage: string, fdid: string = '1') {
     const base64Data = faceImage.replace(/^data:image\/\w+;base64,/, '');
-    const faceData = {
-      FaceDataRecord: { faceLibType: 'blackFD', FDID: '1', FPID: employeeNo, faceData: base64Data }
-    };
-    return this.request('POST', '/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', { data: faceData, context: 'uploadFace' });
+    const imgBuffer = Buffer.from(base64Data, 'base64');
+
+    const meta = JSON.stringify({ faceLibType: 'blackFD', FDID: fdid, FPID: employeeNo });
+    const boundary = '----HikFD' + crypto.randomBytes(8).toString('hex');
+    const CRLF = '\r\n';
+    const head = Buffer.from(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="FaceDataRecord"${CRLF}` +
+      `Content-Type: application/json${CRLF}${CRLF}` +
+      `${meta}${CRLF}` +
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="img"; filename="face.jpg"${CRLF}` +
+      `Content-Type: image/jpeg${CRLF}${CRLF}`,
+      'utf8'
+    );
+    const tail = Buffer.from(`${CRLF}--${boundary}--${CRLF}`, 'utf8');
+    const body = Buffer.concat([head, imgBuffer, tail]);
+
+    return this.request('POST', '/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json', {
+      data: body,
+      contentType: `multipart/form-data; boundary=${boundary}`,
+      context: 'uploadFace'
+    });
   }
 
   // Registra um cartão (credencial numérica) para um usuário já existente.
