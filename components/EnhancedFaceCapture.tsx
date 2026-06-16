@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { detectFace as mpDetectFace, validateFace, nextGateState, median, type FaceReason } from '../lib/face/detector'
+import { detectFace as mpDetectFace, decideFromReads, nextGateState, type FaceReason } from '../lib/face/detector'
 
 interface EnhancedFaceCaptureProps {
   onCapture: (imageData: string, faceData?: any) => void
@@ -75,8 +75,18 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const frame = buildFrameCanvas()
       if (!frame) return
       const m = await mpDetectFace(frame)
+      // SEM ROSTO = no_face IMEDIATO: zera a janela da mediana e cai pro vermelho
+      // na hora, SEM suavização. A mediana/histerese só vale p/ o tamanho
+      // (tooSmall↔ok) com rosto presente — nunca pode segurar 'ok' verde depois
+      // que o rosto saiu do quadro (era o furo: o verde segurava ~500ms).
+      if (m.faceCount === 0) {
+        historyRef.current = []
+        if (gateStateRef.current !== 'noFace') { gateStateRef.current = 'noFace'; setGateState('noFace') }
+        drawOval('noFace')
+        return
+      }
       const hist = historyRef.current
-      hist.push(m.faceCount > 0 ? m.interocularPx : 0)
+      hist.push(m.interocularPx)
       if (hist.length > 8) hist.shift()
       const next = nextGateState(hist, gateStateRef.current)
       if (next !== gateStateRef.current) { gateStateRef.current = next; setGateState(next) }
@@ -180,15 +190,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         canvas.height = height
         ctx.drawImage(img, 0, 0, width, height)
 
-        // GATE: 3 medições + MEDIANA (imagem única é mais sujeita ao ruído que a
-        // câmera, que tem vários frames).
+        // GATE: 3 medições no MESMO frame; exige rosto na MAIORIA ESTRITA (um
+        // falso-positivo do detector não pode liberar foto sem rosto) E
+        // interocular ≥ 60. Imagem única é mais sujeita a ruído que a câmera.
         const reads: number[] = []
         for (let i = 0; i < 3; i++) {
           const m = await mpDetectFace(canvas)
           reads.push(m.faceCount > 0 ? m.interocularPx : 0)
         }
-        const ip = median(reads.filter(x => x > 0))
-        const v = validateFace({ faceCount: ip > 0 ? 1 : 0, interocularPx: ip })
+        const v = decideFromReads(reads)
+        const ip = v.interocularPx
 
         if (!v.ok) {
           // BLOQUEIO TOTAL: NÃO chama onCapture; mostra o motivo; limpa o input.
@@ -221,7 +232,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       : reason === 'tooSmall' ? 'Aproxime o rosto e tente de novo.'
         : ''
 
-  // Captura: SÓ procede com validateFace.ok. Não há "capturar mesmo assim".
+  // Captura: SÓ procede com decideFromReads.ok. Não há "capturar mesmo assim".
   const handleCapture = async () => {
     // dupla trava: o botão já só habilita em 'ok', mas revalidamos aqui também
     if (gateStateRef.current !== 'ok' || isCapturing) return
@@ -238,18 +249,22 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     const frame = buildFrameCanvas() // frame de submissão ≤800px
     if (!frame) { setIsCapturing(false); startDetectionLoop(); return }
 
-    // valida no frame capturado: 3 medições + mediana (mesmo critério do upload)
+    // GATE do frame capturado: 3 medições no MESMO frame; exige rosto na MAIORIA
+    // (um único falso-positivo NÃO libera foto sem rosto) E interocular ≥ 60.
+    // Mesmo critério do upload (Fatia 4).
     const reads: number[] = []
     for (let i = 0; i < 3; i++) {
       const m = await mpDetectFace(frame)
       reads.push(m.faceCount > 0 ? m.interocularPx : 0)
     }
-    const ip = median(reads.filter(x => x > 0))
-    const v = validateFace({ faceCount: ip > 0 ? 1 : 0, interocularPx: ip })
+    const v = decideFromReads(reads)
+    const ip = v.interocularPx
 
     if (!v.ok) {
       // NÃO captura — feedback e volta ao preview
-      setError(friendly(v.reason))
+      setError(v.reason === 'noFace'
+        ? 'Não detectei seu rosto. Centralize no oval e tente de novo.'
+        : friendly(v.reason))
       setIsCapturing(false)
       startDetectionLoop()
       return

@@ -122,6 +122,22 @@ export function validateFace(m: FaceMeasurement, minPx: number = MIN_INTEROCULAR
   return { ok: true, reason: 'ok', interocularPx: m.interocularPx }
 }
 
+/**
+ * Decide o gate a partir de N medições do MESMO frame submetido (captura da
+ * câmera OU upload). Cada leitura é a interocular em px (0 = sem rosto naquela
+ * leitura). REGRA DE SEGURANÇA: exige rosto na MAIORIA ESTRITA das leituras — um
+ * único falso-positivo do detector NÃO pode liberar uma foto sem rosto (era o
+ * furo do gate: `median(reads.filter(>0))` deixava [65,0,0] passar). Só então
+ * mede a interocular (mediana das leituras com rosto) e exige ≥ minPx.
+ */
+export function decideFromReads(reads: number[], minPx: number = MIN_INTEROCULAR_PX): FaceValidation {
+  const present = reads.filter(x => x > 0)
+  if (present.length * 2 <= reads.length) return { ok: false, reason: 'noFace', interocularPx: 0 }
+  const ip = median(present)
+  if (ip < minPx) return { ok: false, reason: 'tooSmall', interocularPx: ip }
+  return { ok: true, reason: 'ok', interocularPx: ip }
+}
+
 // ── Suavização do gate AO VIVO (câmera) ──────────────────────────────────────
 // O MediaPipe oscila ±~10px; perto do gate (60) o estado tremularia
 // (aproxime/ok/aproxime). Combinamos MEDIANA dos últimos N frames (mata o spike
