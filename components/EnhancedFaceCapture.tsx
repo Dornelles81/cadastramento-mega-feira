@@ -299,7 +299,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   return (
     <div className="space-y-4">
-      <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[3/4] max-h-[58vh] mx-auto">
+      <div className="relative bg-gray-900 rounded-xl overflow-hidden h-[42svh] max-h-[420px] min-h-[220px] mx-auto">
         {!capturedImage ? (
           <>
             <video
@@ -387,9 +387,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         </div>
       )}
 
-      {/* Ações — quando o rosto está ok as dicas somem (acima) e a câmera tem
-          altura limitada (max-h-[58vh]), então o botão de captura fica acima da
-          dobra mesmo em celulares baixos, sem precisar de posicionamento fixo. */}
+      {/* Ações — câmera com altura em svh (área REALMENTE visível, já desconta a
+          barra de endereço do mobile; vh contaria a área sob a barra e estouraria)
+          + dicas escondidas quando ok => câmera e botão cabem juntos sem rolar,
+          sem precisar de fixed/sticky (que seriam frágeis pelos transforms). */}
       <div className="space-y-3">
         {!capturedImage ? (
           <>
