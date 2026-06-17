@@ -1,9 +1,13 @@
 /**
- * Elegibilidade de acesso aos terminais e derivação do employeeNo.
+ * Elegibilidade de acesso aos terminais.
  *
  * Regra (device-integration-plan):
  *   status='active' AND isDeleted=false AND face utilizável
  *   AND (quando Event.requiresApprovalForAccess) approvalStatus='approved'.
+ *
+ * O identificador no terminal é o `Participant.employeeNo` (Fase 1: sequencial
+ * global via `assignIdentityIfEligible`). O antigo `deriveEmployeeNo` (derivado
+ * do credentialNumber/id) foi APOSENTADO na Fase 2 — o /work usa `employeeNo`.
  */
 import { getFaceImageDataUrl } from '../face-image'
 
@@ -24,19 +28,4 @@ export function isEligible(
   if (getFaceImageDataUrl(p) === null) return false
   if (opts.requiresApproval && p.approvalStatus !== 'approved') return false
   return true
-}
-
-/**
- * Identificador do usuário no terminal (ISAPI employeeNo).
- *
- * FASE 1: o esquema definitivo (sequencial vs derivado do credentialNumber) é
- * decidido junto com o valor do card e o teste de bancada. Por ora usamos o
- * credentialNumber (numérico, dedicado, sem dado pessoal) e caímos para um
- * prefixo do id quando ausente. Determinístico e estável por participante.
- */
-export function deriveEmployeeNo(p: { credentialNumber?: string | null; id: string }): string {
-  if (p.credentialNumber && /^\d+$/.test(p.credentialNumber)) {
-    return p.credentialNumber
-  }
-  return p.id.replace(/\D/g, '').slice(0, 8) || p.id.slice(0, 8)
 }

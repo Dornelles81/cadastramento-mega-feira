@@ -62,13 +62,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     }
 
     if ((kind as Kind) === 'face') {
-      data.faceState = success ? 'done' : 'failed'
+      data.faceState = success ? 'synced' : 'failed'
       if (success) data.syncedAt = now
     } else if ((kind as Kind) === 'card') {
-      data.cardState = success ? 'done' : 'failed'
+      data.cardState = success ? 'synced' : 'failed'
       if (success) data.syncedAt = now
     } else {
-      data.removalState = success ? 'done' : 'failed'
+      data.removalState = success ? 'removed' : 'failed'
       if (success) data.removedAt = now
     }
 

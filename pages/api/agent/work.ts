@@ -17,7 +17,8 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
-import { isEligible, deriveEmployeeNo } from '../../../lib/agent/eligibility'
+import { isEligible } from '../../../lib/agent/eligibility'
+import { resolveValidity } from '../../../lib/agent/validity'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -64,7 +65,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
           faceData: true,
           faceImageUrl: true,
           cardNumber: true,
-          credentialNumber: true,
+          employeeNo: true,
           event: { select: { requiresApprovalForAccess: true } }
         }
       }
@@ -76,7 +77,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
 
   for (const row of rows) {
     const p = row.participant
-    const employeeNo = deriveEmployeeNo(p)
+    const employeeNo = p.employeeNo // Fase 1: sequencial global, fonte da verdade
+
+    // Sem employeeNo não há o que escrever/remover no device (a identidade é
+    // atribuída antes do fan-out). Pula a linha — a reconciliação cuida do resto.
+    if (!employeeNo) continue
 
     if (row.removalState === 'pending') {
       removals.push({ syncId: row.id, terminalId: row.terminalId, employeeNo })
@@ -95,12 +100,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
       continue
     }
 
+    // Validade resolvida NA NUVEM (§6): o agente só aplica. Hoje = modo evento.
+    const validity = resolveValidity()
+
     push.push({
       syncId: row.id,
       terminalId: row.terminalId,
       employeeNo,
       name: p.name,
-      cardNumber: p.cardNumber, // pode ser null até a Fase 1 definir o valor
+      cardNumber: p.cardNumber,
+      validBegin: validity.begin,
+      validEnd: validity.end,
       needFace,
       needCard,
       // Face decriptada na nuvem; null se não for necessária nesta linha.

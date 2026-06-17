@@ -71,7 +71,7 @@ async function main() {
       data: {
         eventId: evA.id, name: 'Fulano Push', cpf: `000${Date.now()}`.slice(-11),
         status: 'active', isDeleted: false, approvalStatus: 'approved',
-        cardNumber: '9001', credentialNumber: '42', faceData: encryptString(FACE_PLAIN)
+        cardNumber: '9001', employeeNo: '90000042', faceData: encryptString(FACE_PLAIN)
       }
     })
     // Participante para remoção (evento A)
@@ -79,7 +79,7 @@ async function main() {
       data: {
         eventId: evA.id, name: 'Fulano Remove', cpf: `111${Date.now()}`.slice(-11),
         status: 'active', isDeleted: false, approvalStatus: 'approved',
-        cardNumber: '9002', faceData: encryptString(FACE_PLAIN)
+        cardNumber: '9002', employeeNo: '90000043', faceData: encryptString(FACE_PLAIN)
       }
     })
     created.participants.push(partPush.id, partRem.id)
@@ -88,7 +88,7 @@ async function main() {
       data: { participantId: partPush.id, terminalId: termA.id, faceState: 'pending', cardState: 'pending' }
     })
     const syncRem = await prisma.participantTerminalSync.create({
-      data: { participantId: partRem.id, terminalId: termA.id, faceState: 'done', cardState: 'done', removalState: 'pending' }
+      data: { participantId: partRem.id, terminalId: termA.id, faceState: 'synced', cardState: 'synced', removalState: 'pending' }
     })
     created.syncs.push(syncPush.id, syncRem.id)
 
@@ -113,9 +113,12 @@ async function main() {
     check('needFace e needCard true', pushItem?.needFace === true && pushItem?.needCard === true)
     check('cardNumber entregue (9001)', pushItem?.cardNumber === '9001')
     check('FACE veio em claro (base64) e bate com o plaintext', pushItem?.face === FACE_PLAIN)
-    check('employeeNo derivado do credentialNumber (distinto do cardNo)', pushItem?.employeeNo === '42', pushItem?.employeeNo)
+    check('employeeNo vem de Participant.employeeNo (Fase 1)', pushItem?.employeeNo === '90000042', pushItem?.employeeNo)
+    check('validEnd = 2037 (resolveValidity, modo evento)', pushItem?.validEnd === '2037-12-31T23:59:59', pushItem?.validEnd)
+    check('validBegin presente', typeof pushItem?.validBegin === 'string' && pushItem.validBegin.length > 0)
     const remItem = w1.json?.removals?.find((x: any) => x.syncId === syncRem.id)
     check('item de remoção presente', !!remItem)
+    check('removal traz employeeNo (Fase 1)', remItem?.employeeNo === '90000043', remItem?.employeeNo)
 
     console.log(`\n=== 3) POST /ack (token A): estado converge a partir do ack ===`)
     const a1 = await call('POST', '/api/agent/ack', tokenA, {
@@ -128,8 +131,8 @@ async function main() {
     check('200 e 3 aplicados', a1.status === 200 && a1.json?.applied === 3, a1.json)
     const afterPush = await prisma.participantTerminalSync.findUnique({ where: { id: syncPush.id } })
     const afterRem = await prisma.participantTerminalSync.findUnique({ where: { id: syncRem.id } })
-    check('faceState=done, cardState=done, syncedAt setado', afterPush?.faceState === 'done' && afterPush?.cardState === 'done' && !!afterPush?.syncedAt)
-    check('removalState=done, removedAt setado', afterRem?.removalState === 'done' && !!afterRem?.removedAt)
+    check('faceState=synced, cardState=synced, syncedAt setado', afterPush?.faceState === 'synced' && afterPush?.cardState === 'synced' && !!afterPush?.syncedAt)
+    check('removalState=removed, removedAt setado', afterRem?.removalState === 'removed' && !!afterRem?.removedAt)
     check('attempts incrementado', (afterPush?.attempts ?? 0) >= 1)
 
     console.log(`\n=== 4) Isolamento de escopo: token B não enxerga evento A ===`)
