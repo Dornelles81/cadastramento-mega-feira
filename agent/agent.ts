@@ -14,6 +14,7 @@ import {
   type Ack, type HeartbeatItem, type PushItem
 } from './api'
 import { applyPush, applyRemoval } from './apply'
+import { runReconcile } from './reconcile'
 import { HikvisionClient } from '../lib/hikvision/client'
 
 export interface RunResult {
@@ -91,12 +92,25 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 export async function mainLoop(): Promise<void> {
   const cfg = loadConfig()
-  console.log(`[agente] iniciado · base=${cfg.baseUrl} · poll=${cfg.pollMs}ms`)
+  console.log(`[agente] iniciado · base=${cfg.baseUrl} · poll=${cfg.pollMs}ms · reconcile=${cfg.reconcileMs}ms`)
+  let lastReconcile = 0
   for (;;) {
     try {
       const r = await runOnce(cfg)
       if (r.pushCount + r.removalCount > 0) {
         console.log(`[agente] ${new Date().toISOString()} push=${r.pushCount} removal=${r.removalCount} ok=${r.applied} falhas=${r.failed}`)
+      }
+      // Reconciliação em cadência própria (mais pesada — lista o roster do device).
+      if (Date.now() - lastReconcile >= cfg.reconcileMs) {
+        lastReconcile = Date.now()
+        try {
+          const rc = await runReconcile(cfg)
+          if (rc.pushes + rc.removals + rc.directDeletes > 0) {
+            console.log(`[agente] reconcile: pushes=${rc.pushes} removals=${rc.removals} deletes=${rc.directDeletes} (${rc.terminals} terminais)`)
+          }
+        } catch (e: any) {
+          console.error(`[agente] erro na reconciliação: ${e?.message ?? e}`)
+        }
       }
     } catch (e: any) {
       console.error(`[agente] erro no ciclo: ${e?.message ?? e}`)

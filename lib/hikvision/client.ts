@@ -173,14 +173,17 @@ export class HikvisionClient {
   }
 
   // Search users
-  async searchUsers(employeeNo?: string) {
+  // searchResultPosition/maxResults p/ PAGINAÇÃO (F4: o device devolve no máx 30
+  // por página; o reconcile pagina iterando a posição até totalMatches). Defaults
+  // mantêm o comportamento antigo (busca por employeeNo, 1ª página).
+  async searchUsers(employeeNo?: string, searchResultPosition = 0, maxResults = 30) {
     // ISAPI: EmployeeNoList é ARRAY de objetos [{ employeeNo }] — não
     // { employeeNo: [...] } (este firmware rejeita com badJsonContent).
     const searchData = {
       UserInfoSearchCond: {
         searchID: '1',
-        maxResults: 30,
-        searchResultPosition: 0,
+        maxResults,
+        searchResultPosition,
         ...(employeeNo && { EmployeeNoList: [{ employeeNo }] })
       }
     };

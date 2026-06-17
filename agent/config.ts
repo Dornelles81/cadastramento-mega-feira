@@ -14,6 +14,7 @@ export interface AgentConfig {
   token: string
   pollMs: number
   workLimit: number
+  reconcileMs: number
 }
 
 function readConfigFile(): Partial<AgentConfig> {
@@ -37,8 +38,11 @@ export function loadConfig(): AgentConfig {
   const token = process.env.AGENT_TOKEN || file.token || ''
   const pollMs = Number(process.env.AGENT_POLL_MS || file.pollMs || 5000)
   const workLimit = Number(process.env.AGENT_WORK_LIMIT || file.workLimit || 50)
+  // Reconciliação roda em cadência própria (não a cada poll): lista o roster do
+  // device, mais pesado. Default 60s.
+  const reconcileMs = Number(process.env.AGENT_RECONCILE_MS || file.reconcileMs || 60000)
   if (!token) {
     throw new Error('Token ausente. Cole o token em agent.config.json (campo "token") ou defina AGENT_TOKEN.')
   }
-  return { baseUrl, token, pollMs, workLimit }
+  return { baseUrl, token, pollMs, workLimit, reconcileMs }
 }

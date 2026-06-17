@@ -44,6 +44,16 @@ export interface HeartbeatItem {
   online: boolean
   error?: string
 }
+export interface DeviceUser {
+  employeeNo: string
+  numOfFace: number
+  numOfCard: number
+}
+export interface ReconcileResult {
+  pushesEnqueued: number
+  removalsEnqueued: number
+  removeEmployeeNos: string[]
+}
 
 async function req(cfg: AgentConfig, method: string, p: string, body?: any) {
   const res = await fetch(cfg.baseUrl + p, {
@@ -78,4 +88,13 @@ export async function postAck(cfg: AgentConfig, acks: Ack[]): Promise<void> {
 export async function postHeartbeat(cfg: AgentConfig, terminals: HeartbeatItem[]): Promise<void> {
   if (terminals.length === 0) return
   await req(cfg, 'POST', '/api/agent/heartbeat', { terminals })
+}
+
+export async function postReconcile(cfg: AgentConfig, terminalId: string, users: DeviceUser[]): Promise<ReconcileResult> {
+  const { json } = await req(cfg, 'POST', '/api/agent/reconcile', { terminalId, users })
+  return {
+    pushesEnqueued: json?.pushesEnqueued ?? 0,
+    removalsEnqueued: json?.removalsEnqueued ?? 0,
+    removeEmployeeNos: json?.removeEmployeeNos ?? []
+  }
 }

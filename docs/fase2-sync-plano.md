@@ -42,10 +42,14 @@
 - **Testável (dev + 1 real):** rodar o agente contra o token de bancada + `192.168.1.47` → aprovar alguém → **o agente sozinho** escreve e a linha vira `synced`. Primeiro fluxo automático ponta a ponta.
 - **Riscos:** ordem das ops (addUser primeiro); erro parcial (estado por-kind cobre); **segurança:** agente nunca recebe MASTER_KEY (face vem pronta) nem connection string (só token); empacotamento `.exe` (assinatura/SmartScreen, tamanho, auto-update).
 
-### F4 — Reconciliação (drift correction), paginada
-- **Muda:** loop periódico/sob-demanda compara **desejado** (linhas elegíveis) × **real** no device (`UserInfo/Search` **paginado 30/página até `totalMatches`**): elegível ausente → re-push; presente e órfão/não-elegível → removal; face/card divergente → update.
-- **Testável (dev + 1 real):** criar divergência artificial → reconciliação re-enfileira; paginação com mock >30 usuários.
-- **Riscos:** paginação correta (senão diverge silencioso); **DB é fonte da verdade**; evitar loop inclusão↔remoção; custo/rate das buscas.
+### F4 — Reconciliação (drift correction), paginada — APROVADA
+**Arquitetura (decisão):** o **device só é alcançado pelo agente**; a **nuvem tem o banco (verdade)**. Então o **.exe fica burro**: lista o roster do device e **reporta**; a **nuvem decide** o diff e enfileira; o agente aplica pelo caminho que já existe (`/work`). O banco **nunca** muda pra bater com o device.
+- **Fluxo:** agente lista usuários (`UserInfo/Search` **paginado 30/página até `totalMatches`**) → `POST /api/agent/reconcile { terminalId, users:[{employeeNo,numOfFace,numOfCard}] }` → nuvem compara desejado (elegíveis+`employeeNo`) × atual e **enfileira em `ParticipantTerminalSync`**; devolve `removeEmployeeNos` (órfãos sem linha) que o agente **deleta direto** (não há linha p/ enfileirar).
+- **Ações por divergência:** faltando → `faceState/cardState=pending` (re-push); órfão **com linha** (inelegível) → `removalState=pending`; órfão **sem linha** (delete-hard/manual no device) → `removeEmployeeNos` (delete direto); incompleto (`numOfFace=0`/`numOfCard=0`) → re-enfileira só o kind.
+- **Hook F5 (pronto, não construído):** função `faceNeedsUpdate(participant,row)` que hoje retorna `false`; a F5 adiciona `Participant.faceVersion` + `ParticipantTerminalSync.faceVersion` e a comparação — o reconcile **já chama o hook**, F5 encaixa sem mudar o fluxo.
+- **Anti-loop inclusão↔remoção:** (a) `employeeNo` casado como **STRING exata** (nunca coagir p/ número — perderia zeros à esquerda e faria elegível virar "órfão" → loop); (b) **desejado XOR órfão** (mutuamente exclusivos por construção); (c) reconcile reflete o banco deterministicamente; (d) idempotente (re-setar `pending` é no-op).
+- **Testável:** unit do diff (faltando/órfão-com-linha/órfão-sem-linha/incompleto) sem device + paginação do lister com mock >30 (zero re-push espúrio nos 31+). Bancada: criar divergência artificial (deletar user no device por fora → re-push; addUser de emp fora do banco → removal; addUser sem face → enfileira face).
+- **Riscos:** paginação correta (senão diverge silencioso); custo/rate das buscas no device; reconcile não roda a cada poll (cadência própria, ~60s).
 
 ### F5 — Face versionada (re-captura) + caminho de update
 - **Muda:** `faceVersion`/hash do `faceData` em `Participant` (e na linha sync); fan-out/reconciliação compara versões → enfileira **update de face**. Device rejeita sobrescrever (`deviceUserAlreadyExistFace`) → update = apagar face (ou delete+add do usuário) e re-subir (operação de 1ª classe; escola re-captura, evento quase nunca).
