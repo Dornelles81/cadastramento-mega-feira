@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client'
 import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
+import { onBecameEligible, enqueueRemoval } from '../../../lib/agent/sync-enqueue'
 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -49,6 +50,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         rejectionReason: action === 'reject' ? reason : null
       }
     })
+
+    // Transição de elegibilidade → fan-out do sync (este é o endpoint que a UI do
+    // admin usa de fato). Aprovar: identidade + enqueue por terminal ativo.
+    // Rejeitar: enfileira remoção. Idempotente e não-fatal.
+    try {
+      if (action === 'approve') {
+        await onBecameEligible(participant.eventId, participantId)
+      } else {
+        await enqueueRemoval(participantId)
+      }
+    } catch (syncErr) {
+      console.error(`fan-out/remoção do sync falhou na ${action} (participant-approval):`, syncErr)
+    }
 
     // Create approval log (non-blocking — table may not exist in all environments)
     try {
