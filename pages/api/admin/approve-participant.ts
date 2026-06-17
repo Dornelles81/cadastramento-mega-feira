@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client';
 import { prisma } from '../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
-import { assignIdentityIfEligible } from '../../../lib/agent/identity'
+import { onBecameEligible, enqueueRemoval } from '../../../lib/agent/sync-enqueue'
 
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -47,15 +47,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       data: updateData
     });
 
-    // Ao aprovar, o participante pode ter ficado elegível: atribui a identidade
-    // de terminal (employeeNo + cardNumber) se ainda não tiver. Idempotente e
-    // não-fatal (falha aqui não derruba a aprovação).
-    if (action === 'approve') {
-      try {
-        await assignIdentityIfEligible(participantId)
-      } catch (idErr) {
-        console.error('assignIdentityIfEligible falhou na aprovação:', idErr)
+    // Transição de elegibilidade → fan-out do sync. Aprovar: atribui identidade
+    // (employeeNo + cardNumber) e enfileira push em cada terminal ativo. Rejeitar:
+    // enfileira remoção (caso já estivesse sincronizado). Idempotente e não-fatal.
+    try {
+      if (action === 'approve') {
+        await onBecameEligible(participant.eventId, participantId)
+      } else {
+        await enqueueRemoval(participantId)
       }
+    } catch (syncErr) {
+      console.error(`fan-out/remoção do sync falhou na ${action}:`, syncErr)
     }
 
     // Create audit log

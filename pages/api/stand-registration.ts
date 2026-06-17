@@ -5,6 +5,7 @@ import { encryptString } from '../../lib/crypto'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
+import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 
 /**
  * Cadastro de credenciado via link mágico do stand (SPEC seção 2.3).
@@ -199,6 +200,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return created
     })
+
+    // Evento SEM-APROVAÇÃO: já fica elegível no registro → identidade + fan-out
+    // (pós-commit da transação). Idempotente e não-fatal.
+    if (event.requiresApprovalForAccess === false) {
+      try {
+        await onBecameEligible(event.id, participant.id)
+      } catch (syncErr) {
+        console.error('fan-out do sync falhou no registro de stand sem-aprovação:', syncErr)
+      }
+    }
 
     return res.status(201).json({
       success: true,

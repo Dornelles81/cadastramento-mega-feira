@@ -11,6 +11,7 @@ import type { Session } from 'next-auth'
 import { prisma } from '../../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
 import { encryptString } from '../../../../lib/crypto'
+import { backfillTerminal } from '../../../../lib/agent/sync-enqueue'
 
 function publicTerminal(t: any) {
   const { passwordEncrypted, ...rest } = t
@@ -47,6 +48,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse, _session: Sess
         isActive: isActive !== false
       }
     })
+    // Backfill: o roster elegível do contexto já existente passa a ter linha de
+    // sync pendente neste terminal novo (não duplica). Idempotente e não-fatal.
+    try {
+      await backfillTerminal(created.id)
+    } catch (syncErr) {
+      console.error('backfillTerminal falhou ao criar terminal:', syncErr)
+    }
+
     return res.status(201).json({ terminal: publicTerminal(created) })
   }
 

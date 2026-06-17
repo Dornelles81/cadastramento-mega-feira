@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma'
 import Joi from 'joi'
 import { encryptString } from '../../lib/crypto'
 import { rateLimitOrReject } from '../../lib/rate-limit'
+import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 
 // Simplified validation schema
 const registrationSchema = Joi.object({
@@ -304,6 +305,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     console.log('✅ Participant created successfully:', participant.id)
+
+    // Evento SEM-APROVAÇÃO: o participante já fica elegível no registro → atribui
+    // identidade e enfileira o fan-out aqui (em eventos com aprovação, isso
+    // acontece no approve-participant). Idempotente e não-fatal.
+    if (event.requiresApprovalForAccess === false) {
+      try {
+        await onBecameEligible(event.id, participant.id)
+      } catch (syncErr) {
+        console.error('fan-out do sync falhou no registro sem-aprovação:', syncErr)
+      }
+    }
 
     return res.status(201).json({
       success: true,

@@ -9,6 +9,7 @@ import {
   deleteUploadFiles
 } from '../../lib/participant-sensitive'
 import { removeUserFromDevice } from '../../lib/ivms'
+import { enqueueRemoval } from '../../lib/agent/sync-enqueue'
 import {
   lastDayReset,
   nextDayReset,
@@ -214,6 +215,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return { hadCheckinToday, slotLockedUntil }
     })
+
+    // Removido do stand (status='removed') → enfileira remoção do device em cada
+    // terminal (o agente faz deleteUser). As linhas de sync persistem (não é
+    // delete hard). Idempotente e não-fatal.
+    try {
+      await enqueueRemoval(participant.id)
+    } catch (syncErr) {
+      console.error('enqueueRemoval falhou na remoção de stand:', syncErr)
+    }
 
     // Arquivos físicos referenciados morrem junto com a referência; falha
     // não bloqueia a exclusão, mas fica registrada para reprocessamento
