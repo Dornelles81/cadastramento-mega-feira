@@ -27,6 +27,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const detectingRef = useRef(false) // guarda contra detecção concorrente
   const [showUploadOption, setShowUploadOption] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // refs p/ DEBUG TEMPORÁRIO (medir câmera e botão no aparelho real)
+  const camBoxRef = useRef<HTMLDivElement>(null)
+  const captureBtnRef = useRef<HTMLButtonElement>(null)
 
   // Desenha o frame atual do vídeo redimensionado para ≤800px (a MESMA imagem
   // que será submetida) num canvas offscreen — contrato da régua do detector.
@@ -297,9 +300,45 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   const okState = gateState === 'ok'
 
+  // ── DEBUG TEMPORÁRIO — números reais do aparelho (REMOVER depois) ──
+  const [dbg, setDbg] = useState<{ innerH: number; visualH: number; camH: number; btnTop: number; btnBottom: number } | null>(null)
+  useEffect(() => {
+    const measure = () => {
+      const cam = camBoxRef.current?.getBoundingClientRect()
+      const btn = captureBtnRef.current?.getBoundingClientRect()
+      setDbg({
+        innerH: Math.round(window.innerHeight),
+        visualH: Math.round(window.visualViewport?.height || 0),
+        camH: cam ? Math.round(cam.height) : 0,
+        btnTop: btn ? Math.round(btn.top) : 0,
+        btnBottom: btn ? Math.round(btn.bottom) : 0,
+      })
+    }
+    measure()
+    const id = setInterval(measure, 500)
+    window.visualViewport?.addEventListener('resize', measure)
+    window.addEventListener('resize', measure)
+    return () => {
+      clearInterval(id)
+      window.visualViewport?.removeEventListener('resize', measure)
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
+
   return (
-    <div className="space-y-4">
-      <div className="relative bg-gray-900 rounded-xl overflow-hidden h-[42svh] max-h-[420px] min-h-[220px] mx-auto">
+    <>
+      {/* DEBUG TEMPORÁRIO — REMOVER após coletar os números do aparelho real */}
+      {dbg && (
+        <div className="fixed top-0 left-0 z-[60] bg-black/85 text-green-300 text-[11px] font-mono px-2 py-1 leading-tight pointer-events-none rounded-br-lg">
+          <div>innerH={dbg.innerH} · visualVP={dbg.visualH}</div>
+          <div>camera={dbg.camH}px</div>
+          <div>botao: top={dbg.btnTop} bottom={dbg.btnBottom}</div>
+          <div>{dbg.btnBottom > 0 && dbg.btnBottom <= dbg.visualH ? '✅ botao VISIVEL' : '❌ botao CORTADO/ausente'}</div>
+        </div>
+      )}
+
+      <div className="space-y-4 pb-44">
+        <div ref={camBoxRef} className="relative bg-gray-900 rounded-xl overflow-hidden h-[42svh] max-h-[420px] min-h-[220px] mx-auto">
         {!capturedImage ? (
           <>
             <video
@@ -387,16 +426,21 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         </div>
       )}
 
-      {/* Ações — câmera com altura em svh (área REALMENTE visível, já desconta a
-          barra de endereço do mobile; vh contaria a área sob a barra e estouraria)
-          + dicas escondidas quando ok => câmera e botão cabem juntos sem rolar,
-          sem precisar de fixed/sticky (que seriam frágeis pelos transforms). */}
-      <div className="space-y-3">
+      </div>{/* fim do conteúdo em fluxo (rolável) */}
+
+      {/* Barra de ações FIXA no rodapé da viewport (fora do scroll): o botão de
+          captura fica SEMPRE visível, independente da barra de endereço/gestos.
+          pb com env(safe-area-inset-bottom) limpa a barra de gestos do Android.
+          Não há ancestral com transform nesta tela, então fixed = relativo à
+          viewport (o conteúdo acima tem pb-44 p/ não ficar escondido atrás). */}
+      <div className="fixed inset-x-0 bottom-0 z-40 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-azul-marinho via-azul-marinho/95 to-transparent">
+        <div className="max-w-md mx-auto space-y-3">
         {!capturedImage ? (
           <>
             {/* Captura: habilita SÓ com gate ok. Sem "capturar mesmo assim". */}
             {isStreaming && (
               <button
+                ref={captureBtnRef}
                 onClick={handleCapture}
                 disabled={isCapturing || !okState}
                 className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-md active:scale-95 ${
@@ -460,7 +504,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             <p className="text-center text-sm text-white/60">Processando... Aguarde</p>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
