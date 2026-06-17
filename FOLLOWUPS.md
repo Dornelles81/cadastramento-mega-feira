@@ -1,4 +1,4 @@
-# Follow-ups pendentes — consolidado (2026-06-16)
+# Follow-ups pendentes — consolidado (2026-06-17)
 
 Backlog único de pendências acumuladas, por urgência. Itens resolvidos no fim, para referência.
 
@@ -7,10 +7,10 @@ Backlog único de pendências acumuladas, por urgência. Itens resolvidos no fim
 ## 🔴 PRÉ-EVENTO (resolver antes de rodar o evento real)
 
 - **IP fixo dos terminais Hikvision.** Hoje em DHCP. O agente referencia `Terminal.ipAddress`; se o IP mudar, o sync quebra. Fixar IP no device/roteador (reserva DHCP ou IP estático) e cadastrar o IP definitivo em `Terminal`.
+- **NTP acessível na rede do evento (ou fixar a hora no device antes).** O terminal usa NTP; se o servidor ficar inacessível e o device reiniciar/perder RTC, a hora deriva. Não bloqueia o acesso (a validade dos usuários é 2037), mas **bagunça os timestamps dos registros de acesso**. Garantir NTP na LAN do evento ou setar a hora manualmente no device antes de abrir.
 - **Senha forte do device.** A atual (`Meg@2016`) é fraca — padrão `<empresa><ano>`, mesma família da `Index2016` comprometida. Trocar por **senha aleatória forte** sem relação com a empresa; entra criptografada em `Terminal.passwordEncrypted` (nunca em código/env/relato). Ver [[device-password-hardcoded]].
 - **Usuários OPERATOR (portaria).** Criar contas NextAuth role `OPERATOR` antes do evento — os endpoints `access/*` (check-in/out) exigem sessão. Ver [[fase1-seguranca-pendencias]].
-- **(Em andamento) Validação de face no cadastro.** Detector MediaPipe nos dois caminhos (upload é o crítico), gate de **interocular ≥ 50px**, bloqueio real (sem "Capturar Mesmo Assim"), `captureQuality` real + `hasValidFace` unificado. Desenho aprovado, limiar calibrado. É a próxima tarefa ativa. Ver [[validacao-face-cadastro-morta]].
-- **(Fase 2 da integração) Wire do enqueue.** Criar/atualizar `ParticipantTerminalSync` quando alguém fica elegível / é removido, e fan-out para N terminais. Hoje a identidade é atribuída em approve-participant, mas o estado de sync por terminal ainda não é populado. Ver [[device-integration-plan]].
+- **(Próximo evento, sem urgência) Fase 2 do sync.** Wire do enqueue: criar/atualizar `ParticipantTerminalSync` quando alguém fica elegível / é removido, **fan-out para N terminais** e **reconciliação**, mais o **push automático cadastro→sync** (hoje a identidade é atribuída em approve-participant, mas o estado de sync por terminal não é populado e o push é manual). **Invariantes a blindar no código (achados do device real 2026-06-17):** (a) **`Valid.endTime` SEMPRE `2037-12-31T23:59:59`, NUNCA data curta** — endTime curto faz o usuário expirar e sumir do terminal no meio do evento (o `addUser` atual já está correto, manter no fan-out); (b) **paginação obrigatória — buscas ISAPI retornam máx 30/página**, a reconciliação tem que iterar `searchResultPosition` até `totalMatches` ou diverge silenciosamente. Ver [[device-integration-plan]].
 
 ## 🟡 DÍVIDA TÉCNICA
 
@@ -34,6 +34,8 @@ Backlog único de pendências acumuladas, por urgência. Itens resolvidos no fim
 
 ## ✅ Resolvidos recentemente (NÃO refazer — referência)
 
+- **Validação de face no cadastro — COMPLETA e validada ponta a ponta (2026-06-17).** Detector MediaPipe real nos DOIS caminhos (câmera + upload), gate de **interocular ≥ 60px** (calibrado na bancada), bloqueio total (sem "Capturar mesmo assim"), `captureQuality` fictício substituído por `faceInterocularPx` real + `hasValidFace` unificado (`lib/face/status.ts`). **Furo do gate sem-rosto corrigido** (`b40e3c9`: maioria estrita + `noFace` imediato). **Layout do botão resolvido no APARELHO REAL** (`d34d7a8`: botão fixo no rodapé com safe-area + câmera em `svh` + dicas escondidas quando ok). **Admin renderiza sem React #310** (`a3de70e`: `useRef` movido p/ antes dos early-returns). **Validado em produção** (câmera + upload no celular) **E em bancada** (push pelo caminho de produção → `uploadFace` aceitou a face do gate de 60px → terminal reconheceu e **abriu a porta com o relé**). Dado de teste 100% expurgado (device 0 usuários, evento de teste deletado, biometria sumiu). Ver [[validacao-face-cadastro-morta]] e [[deploy-gap-celular-producao]].
+- **Auditoria de licença/limites do terminal Hikvision** — RESOLVIDA (2026-06-17, lido do device real `192.168.1.47`): **SEM licença/ativação/expiração** (`/ISAPI/System/license` e `/licenseInfo` → 404 `notSupport`; sem campo de validade no `deviceInfo`/`capabilities`). **Único teto: 10.000 users/faces/cards POR TERMINAL** — confortável (eventos reais ≤333, alvo 2.000 ≈ 20% do teto, ~5× de folga). Nada para/expira por tempo ou licença. **Risco estratégico de longo prazo (não-técnico):** restrições comerciais à Hikvision podem afetar compra/suporte/firmware futuros → avaliar fornecedor alternativo se a operação escalar. Ver [[device-integration-plan]].
 - **HikCentralService crash no load** — RESOLVIDO pelo descarte de `lib/hikcentral/*` na Fase 0 Parte 2 (`ddccab5`). Não há lazy-init a fazer. Ver [[hikcentral-sync-module-crash]].
 - **Backfill de re-medição de face dos legados** — **MOOT**: os 333 do FEICAP (única base real restante) tiveram a biometria expurgada; não há face para re-medir. O grupo de teste foi deletado. A validação de face nova só se aplica a cadastros futuros.
 - **Senha `Index2016` no código** — removida de todo o repositório (código `ce95b7d` + docs `a678be8`).
