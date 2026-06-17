@@ -1,0 +1,5 @@
+{
+  "baseUrl": "https://megacredenciamento.com.br",
+  "token": "COLE_AQUI_O_TOKEN_DO_EVENTO",
+  "pollMs": 5000
+}

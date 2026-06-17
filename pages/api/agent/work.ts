@@ -22,6 +22,10 @@ import { resolveValidity } from '../../../lib/agent/validity'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
+// Backoff por linha (F3): re-serve uma linha `failed` só depois de RETRY_BACKOFF_MS
+// e enquanto attempts < MAX_ATTEMPTS — daí a reconciliação/operador assume.
+const RETRY_BACKOFF_MS = 60_000
+const MAX_ATTEMPTS = 8
 
 async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentContext) {
   if (req.method !== 'GET') {
@@ -38,7 +42,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
   )
 
   // Só terminais do evento do token (e, se pedido, um terminal específico DENTRO
-  // do escopo — nunca de outro evento).
+  // do escopo — nunca de outro evento). Serve linhas pendentes E linhas `failed`
+  // que já passaram do backoff (retry coerente por kind), com teto de tentativas.
+  const retryCutoff = new Date(Date.now() - RETRY_BACKOFF_MS)
+  const retriable = { attempts: { lt: MAX_ATTEMPTS }, lastAttemptAt: { lt: retryCutoff } }
   const rows = await prisma.participantTerminalSync.findMany({
     where: {
       terminal: {
@@ -48,7 +55,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
       OR: [
         { faceState: 'pending' },
         { cardState: 'pending' },
-        { removalState: 'pending' }
+        { removalState: 'pending' },
+        { faceState: 'failed', ...retriable },
+        { cardState: 'failed', ...retriable },
+        { removalState: 'failed', ...retriable }
       ]
     },
     take: limit,
@@ -83,14 +93,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     // atribuída antes do fan-out). Pula a linha — a reconciliação cuida do resto.
     if (!employeeNo) continue
 
-    if (row.removalState === 'pending') {
+    if (row.removalState === 'pending' || row.removalState === 'failed') {
       removals.push({ syncId: row.id, terminalId: row.terminalId, employeeNo })
       // Remoção e push são mutuamente exclusivos por linha.
       continue
     }
 
-    const needFace = row.faceState === 'pending'
-    const needCard = row.cardState === 'pending'
+    // 'failed' também precisa de ação (retry); 'synced'/'na' não.
+    const needFace = row.faceState === 'pending' || row.faceState === 'failed'
+    const needCard = row.cardState === 'pending' || row.cardState === 'failed'
     if (!needFace && !needCard) continue
 
     const requiresApproval = p.event?.requiresApprovalForAccess ?? true

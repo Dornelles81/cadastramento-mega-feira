@@ -34,6 +34,10 @@ nul
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Agente local — config com token de escopo, NUNCA versionar (só o .example)
+agent/agent.config.json
+agent.config.json
 # Debug logs
 npm-debug.log*
 yarn-debug.log*
