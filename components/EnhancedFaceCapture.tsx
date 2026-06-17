@@ -27,9 +27,6 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const detectingRef = useRef(false) // guarda contra detecção concorrente
   const [showUploadOption, setShowUploadOption] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // refs p/ DEBUG TEMPORÁRIO (medir câmera e botão no aparelho real)
-  const camBoxRef = useRef<HTMLDivElement>(null)
-  const captureBtnRef = useRef<HTMLButtonElement>(null)
 
   // Desenha o frame atual do vídeo redimensionado para ≤800px (a MESMA imagem
   // que será submetida) num canvas offscreen — contrato da régua do detector.
@@ -300,45 +297,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   const okState = gateState === 'ok'
 
-  // ── DEBUG TEMPORÁRIO — números reais do aparelho (REMOVER depois) ──
-  const [dbg, setDbg] = useState<{ innerH: number; visualH: number; camH: number; btnTop: number; btnBottom: number } | null>(null)
-  useEffect(() => {
-    const measure = () => {
-      const cam = camBoxRef.current?.getBoundingClientRect()
-      const btn = captureBtnRef.current?.getBoundingClientRect()
-      setDbg({
-        innerH: Math.round(window.innerHeight),
-        visualH: Math.round(window.visualViewport?.height || 0),
-        camH: cam ? Math.round(cam.height) : 0,
-        btnTop: btn ? Math.round(btn.top) : 0,
-        btnBottom: btn ? Math.round(btn.bottom) : 0,
-      })
-    }
-    measure()
-    const id = setInterval(measure, 500)
-    window.visualViewport?.addEventListener('resize', measure)
-    window.addEventListener('resize', measure)
-    return () => {
-      clearInterval(id)
-      window.visualViewport?.removeEventListener('resize', measure)
-      window.removeEventListener('resize', measure)
-    }
-  }, [])
-
   return (
     <>
-      {/* DEBUG TEMPORÁRIO — REMOVER após coletar os números do aparelho real */}
-      {dbg && (
-        <div className="fixed top-0 left-0 z-[60] bg-black/85 text-green-300 text-[11px] font-mono px-2 py-1 leading-tight pointer-events-none rounded-br-lg">
-          <div>innerH={dbg.innerH} · visualVP={dbg.visualH}</div>
-          <div>camera={dbg.camH}px</div>
-          <div>botao: top={dbg.btnTop} bottom={dbg.btnBottom}</div>
-          <div>{dbg.btnBottom > 0 && dbg.btnBottom <= dbg.visualH ? '✅ botao VISIVEL' : '❌ botao CORTADO/ausente'}</div>
-        </div>
-      )}
-
       <div className="space-y-4 pb-44">
-        <div ref={camBoxRef} className="relative bg-gray-900 rounded-xl overflow-hidden h-[42svh] max-h-[420px] min-h-[220px] mx-auto">
+        <div className="relative bg-gray-900 rounded-xl overflow-hidden h-[42svh] max-h-[420px] min-h-[220px] mx-auto">
         {!capturedImage ? (
           <>
             <video
@@ -440,7 +402,6 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             {/* Captura: habilita SÓ com gate ok. Sem "capturar mesmo assim". */}
             {isStreaming && (
               <button
-                ref={captureBtnRef}
                 onClick={handleCapture}
                 disabled={isCapturing || !okState}
                 className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-md active:scale-95 ${
