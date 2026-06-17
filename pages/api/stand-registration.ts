@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import Joi from 'joi'
 import { prisma } from '../../lib/prisma'
 import { encryptString } from '../../lib/crypto'
+import { faceVersionOf } from '../../lib/face/version'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
@@ -121,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Biometria: criptografa a imagem (AES-256-GCM) — nunca armazenar plaintext
     let encryptedFaceData: Buffer | null = null
+    let faceVersion: string | null = null // F5: hash do conteúdo da face
     // Medição REAL do detector (MediaPipe); null se o cliente não mediu (legado).
     const faceInterocularPx =
       faceData && typeof faceData.faceInterocularPx === 'number'
@@ -131,6 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? faceImage
         : `data:image/jpeg;base64,${faceImage}`
       encryptedFaceData = encryptString(dataUrl)
+      faceVersion = faceVersionOf(dataUrl)
     }
 
     const { documents, ...otherCustomData } = customData || {}
@@ -181,6 +184,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           faceImageUrl: null,
           faceData: encryptedFaceData,
           faceInterocularPx,
+          faceVersion,
           consentAccepted: consent,
           consentIp: ip,
           consentDate: new Date(),

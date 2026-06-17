@@ -55,6 +55,19 @@ export async function enqueueRemoval(participantId: string): Promise<void> {
 }
 
 /**
+ * Re-captura de face (F5): a foto mudou → re-empurra face E card em TODOS os
+ * terminais (o agente apaga+recria o usuário, então o card precisa voltar junto).
+ * Só linhas em push (removalState='none'). Imediato; o reconcile também pegaria
+ * pela divergência de `faceVersion`, mas isto evita esperar o ciclo de 60s.
+ */
+export async function enqueueFaceChange(participantId: string): Promise<void> {
+  await prisma.participantTerminalSync.updateMany({
+    where: { participantId, removalState: 'none' },
+    data: { faceState: 'pending', cardState: 'pending' }
+  })
+}
+
+/**
  * Backfill ao cadastrar/ativar um terminal: cria linha de push para todo o
  * roster ELEGÍVEL do contexto que ainda não tem linha nesse terminal. Não
  * duplica (upsert). No-op se o terminal estiver inativo.

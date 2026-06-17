@@ -21,13 +21,16 @@ export interface ReconcileResult {
 }
 
 /**
- * HOOK F5 — detecta face TROCADA (mesmo emp, foto nova). Hoje retorna `false`
- * (não há versão de face no Participant). A F5 adiciona `Participant.faceVersion`
- * + `ParticipantTerminalSync.faceVersion` e implementa a comparação aqui; o
- * reconcile JÁ chama este ponto, então a F5 encaixa sem mudar o fluxo.
+ * F5 — face TROCADA: a versão atual do participante difere da que foi
+ * sincronizada NESTE terminal. Só dispara quando AMBAS as versões são conhecidas
+ * e diferem (re-captura). row.faceVersion null = nunca sincronizou face (caso
+ * inicial, tratado pelo numOfFace=0); participant.faceVersion null = legado.
  */
-export function faceNeedsUpdate(_participant: unknown, _row: unknown): boolean {
-  return false
+export function faceNeedsUpdate(
+  participant: { faceVersion: string | null },
+  row: { faceVersion: string | null } | undefined | null
+): boolean {
+  return !!participant.faceVersion && !!row?.faceVersion && participant.faceVersion !== row.faceVersion
 }
 
 export async function reconcileTerminal(
@@ -48,14 +51,14 @@ export async function reconcileTerminal(
     where: { eventId, isDeleted: false, employeeNo: { not: null } },
     select: {
       id: true, employeeNo: true, cardNumber: true, status: true, isDeleted: true,
-      approvalStatus: true, faceData: true, faceImageUrl: true,
+      approvalStatus: true, faceData: true, faceImageUrl: true, faceVersion: true,
       event: { select: { requiresApprovalForAccess: true } }
     }
   })
   // Linhas de sync deste terminal (estado atual + detectar órfão-com-linha).
   const rows = await prisma.participantTerminalSync.findMany({
     where: { terminalId },
-    select: { id: true, participantId: true, faceState: true, cardState: true, removalState: true, participant: { select: { employeeNo: true } } }
+    select: { id: true, participantId: true, faceState: true, cardState: true, removalState: true, faceVersion: true, participant: { select: { employeeNo: true } } }
   })
   const rowByPid = new Map(rows.map((r) => [r.participantId, r]))
   const rowByEmp = new Map(rows.filter((r) => r.participant.employeeNo).map((r) => [r.participant.employeeNo as string, r]))
@@ -83,7 +86,9 @@ export async function reconcileTerminal(
     } else {
       if (hasFace && act.numOfFace === 0) needFace = true // face incompleta
       if (p.cardNumber && act.numOfCard === 0) needCard = true // card incompleto
-      if (faceNeedsUpdate(p, row)) needFace = true // F5: face trocada
+      // F5: face trocada → re-push de face E card (o agente apaga+re-cria, então
+      // o card também precisa voltar — senão deleteUser deixaria sem card).
+      if (faceNeedsUpdate(p, row)) { needFace = true; needCard = !!p.cardNumber }
     }
     if (!needFace && !needCard) continue
 

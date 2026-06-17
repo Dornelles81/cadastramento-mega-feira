@@ -51,10 +51,12 @@
 - **Testável:** unit do diff (faltando/órfão-com-linha/órfão-sem-linha/incompleto) sem device + paginação do lister com mock >30 (zero re-push espúrio nos 31+). Bancada: criar divergência artificial (deletar user no device por fora → re-push; addUser de emp fora do banco → removal; addUser sem face → enfileira face).
 - **Riscos:** paginação correta (senão diverge silencioso); custo/rate das buscas no device; reconcile não roda a cada poll (cadência própria, ~60s).
 
-### F5 — Face versionada (re-captura) + caminho de update
-- **Muda:** `faceVersion`/hash do `faceData` em `Participant` (e na linha sync); fan-out/reconciliação compara versões → enfileira **update de face**. Device rejeita sobrescrever (`deviceUserAlreadyExistFace`) → update = apagar face (ou delete+add do usuário) e re-subir (operação de 1ª classe; escola re-captura, evento quase nunca).
-- **Testável (dev + 1 real):** face A → sync → nova coleta → versão muda → update → agente apaga+re-sobe → device com face nova.
-- **Riscos:** janela sem-face (delete antes do re-upload) — ordenar; definir "versão" (hash); não otimizar para evento.
+### F5 — Face versionada (re-captura) + caminho de update — IMPLEMENTADA
+- **Versão:** `faceVersionOf(dataUrl)` = **sha256 do conteúdo EM CLARO** (antes de cifrar — o `faceData` cifrado muda a cada gravação por causa do IV/GCM). Calculada no cadastro (`register-fixed`, `stand-registration`) e na re-captura (`participants/update`). Campos: `Participant.faceVersion` (atual) + `ParticipantTerminalSync.faceVersion` (a que está NO terminal).
+- **Fluxo:** `/work` carrega `faceVersion` → o agente **ecoa no ack** → `/ack` grava `row.faceVersion`. O hook `faceNeedsUpdate(p,row)` (encaixado da F4) compara `p.faceVersion ≠ row.faceVersion` → reconcile/`enqueueFaceChange` enfileira **face E card pending** (re-captura imediata no update; reconcile pega o resto).
+- **Caminho de update no device:** o device rejeita sobrescrever (`deviceUserAlreadyExistFace`) → o agente **apaga o usuário e re-cria** (deleteUser → addUser → uploadFace → registerCard). Por isso a face trocada re-empurra **face + card** (deleteUser leva o card junto).
+- **Testado** (`test-faceversion.ts`, sem device): versão estável/diferente; `/work` carrega + `/ack` grava `faceVersion`; re-captura → reconcile detecta → re-enfileira face+card; `enqueueFaceChange` imediato. Regressão F1–F4 verde.
+- **Riscos aceitos:** janela curta sem-face no device (delete antes do re-upload) — raro no evento, rotina na escola.
 
 ### F6 — Operacional (leve, por último)
 Painel de estado de sync por terminal + `lastSeenAt`/heartbeat + pendentes/falhas, para o operador ver "todos sincronizados" antes de abrir o portão.

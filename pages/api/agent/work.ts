@@ -76,6 +76,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
           faceImageUrl: true,
           cardNumber: true,
           employeeNo: true,
+          faceVersion: true,
           event: { select: { requiresApprovalForAccess: true } }
         }
       }
@@ -122,6 +123,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
       cardNumber: p.cardNumber,
       validBegin: validity.begin,
       validEnd: validity.end,
+      faceVersion: p.faceVersion, // F5: o agente devolve no ack p/ gravar na linha
       needFace,
       needCard,
       // Face decriptada na nuvem; null se não for necessária nesta linha.

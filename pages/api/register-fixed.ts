@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../lib/prisma'
 import Joi from 'joi'
 import { encryptString } from '../../lib/crypto'
+import { faceVersionOf } from '../../lib/face/version'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 
@@ -257,6 +258,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Process face image and Azure data
     let encryptedFaceData = null
     let faceImageUrl = null
+    let faceVersion: string | null = null // F5: hash do conteúdo da face
     // Medição REAL de face vinda do detector (MediaPipe) no momento da captura.
     // Substitui o captureQuality fictício: null se o cliente não mediu (legado).
     const faceInterocularPx =
@@ -270,6 +272,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? faceImage
         : `data:image/jpeg;base64,${faceImage}`
       encryptedFaceData = encryptString(faceDataUrl)
+      faceVersion = faceVersionOf(faceDataUrl)
       faceImageUrl = null // imagem só é servida decriptada via /api/participant-image (autenticado)
     }
 
@@ -294,6 +297,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         faceImageUrl: faceImageUrl, // Store complete face image
         faceData: encryptedFaceData,
         faceInterocularPx: faceInterocularPx,
+        faceVersion: faceVersion,
         consentAccepted: consent,
         consentIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown',
         consentDate: new Date(),

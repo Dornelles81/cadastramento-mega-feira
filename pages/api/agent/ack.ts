@@ -34,7 +34,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
   const now = new Date()
 
   for (const ack of acks) {
-    const { syncId, kind, status, error } = ack || {}
+    const { syncId, kind, status, error, faceVersion } = ack || {}
     if (
       typeof syncId !== 'string' ||
       !['face', 'card', 'removal'].includes(kind) ||
@@ -63,7 +63,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
 
     if ((kind as Kind) === 'face') {
       data.faceState = success ? 'synced' : 'failed'
-      if (success) data.syncedAt = now
+      if (success) {
+        data.syncedAt = now
+        // F5: registra a versão de face efetivamente sincronizada neste terminal
+        // (o agente devolve a faceVersion que o /work mandou).
+        if (typeof faceVersion === 'string') data.faceVersion = faceVersion
+      }
     } else if ((kind as Kind) === 'card') {
       data.cardState = success ? 'synced' : 'failed'
       if (success) data.syncedAt = now

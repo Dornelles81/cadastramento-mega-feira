@@ -50,18 +50,29 @@ export async function applyPush(client: HikvisionClient, item: PushItem): Promis
     }
   }
 
-  // 2) face (independente)
+  // 2) face (independente). F5: o `faceVersion` do item é ecoado no ack p/ a
+  // nuvem registrar a versão sincronizada.
   if (item.needFace) {
     if (!item.face) {
       acks.push({ syncId: item.syncId, kind: 'face', status: 'failed', error: 'face ausente no payload do /work' })
     } else {
       try {
         await client.uploadFace(item.employeeNo, item.face)
-        acks.push({ syncId: item.syncId, kind: 'face', status: 'success' })
+        acks.push({ syncId: item.syncId, kind: 'face', status: 'success', faceVersion: item.faceVersion ?? undefined })
       } catch (e) {
-        // face já presente = estado desejado já vale (atualização de face é F5)
         if (subStatus(e) === 'deviceUserAlreadyExistFace') {
-          acks.push({ syncId: item.syncId, kind: 'face', status: 'success' })
+          // O device já tem uma face, mas a nuvem enfileirou ESTA (pending) → é
+          // uma face DESATUALIZADA (re-captura). O device não sobrescreve, então
+          // recria o usuário (deleteUser apaga a face antiga) e re-sobe. O card
+          // vem em seguida (a nuvem marcou cardState pending no update de face).
+          try {
+            await client.deleteUser(item.employeeNo)
+            await client.addUser(buildUser(item))
+            await client.uploadFace(item.employeeNo, item.face)
+            acks.push({ syncId: item.syncId, kind: 'face', status: 'success', faceVersion: item.faceVersion ?? undefined })
+          } catch (e2) {
+            acks.push({ syncId: item.syncId, kind: 'face', status: 'failed', error: 'replace de face falhou: ' + errMsg(e2) })
+          }
         } else {
           acks.push({ syncId: item.syncId, kind: 'face', status: 'failed', error: errMsg(e) })
         }

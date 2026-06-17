@@ -233,6 +233,10 @@ model Participant {
   //   0    = medido, sem rosto detectável
   //   >0   = distância interocular em px na imagem submetida (gate ≥50px)
   faceInterocularPx Int?
+  // F5: hash (sha256) do CONTEÚDO da face em claro — muda quando a foto é
+  // re-capturada. A reconciliação compara com ParticipantTerminalSync.faceVersion
+  // p/ detectar "face trocada" e re-empurrar. null = legado/sem face.
+  faceVersion String?
 
   // Consent and compliance (LGPD)
   consentAccepted Boolean   @default(false)
@@ -513,6 +517,10 @@ model ParticipantTerminalSync {
   faceState    String @default("pending") // pending | synced | failed | na
   cardState    String @default("pending") // pending | synced | failed
   removalState String @default("none") // none | pending | removed | failed
+
+  // F5: versão da face efetivamente sincronizada NESTE terminal (= Participant
+  // .faceVersion no momento do upload ok). null = nunca sincronizou face.
+  faceVersion  String?
 
   syncedAt      DateTime?
   removedAt     DateTime?

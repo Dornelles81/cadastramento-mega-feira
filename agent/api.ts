@@ -20,6 +20,7 @@ export interface PushItem {
   cardNumber: string | null
   validBegin: string
   validEnd: string
+  faceVersion: string | null // F5: versão da face servida (devolvida no ack)
   needFace: boolean
   needCard: boolean
   face: string | null // data URL já decriptada na nuvem
@@ -38,6 +39,7 @@ export interface Ack {
   kind: 'face' | 'card' | 'removal'
   status: 'success' | 'failed'
   error?: string
+  faceVersion?: string // F5: ecoa a versão da face quando kind='face' e sucesso
 }
 export interface HeartbeatItem {
   terminalId: string

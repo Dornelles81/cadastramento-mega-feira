@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { encryptString } from '../../../lib/crypto'
+import { faceVersionOf } from '../../../lib/face/version'
 import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
 import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
+import { enqueueFaceChange } from '../../../lib/agent/sync-enqueue'
 
 /**
  * POST /api/participants/update
@@ -48,12 +50,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (phone !== undefined) updateData.phone = phone
 
     // Foto: criptografada (AES-256-GCM), nunca plaintext
+    let faceChanged = false
     if (faceImage) {
       const faceDataUrl = faceImage.includes(',')
         ? faceImage
         : `data:image/jpeg;base64,${faceImage}`
       updateData.faceData = encryptString(faceDataUrl)
       updateData.faceImageUrl = null
+      updateData.faceVersion = faceVersionOf(faceDataUrl) // F5: nova versão
+      faceChanged = true
     }
     if (faceData && typeof faceData.faceInterocularPx === 'number') {
       updateData.faceInterocularPx = faceData.faceInterocularPx
@@ -70,6 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { id: participantId },
       data: updateData
     })
+
+    // F5: re-captura → re-empurra a face nova p/ os terminais (imediato).
+    if (faceChanged) {
+      try { await enqueueFaceChange(participantId) } catch (e) { console.error('enqueueFaceChange falhou:', e) }
+    }
 
     await auditSelfUpdate(access, {
       ip: getClientIp(req),
