@@ -130,6 +130,11 @@ export default function EventAdminPage() {
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set())
   const [printingBulk, setPrintingBulk] = useState(false)
   const [printingLabels, setPrintingLabels] = useState(false)
+  // Cache do link de edição por participante (ref, não estado: imune ao race
+  // dos setEditingParticipant subsequentes dos handlers). DEVE ficar aqui no
+  // topo, antes de qualquer early-return — senão o nº de hooks muda entre
+  // renders quando o acesso resolve e dá React #310 (regra dos Hooks).
+  const editLinkRef = useRef<{ id: string; url: string } | null>(null)
 
   // Calculate stands and their counts whenever participants change
   useEffect(() => {
@@ -411,10 +416,6 @@ export default function EventAdminPage() {
       default: return eventCode
     }
   }
-
-  // Cache do link de edição por participante (ref, não estado: imune ao
-  // race dos setEditingParticipant subsequentes dos handlers).
-  const editLinkRef = useRef<{ id: string; url: string } | null>(null)
 
   // Gera (uma vez por participante) o link de edição self-service tokenizado
   // e o cacheia, evitando gerações múltiplas — cada geração revoga a anterior.
