@@ -4,6 +4,18 @@ Backlog único de pendências acumuladas, por urgência. Itens resolvidos no fim
 
 ---
 
+## 🚦 GO-LIVE EXPOFEST (liberar a coleta de faciais dos expositores)
+
+Checklist de **operação** para abrir o cadastro ao expositor. O **código de coleta já está no ar** (cadastro + validação de face client-side gate ≥60px + criptografia AES-256-GCM + admin de aprovação — fixes de 2026-06-17 deployados). O que falta é **configuração do evento**, não código.
+
+- **⚠️ ITEM DE MAIOR CUIDADO — Termo de consentimento LGPD biométrico.** O cadastro grava `consentAccepted/consentDate`, mas o **texto** é por-evento e hoje **não existe** (nenhum evento Expofest no banco). Como aqui se coleta **dado biométrico real (face)**, o termo precisa ser explícito e juridicamente sólido — não reaproveitar texto genérico. Deve deixar claro: **(1) coleta de dado biométrico facial** (categoria especial, art. 11 LGPD); **(2) finalidade** (controle de acesso ao evento via reconhecimento facial nos terminais); **(3) retenção** (fim do evento + 90 dias → `retentionDate`, expurgo automático pelo cron LGPD); **(4) direito de revogação/eliminação** e como exercer. Revisar com responsável jurídico antes de expor a expositor real. **Este é o item que mais pode dar problema — tratar com prioridade.**
+- **Criar o evento Expofest e colocar em `status='active'`.** **Não existe** evento Expofest hoje. Cadastro em evento `draft` **trava** a página em "Carregando evento..." (só renderiza com `active`). Definir `slug`, `code`, datas, `isPublic`, e `requiresApprovalForAccess` (se a entrada exige aprovação do admin antes de virar elegível).
+- **Capacidade (`maxCapacity`).** Default 2000. Ajustar ao número real de expositores esperados (folga confortável vs. teto de 10k/terminal do device, que só importa no sync, não na coleta).
+- **Usuários OPERATOR.** Mesmas contas NextAuth role `OPERATOR` da portaria — também necessárias para o admin de aprovação dos cadastros. Ver [[fase1-seguranca-pendencias]]. (Item compartilhado com a seção pré-evento abaixo.)
+- **Aviso de navegador ao expositor.** A validação de face é **client-side** (MediaPipe, gate de interocular ≥60px). Em navegador antigo sem medição o gate bloqueia a captura. Orientar uso de **Chrome/Safari atualizado no celular**.
+
+> **Regra de isolamento (dev futuro × coleta no ar):** **deploy SÓ por `git push origin main`** — publica apenas o que está commitado (`origin/main`), então o WIP local **não vaza**. **NUNCA `vercel --prod`** — esse comando empacota o **diretório de trabalho** (hoje ~42 arquivos de WIP, incluindo auth/admin meio-editados) e **vazaria tudo pra produção**. O `.exe` do agente, F6 e o módulo escola vivem **fora do hot-path de coleta** (`lib/agent/*`, `agent/*`, `/api/agent/*`); compilar o `.exe` não toca a Vercel. Zona quente (mexer só com teste + push cuidadoso): `register-fixed.ts`, `stand-registration.ts`, `participants/update.ts`, `participant-approval.ts`, `EnhancedFaceCapture.tsx`, `lib/face/*`, `lib/crypto.ts`, páginas de cadastro/aprovação.
+
 ## 🔴 PRÉ-EVENTO (resolver antes de rodar o evento real)
 
 - **IP fixo dos terminais Hikvision.** Hoje em DHCP. O agente referencia `Terminal.ipAddress`; se o IP mudar, o sync quebra. Fixar IP no device/roteador (reserva DHCP ou IP estático) e cadastrar o IP definitivo em `Terminal`.
