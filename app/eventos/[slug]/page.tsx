@@ -194,8 +194,11 @@ export default function EventoPage() {
       const isFull = eventData.currentCount >= eventData.maxCapacity
 
       // Cadastro público desativado para eventos com acesso delegado por
-      // stand: o cadastro é feito pelo link enviado ao responsável
-      const updateMode = new URLSearchParams(window.location.search).has('update')
+      // stand: o cadastro é feito pelo link enviado ao responsável. EXCEÇÃO: uma
+      // EDIÇÃO (token novo `editToken` ou o antigo `update`) não é cadastro novo
+      // e não pode ser bloqueada pela delegação de stand.
+      const search = new URLSearchParams(window.location.search)
+      const updateMode = search.has('update') || search.has('editToken')
       if (eventData.delegatedStandAccess && !updateMode) {
         setEventError('O cadastro deste evento agora é feito pelo link enviado ao responsável do seu stand. Solicite o link a ele ou à organização do evento.')
       } else if (eventData.status !== 'active') {
