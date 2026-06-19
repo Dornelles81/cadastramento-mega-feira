@@ -29,7 +29,11 @@ export interface ConsentVars {
   retencaoDias: number
   /** Meio alternativo de credenciamento sem biometria */
   meioAlternativo: string
-  /** Canal de contato para exercer direitos do titular */
+  /** Dados de identificação pedidos no formulário (ex.: "nome, CPF, e-mail e telefone") */
+  camposColetados: string
+  /** Usos do dado além da entrada; vazio se for só controle de acesso */
+  finalidadesAdicionais: string
+  /** Canal de contato para exercer direitos (não usado na v1.0 — DPO fixo no corpo) */
   contato: string
 }
 
@@ -47,24 +51,58 @@ interface ConsentTemplate {
 export const CURRENT_CONSENT_VERSION = '1.0'
 
 const TEMPLATES: Record<string, ConsentTemplate> = {
-  // ⚠️ CORPO PROVISÓRIO — aguardando o texto jurídico v1.0 do usuário.
-  // NÃO é exibido a ninguém: nenhum evento aponta consentTermVersion='1.0'
-  // até o texto real entrar aqui e a ativação ser feita.
+  // v1.0 PROVISÓRIA — pendente de revisão jurídica. Se o jurídico alterar algo,
+  // criar uma nova versão (1.1/2.0); NUNCA editar este corpo após alguém aceitar
+  // (quebraria a prova do snapshot). Dados fixos da Controladora estão no corpo.
   '1.0': {
     version: '1.0',
-    body: [
-      'TERMO DE CONSENTIMENTO PARA TRATAMENTO DE DADOS BIOMÉTRICOS',
-      '',
-      '[AGUARDANDO TEXTO JURÍDICO v1.0 — substituir este corpo pelo termo aprovado.]',
-      '',
-      'Evento: {{evento}}',
-      'Período: {{dataInicio}} a {{dataFim}}',
-      'Local: {{local}}',
-      'Retenção: os dados biométricos são mantidos por {{retencaoDias}} dias após o',
-      'término do evento e então excluídos automaticamente.',
-      'Meio alternativo (sem biometria): {{meioAlternativo}}',
-      'Contato para exercer seus direitos: {{contato}}',
-    ].join('\n'),
+    body: `TERMO DE CONSENTIMENTO PARA COLETA E TRATAMENTO DE DADO BIOMÉTRICO FACIAL
+
+Controle de Acesso por Reconhecimento Facial — {{evento}}
+
+1. Quem coleta seus dados (Controlador)
+
+Os seus dados pessoais são coletados e tratados por Mega Feira Tecnologia para Acessos Ltda, inscrita no CNPJ sob nº 32.311.191/0001-07, com sede na Rua São Joaquim, 1085, Centro, São Leopoldo/RS, doravante denominada "Controladora".
+
+Encarregado de Dados (DPO): Luís Eduardo Dornelles — dornelles@megafeira.com
+
+Esta coleta refere-se ao evento {{evento}}, realizado em {{local}}, no período de {{dataInicio}} a {{dataFim}}.
+
+2. Que dado é coletado
+
+A Controladora coletará a sua imagem facial (fotografia do rosto) e dela extrairá um modelo biométrico (representação matemática dos traços do seu rosto) para fins de reconhecimento facial.
+
+A imagem facial e o modelo biométrico são classificados pela Lei Geral de Proteção de Dados (Lei nº 13.709/2018) como dado pessoal sensível (art. 5º, II, e art. 11), recebendo proteção reforçada.
+
+São também coletados os dados de identificação informados no cadastro: {{camposColetados}}.
+
+3. Para que seu dado será usado (Finalidade)
+
+O seu dado biométrico facial será usado exclusivamente para o controle de acesso ao evento {{evento}} — permitir e registrar a sua entrada por reconhecimento facial, dispensando crachá físico.
+
+{{finalidadesAdicionais}}
+
+O seu dado biométrico não será usado para finalidade diversa da informada, não será vendido, nem compartilhado com terceiros para fins comerciais ou de marketing.
+
+4. Como seu dado é protegido
+
+A sua imagem facial é armazenada de forma criptografada (padrão AES-256-GCM), nunca em texto aberto. O acesso aos dados é restrito e controlado. O modelo biométrico enviado aos terminais de acesso trafega de forma protegida.
+
+5. Por quanto tempo seu dado é guardado (Retenção)
+
+O seu dado biométrico facial será mantido até o encerramento do evento {{evento}} e por até {{retencaoDias}} dias após o seu término, prazo após o qual será eliminado de forma definitiva dos nossos sistemas e dos terminais de acesso.
+
+6. Seus direitos (art. 18 da LGPD)
+
+A qualquer momento, gratuitamente, você pode: revogar este consentimento e solicitar a eliminação imediata do seu dado biométrico; confirmar se tratamos seus dados e acessá-los; corrigir dados incompletos ou desatualizados; solicitar a eliminação dos dados; obter informação sobre com quem compartilhamos seus dados.
+
+Para exercer qualquer direito, contate: Luís Eduardo Dornelles (Encarregado de Dados) — dornelles@megafeira.com.
+
+A revogação do consentimento ou a recusa em fornecer o dado biométrico não impede o seu acesso ao evento — será oferecido um meio alternativo de credenciamento: {{meioAlternativo}}.
+
+7. Consentimento livre e informado
+
+Ao marcar a opção de aceite e prosseguir com o cadastro, você declara que: leu e compreendeu este termo; tem 18 anos ou mais; e consente, de forma livre, informada e específica, com a coleta e o tratamento do seu dado biométrico facial para a finalidade descrita no item 3, no contexto do evento {{evento}}.`,
   },
 }
 
@@ -92,7 +130,12 @@ export function renderConsent(version: string | null | undefined, vars: ConsentV
     .replace(/\{\{\s*local\s*\}\}/g, vars.local)
     .replace(/\{\{\s*retencaoDias\s*\}\}/g, String(vars.retencaoDias))
     .replace(/\{\{\s*meioAlternativo\s*\}\}/g, vars.meioAlternativo)
+    .replace(/\{\{\s*camposColetados\s*\}\}/g, vars.camposColetados)
+    .replace(/\{\{\s*finalidadesAdicionais\s*\}\}/g, vars.finalidadesAdicionais)
     .replace(/\{\{\s*contato\s*\}\}/g, vars.contato)
+    // finalidadesAdicionais vazio deixa um parágrafo em branco — colapsa
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 type EventLike = {
@@ -108,8 +151,21 @@ type EventLike = {
 
 const DEFAULT_RETENTION_DAYS = parseInt(process.env.DATA_RETENTION_DAYS || '90', 10)
 const DEFAULT_CONTATO = process.env.PRIVACY_CONTACT || 'privacidade@megacredenciamento.com.br'
-const DEFAULT_MEIO_ALTERNATIVO =
-  'credenciamento presencial na secretaria do evento, sem coleta de dado biométrico facial'
+const DEFAULT_MEIO_ALTERNATIVO = 'crachá com QR code, retirado na secretaria do evento'
+const DEFAULT_CAMPOS_COLETADOS = 'nome, CPF, e-mail e telefone'
+const DEFAULT_FINALIDADES_ADICIONAIS = '' // vazio = só controle de acesso (entrada)
+
+/**
+ * Campos variáveis do termo por evento. Hoje vêm de defaults sensatos; quando
+ * houver UI de configuração do termo por evento, estes overrides serão lidos
+ * do EventConfig (form real → camposColetados; usos extras → finalidadesAdicionais).
+ */
+export interface ConsentVarsOpts {
+  retentionDays?: number
+  meioAlternativo?: string
+  camposColetados?: string
+  finalidadesAdicionais?: string
+}
 
 /** Erro de corrida: o termo mudou entre o carregamento da página e o envio. */
 export class ConsentVersionMismatch extends Error {
@@ -139,7 +195,7 @@ type EventWithConfig = EventLike & { eventConfigs?: { consentTermVersion?: strin
 export function resolveConsentStamp(
   event: EventWithConfig,
   clientVersion: string | null | undefined,
-  opts?: { retentionDays?: number }
+  opts?: ConsentVarsOpts
 ): ConsentStamp {
   const active = isConsentVersionValid(event.eventConfigs?.consentTermVersion)
     ? event.eventConfigs!.consentTermVersion!
@@ -150,9 +206,11 @@ export function resolveConsentStamp(
 }
 
 /** Monta as variáveis do termo a partir de um evento (fonte da verdade = DB). */
-export function buildConsentVars(ev: EventLike, opts?: { retentionDays?: number }): ConsentVars {
+export function buildConsentVars(ev: EventLike, opts?: ConsentVarsOpts): ConsentVars {
+  // timeZone UTC: as datas do evento são guardadas como meia-noite; sem fixar o
+  // fuso, toLocaleDateString desloca um dia (servidor UTC vs. local UTC-3).
   const fmt = (d: Date | string) =>
-    new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
   const cidadeUf = ev.venueCity && ev.venueState ? `${ev.venueCity}/${ev.venueState}` : null
   const local =
     [ev.venueName, cidadeUf || ev.venueAddress].filter(Boolean).join(' — ') || 'local do evento'
@@ -162,7 +220,9 @@ export function buildConsentVars(ev: EventLike, opts?: { retentionDays?: number 
     dataFim: fmt(ev.endDate),
     local,
     retencaoDias: opts?.retentionDays ?? DEFAULT_RETENTION_DAYS,
-    meioAlternativo: DEFAULT_MEIO_ALTERNATIVO,
+    meioAlternativo: opts?.meioAlternativo ?? DEFAULT_MEIO_ALTERNATIVO,
+    camposColetados: opts?.camposColetados ?? DEFAULT_CAMPOS_COLETADOS,
+    finalidadesAdicionais: opts?.finalidadesAdicionais ?? DEFAULT_FINALIDADES_ADICIONAIS,
     contato: ev.organizerEmail || DEFAULT_CONTATO,
   }
 }
