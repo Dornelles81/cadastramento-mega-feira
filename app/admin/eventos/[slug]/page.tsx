@@ -1052,20 +1052,6 @@ export default function EventAdminPage() {
                 >
                   📋 <span className="hidden sm:inline ml-1">Logs</span>
                 </a>
-                <a
-                  href="/admin/hikvision"
-                  className="inline-flex items-center px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                  title="Integração Hikvision"
-                >
-                  🎥 <span className="hidden md:inline ml-1">Hikvision</span>
-                </a>
-                <a
-                  href="/admin/approvals"
-                  className="inline-flex items-center px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
-                  title="Central de Aprovações"
-                >
-                  ✅ <span className="hidden sm:inline ml-1">Aprovações</span>
-                </a>
                 <button
                   onClick={toggleDarkMode}
                   className={`inline-flex items-center px-3 py-2 text-sm rounded-lg transition-colors shadow-sm ${
@@ -2006,8 +1992,9 @@ export default function EventAdminPage() {
           <a
             href={`/admin/eventos/${eventSlug}/approvals`}
             className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            title="Visualizar o histórico de aprovações/rejeições. Para aprovar ou rejeitar, use os botões em cada participante."
           >
-            ✅ Central de Aprovações
+            📋 Histórico de Aprovações
           </a>
           {isSuperAdmin && (
             <a
