@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
+import { decryptDocuments } from '../../../lib/documents'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Check authentication
@@ -115,7 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       hasValidFace: isValidFace(participant.faceInterocularPx),
       faceImageUrl: getFaceImageDataUrl(participant) || '', // decripta GCM ou usa legado
       customData: participant.customData || {},
-      documents: participant.documents || {},
+      documents: decryptDocuments(participant.documents) || {}, // decifra server-side p/ o modal
       approvalStatus: participant.approvalStatus || 'pending',
       approvedAt: participant.approvedAt?.toISOString() || null,
       approvedBy: participant.approvedBy || null,

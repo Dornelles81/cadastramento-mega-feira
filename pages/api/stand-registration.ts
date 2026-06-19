@@ -8,6 +8,7 @@ import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
+import { encryptDocuments } from '../../lib/documents'
 
 /**
  * Cadastro de credenciado via link mágico do stand (SPEC seção 2.3).
@@ -210,7 +211,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           consentTermVersion: consentStamp.consentTermVersion, // versão aceita (null = fluxo antigo)
           retentionDate,
           deviceInfo: userAgent,
-          documents: documents || {},
+          documents: encryptDocuments(documents || {}), // cifrado em repouso (AES-256-GCM)
           customData: otherCustomData || {}
         }
       })

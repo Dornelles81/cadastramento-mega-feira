@@ -5,6 +5,7 @@ import { faceVersionOf } from '../../../lib/face/version'
 import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
 import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
 import { enqueueFaceChange } from '../../../lib/agent/sync-enqueue'
+import { encryptDocuments } from '../../../lib/documents'
 
 /**
  * POST /api/participants/update
@@ -67,7 +68,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updateData.customData = { ...((existing.customData as any) || {}), ...customData }
     }
     if (documents) {
-      updateData.documents = { ...((existing.documents as any) || {}), ...documents }
+      // merge existentes (já cifrados) + novos (em claro) → encryptDocuments é
+      // idempotente: cifra só os novos, mantém os existentes. Também migra
+      // oportunisticamente docs legados em claro deste participante.
+      updateData.documents = encryptDocuments({ ...((existing.documents as any) || {}), ...documents })
     }
     updateData.updatedAt = new Date()
 

@@ -6,6 +6,7 @@ import { faceVersionOf } from '../../lib/face/version'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
+import { encryptDocuments } from '../../lib/documents'
 
 // Simplified validation schema
 const registrationSchema = Joi.object({
@@ -324,7 +325,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         consentTermVersion: consentStamp.consentTermVersion, // versão aceita (null = fluxo antigo)
         retentionDate,
         deviceInfo: req.headers['user-agent'] || 'unknown',
-        documents: documents || {}, // Store documents separately
+        documents: encryptDocuments(documents || {}), // cifrado em repouso (AES-256-GCM)
         customData: otherCustomData || {} // Store other custom fields
       }
     })

@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma'
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
+import { encryptDocuments, decryptDocuments } from '../../../lib/documents'
 
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -98,7 +99,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         hasValidFace: isValidFace(p.faceInterocularPx),
         faceImageUrl: p.faceImageUrl,
         customData: p.customData,
-        documents: p.documents,
+        documents: decryptDocuments(p.documents), // decifra server-side (cliente nunca vê ciphertext)
         approvalStatus: p.approvalStatus,
         approvedAt: p.approvedAt,
         approvedBy: p.approvedBy,
@@ -148,7 +149,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           approvedAt: updateData.approvalStatus === 'approved' ? new Date() : undefined,
           rejectionReason: updateData.rejectionReason,
           customData: updateData.customData,
-          documents: updateData.documents
+          documents: encryptDocuments(updateData.documents) // re-cifra (cliente envia em claro)
         }
       });
 
