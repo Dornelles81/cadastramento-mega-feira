@@ -30,6 +30,10 @@ interface StandCadastroFlowProps {
     logoUrl: string | null
   }
   requireFace: boolean
+  /** Versão do termo versionado ativo (null = fluxo de consentimento antigo). */
+  consentTermVersion?: string | null
+  /** Termo já renderizado (corpo do repo + variáveis do evento). */
+  consentTerm?: string | null
 }
 
 interface RegistrationData {
@@ -41,11 +45,12 @@ interface RegistrationData {
   customData?: any
 }
 
-export default function StandCadastroFlow({ token, stand, event, requireFace }: StandCadastroFlowProps) {
+export default function StandCadastroFlow({ token, stand, event, requireFace, consentTermVersion, consentTerm }: StandCadastroFlowProps) {
   const isFull = stand.activeCount >= stand.maxRegistrations
 
   const [step, setStep] = useState<'consent' | 'personal' | 'capture' | 'success'>('consent')
   const [consentChecked, setConsentChecked] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [registeredName, setRegisteredName] = useState('')
   const [data, setData] = useState<RegistrationData>({
@@ -90,6 +95,7 @@ export default function StandCadastroFlow({ token, stand, event, requireFace }: 
           faceImage: imageData || null,
           faceData,
           consent: reg.consent,
+          consentTermVersion: consentTermVersion ?? undefined, // eco da versão (checagem de corrida)
           customData: reg.customData || {}
         })
       })
@@ -210,9 +216,47 @@ export default function StandCadastroFlow({ token, stand, event, requireFace }: 
                   e controle de acesso ao evento
                 </span>
               </label>
+              {consentTerm && (
+                <div className="mt-2 pl-8 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTerms(true)}
+                    className="text-xs text-verde-agua hover:underline"
+                  >
+                    Ler termo completo
+                  </button>
+                  {consentTermVersion && (
+                    <span className="text-[10px] text-white/50">Termo v{consentTermVersion}</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {showTerms && consentTerm && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-azul-marinho rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden border border-white/20">
+              <div className="p-6 border-b border-white/20">
+                <h2 className="text-lg font-bold text-white">Termo de Consentimento</h2>
+                {consentTermVersion && (
+                  <p className="text-xs text-white/50 mt-1">Versão {consentTermVersion}</p>
+                )}
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">{consentTerm}</div>
+              </div>
+              <div className="p-6 border-t border-white/20 bg-azul-marinho-dark">
+                <button
+                  onClick={() => setShowTerms(false)}
+                  className="w-full py-3 bg-verde-agua text-white rounded-lg font-semibold hover:bg-verde-agua-dark transition-colors"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div
           className="fixed bottom-0 left-0 right-0 px-4 pt-4 bg-gradient-to-t from-azul-marinho via-azul-marinho/98 to-transparent"

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { renderConsent, buildConsentVars, isConsentVersionValid } from '../../../../lib/consent'
 
 /**
  * API PÚBLICA: Buscar configurações de um evento
@@ -56,6 +57,15 @@ export default async function handler(
       }
     })
 
+    // Termo versionado (LGPD): se o evento ativou uma versão existente, renderiza
+    // o corpo (repo) com as variáveis do evento. null = fluxo de consentimento antigo.
+    const activeTermVersion = isConsentVersionValid(event.eventConfigs?.consentTermVersion)
+      ? event.eventConfigs!.consentTermVersion!
+      : null
+    const consentTerm = activeTermVersion
+      ? renderConsent(activeTermVersion, buildConsentVars(event))
+      : null
+
     // Return public event data
     return res.status(200).json({
       success: true,
@@ -90,6 +100,9 @@ export default async function handler(
             ? 'Cadastro realizado com sucesso! Retire sua credencial na secretaria.'
             : (event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial na secretaria.'),
           consentText: event.eventConfigs?.consentText,
+          // Termo versionado (ativo só se o evento apontou uma versão válida)
+          consentTermVersion: activeTermVersion,
+          consentTerm,
           requireConsent: event.eventConfigs?.requireConsent !== false,
           requireFace: event.eventConfigs?.requireFace !== false,
           requireDocuments: event.eventConfigs?.requireDocuments || false,

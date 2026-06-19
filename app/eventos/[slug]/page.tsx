@@ -43,6 +43,8 @@ interface EventConfig {
     welcomeMessage?: string
     successMessage?: string
     consentText?: string
+    consentTermVersion?: string | null // versão do termo ativo neste evento (null = fluxo antigo)
+    consentTerm?: string | null // termo já renderizado (corpo + variáveis do evento)
     requireConsent: boolean
     requireFace: boolean
     requireDocuments: boolean
@@ -315,6 +317,8 @@ export default function EventoPage() {
       faceImage: imageData || null,
       faceData: faceData,
       consent: reg.consent,
+      // Eco da versão do termo exibida (checagem de corrida no servidor)
+      consentTermVersion: event?.config?.consentTermVersion ?? undefined,
       customData: {
         ...reg.customData,
         mesa: reg.mesa || reg.customData?.mesa || ''
@@ -542,7 +546,7 @@ export default function EventoPage() {
                   Li e aceito os termos de uso e política de privacidade
                 </span>
               </label>
-              <div className="mt-2 pl-8">
+              <div className="mt-2 pl-8 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowTerms(true)}
@@ -550,6 +554,9 @@ export default function EventoPage() {
                 >
                   Ler termos completos
                 </button>
+                {event.config.consentTermVersion && (
+                  <span className="text-[10px] text-white/50">Termo v{event.config.consentTermVersion}</span>
+                )}
               </div>
             </div>
           </div>
@@ -584,9 +591,18 @@ export default function EventoPage() {
                 <h2 className="text-lg font-bold text-white">
                   Termos de Uso e Politica de Privacidade
                 </h2>
+                {event.config.consentTermVersion && (
+                  <p className="text-xs text-white/50 mt-1">Versão {event.config.consentTermVersion}</p>
+                )}
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {event.config.consentTerm ? (
+                  // Termo versionado (lib/consent): corpo do repo + variáveis do evento
+                  <div className="text-sm text-white/90 whitespace-pre-wrap leading-relaxed">
+                    {event.config.consentTerm}
+                  </div>
+                ) : (
                 <div className="space-y-4 text-sm text-white/90">
                   <section>
                     <h3 className="font-semibold text-verde-agua mb-2">1. COLETA DE DADOS</h3>
@@ -663,6 +679,7 @@ export default function EventoPage() {
                     <p className="text-xs text-white/60 text-center">Ultima atualizacao: 18/08/2025</p>
                   </div>
                 </div>
+                )}
               </div>
 
               <div className="p-6 border-t border-white/20 bg-azul-marinho-dark">

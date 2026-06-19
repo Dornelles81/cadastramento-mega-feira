@@ -5,6 +5,7 @@ import { checkRateLimit } from '../../../../lib/rate-limit'
 import { validateStandToken } from '../../../../lib/stand-access/validate'
 import StandCadastroFlow from '../../../../components/stand/StandCadastroFlow'
 import { occupiedSlotsWhere, formatRelease } from '../../../../lib/stand-access/occupancy'
+import { renderConsent, buildConsentVars, isConsentVersionValid } from '../../../../lib/consent'
 
 // Cadastro de credenciado via link do stand (SPEC seção 2.3).
 // O stand vem exclusivamente do token validado no servidor.
@@ -57,10 +58,29 @@ export default async function StandCadastroPage({
     access.event.id
       ? prisma.eventConfig.findUnique({
           where: { eventId: access.event.id },
-          select: { requireFace: true, logoUrl: true }
+          select: { requireFace: true, logoUrl: true, consentTermVersion: true }
         })
       : Promise.resolve(null)
   ])
+
+  // Termo versionado (LGPD): renderizado no servidor (fonte da verdade = DB).
+  // null = evento não ativou → fluxo de consentimento antigo do stand.
+  const activeTermVersion = isConsentVersionValid(eventConfig?.consentTermVersion)
+    ? eventConfig!.consentTermVersion!
+    : null
+  const fullEvent = activeTermVersion && access.event.id
+    ? await prisma.event.findUnique({
+        where: { id: access.event.id },
+        select: {
+          name: true, startDate: true, endDate: true,
+          venueName: true, venueAddress: true, venueCity: true, venueState: true,
+          organizerEmail: true
+        }
+      })
+    : null
+  const consentTerm = activeTermVersion && fullEvent
+    ? renderConsent(activeTermVersion, buildConsentVars(fullEvent))
+    : null
 
   return (
     <StandCadastroFlow
@@ -81,6 +101,8 @@ export default async function StandCadastroPage({
         logoUrl: eventConfig?.logoUrl ?? null
       }}
       requireFace={eventConfig?.requireFace !== false}
+      consentTermVersion={activeTermVersion}
+      consentTerm={consentTerm}
     />
   )
 }

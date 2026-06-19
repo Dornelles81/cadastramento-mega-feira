@@ -7,6 +7,7 @@ import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
+import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
 
 /**
  * Cadastro de credenciado via link mágico do stand (SPEC seção 2.3).
@@ -26,6 +27,7 @@ const schema = Joi.object({
   faceImage: Joi.string().allow('', null).optional(),
   faceData: Joi.object().allow(null).optional(),
   consent: Joi.boolean().valid(true).required(),
+  consentTermVersion: Joi.string().allow('', null).optional(), // eco da versão exibida (checagem de corrida)
   customData: Joi.object().optional()
 })
 
@@ -71,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    const { token, name, cpf, email, phone, faceImage, faceData, consent, customData } = value
+    const { token, name, cpf, email, phone, faceImage, faceData, consent, consentTermVersion, customData } = value
 
     // Erro genérico para token inválido: não revelar se o stand existe
     const access = await validateStandToken(token)
@@ -142,6 +144,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const retentionDate = new Date(event.endDate)
     retentionDate.setDate(retentionDate.getDate() + retentionDays)
 
+    // Termo versionado: server-authoritative (carimba versão + snapshot; corrida → 409).
+    // Evento sem versão ativa → stamp vazio (fluxo antigo intacto).
+    let consentStamp
+    try {
+      consentStamp = resolveConsentStamp(event, consentTermVersion, { retentionDays })
+    } catch (e) {
+      if (e instanceof ConsentVersionMismatch) {
+        return res.status(409).json({
+          error: 'Consent term updated',
+          message: 'O termo de consentimento foi atualizado. Recarregue a página para ler e aceitar a nova versão.',
+          currentVersion: e.expected
+        })
+      }
+      throw e
+    }
+
     const ip = getClientIp(req)
     const userAgent = (req.headers['user-agent'] as string) || 'unknown'
 
@@ -188,6 +206,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           consentAccepted: consent,
           consentIp: ip,
           consentDate: new Date(),
+          consentText: consentStamp.consentText, // snapshot do termo aceito (null = fluxo antigo)
+          consentTermVersion: consentStamp.consentTermVersion, // versão aceita (null = fluxo antigo)
           retentionDate,
           deviceInfo: userAgent,
           documents: documents || {},

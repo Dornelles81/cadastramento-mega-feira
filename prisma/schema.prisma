@@ -242,7 +242,8 @@ model Participant {
   consentAccepted Boolean   @default(false)
   consentIp       String?
   consentDate     DateTime?
-  consentText     String? // Version of consent accepted
+  consentText     String? // Snapshot do texto EXATO aceito (prova imutável); null = legado
+  consentTermVersion String? // Versão do termo aceita (ex.: "1.0"); null = legado/fluxo antigo
 
   // Mobile capture metadata
   deviceInfo      String? // User agent + device details
@@ -663,6 +664,9 @@ model EventConfig {
   welcomeMessage String?
   successMessage String?
   consentText    String?
+  // Versão do termo versionado (lib/consent) que ESTE evento usa. null =
+  // fluxo de consentimento antigo (modal hard-coded). Setar para ativar.
+  consentTermVersion String?
 
   // Features
   enableCheckIn Boolean @default(false)

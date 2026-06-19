@@ -5,6 +5,7 @@ import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
+import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
 
 // Simplified validation schema
 const registrationSchema = Joi.object({
@@ -17,6 +18,7 @@ const registrationSchema = Joi.object({
   faceImage: Joi.string().allow('', null).optional(), // Optional - depends on event config
   faceData: Joi.object().allow(null).optional(), // Azure Face API data
   consent: Joi.boolean().valid(true).required(),
+  consentTermVersion: Joi.string().allow('', null).optional(), // versão do termo exibida ao usuário (eco p/ checagem de corrida)
   customData: Joi.object().optional() // Allow any custom fields
 })
 
@@ -65,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    const { name, cpf, email, phone, standCode, faceImage, faceData, consent, customData } = value
+    const { name, cpf, email, phone, standCode, faceImage, faceData, consent, consentTermVersion, customData } = value
 
     // Get eventCode from customData if it exists, otherwise use default
     const eventCodeOrSlug = customData?.eventCode || customData?.evento || value.eventCode || 'MEGA-FEIRA-2025'
@@ -284,6 +286,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const retentionDate = new Date(event.endDate)
     retentionDate.setDate(retentionDate.getDate() + retentionDays)
 
+    // Termo versionado: server-authoritative. Se o evento ativou uma versão,
+    // exige eco da mesma versão (corrida → 409) e carimba versão + snapshot.
+    // Evento sem versão ativa → stamp vazio (mantém o fluxo antigo idêntico).
+    let consentStamp
+    try {
+      consentStamp = resolveConsentStamp(event, consentTermVersion, { retentionDays })
+    } catch (e) {
+      if (e instanceof ConsentVersionMismatch) {
+        return res.status(409).json({
+          error: 'Consent term updated',
+          message: 'O termo de consentimento foi atualizado. Recarregue a página para ler e aceitar a nova versão.',
+          currentVersion: e.expected
+        })
+      }
+      throw e
+    }
+
     // Create participant
     const participant = await prisma.participant.create({
       data: {
@@ -301,6 +320,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         consentAccepted: consent,
         consentIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown',
         consentDate: new Date(),
+        consentText: consentStamp.consentText, // snapshot do termo aceito (null = fluxo antigo)
+        consentTermVersion: consentStamp.consentTermVersion, // versão aceita (null = fluxo antigo)
         retentionDate,
         deviceInfo: req.headers['user-agent'] || 'unknown',
         documents: documents || {}, // Store documents separately
