@@ -43,6 +43,27 @@ interface Stand {
   };
 }
 
+// Preview de importação (dry-run no cliente, ANTES de gravar)
+interface ImportPreviewRow {
+  rowNum: number;
+  code: string;
+  name: string;
+  maxRegistrations: number | null;
+  isActive: boolean;
+  responsibleName: string;
+  responsibleEmail: string;
+  responsiblePhone: string;
+  description: string;
+  location: string;
+  valid: boolean;
+  error?: string;
+  action: 'create' | 'update' | null; // null se inválida
+}
+interface ImportPreviewState {
+  fileName: string;
+  rows: ImportPreviewRow[];
+}
+
 interface StandStats {
   stands: Stand[];
   total: number;
@@ -82,6 +103,8 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
 
   const formRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreviewState | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const [event, setEvent] = useState<Event | null>(null);
   const [stands, setStands] = useState<Stand[]>([]);
@@ -470,6 +493,36 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
     XLSX.writeFile(wb, `template_stands_${event?.slug || 'evento'}.xlsx`);
   };
 
+  // Parse + validação (as MESMAS regras de sempre), montando o preview por linha.
+  // NÃO grava — só constrói a tabela para conferência.
+  const buildImportRows = (jsonData: any[]): ImportPreviewRow[] => {
+    const existingCodes = new Set(stands.map(s => s.code?.toUpperCase().trim()));
+    return jsonData.map((row: any, index: number) => {
+      const rowNum = index + 2; // +1 cabeçalho, +1 base-1
+      const code = row['Código*']?.toString().toUpperCase().trim() || '';
+      const name = row['Nome*']?.toString().trim() || '';
+      const maxRegistrations = parseInt(row['Limite de Registros*']);
+      let error: string | undefined;
+      if (!code) error = 'Código é obrigatório';
+      else if (!name) error = 'Nome é obrigatório';
+      else if (!maxRegistrations || maxRegistrations < 1) error = 'Limite de Registros deve ser maior que 0';
+      const valid = !error;
+      return {
+        rowNum, code, name,
+        maxRegistrations: Number.isNaN(maxRegistrations) ? null : maxRegistrations,
+        isActive: row['Ativo (S/N)']?.toString().toUpperCase() !== 'N',
+        responsibleName: row['Nome do Responsável']?.toString().trim() || '',
+        responsibleEmail: row['Email do Responsável']?.toString().trim() || '',
+        responsiblePhone: row['Telefone do Responsável']?.toString().trim() || '',
+        description: row['Descrição']?.toString().trim() || '',
+        location: row['Localização']?.toString().trim() || '',
+        valid, error,
+        action: valid ? (existingCodes.has(code) ? 'update' : 'create') : null,
+      };
+    });
+  };
+
+  // Selecionar arquivo → PREVIEW (sem escrita). A gravação só em confirmImport.
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -483,29 +536,26 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
         alert('Arquivo vazio ou formato inválido');
         return;
       }
-      const standsToImport: any[] = [];
-      const errors: string[] = [];
-      jsonData.forEach((row: any, index: number) => {
-        const rowNum = index + 2;
-        const code = row['Código*']?.toString().toUpperCase().trim();
-        const name = row['Nome*']?.toString().trim();
-        const maxRegistrations = parseInt(row['Limite de Registros*']);
-        if (!code) { errors.push(`Linha ${rowNum}: Código é obrigatório`); return; }
-        if (!name) { errors.push(`Linha ${rowNum}: Nome é obrigatório`); return; }
-        if (!maxRegistrations || maxRegistrations < 1) { errors.push(`Linha ${rowNum}: Limite de Registros deve ser maior que 0`); return; }
-        standsToImport.push({
-          code, name, maxRegistrations,
-          description: row['Descrição']?.toString().trim() || '',
-          location: row['Localização']?.toString().trim() || '',
-          responsibleName: row['Nome do Responsável']?.toString().trim() || '',
-          responsibleEmail: row['Email do Responsável']?.toString().trim() || '',
-          responsiblePhone: row['Telefone do Responsável']?.toString().trim() || '',
-          isActive: row['Ativo (S/N)']?.toString().toUpperCase() !== 'N'
-        });
-      });
-      if (errors.length > 0) { alert(`Erros encontrados:\n\n${errors.join('\n')}`); return; }
-      if (standsToImport.length === 0) { alert('Nenhum stand válido para importar'); return; }
-      if (!confirm(`Importar ${standsToImport.length} stands?\n\nStands existentes com mesmo código serão atualizados.`)) return;
+      setImportPreview({ fileName: file.name, rows: buildImportRows(jsonData) });
+    } catch (error) {
+      console.error('Error importing:', error);
+      alert('Erro ao processar arquivo Excel');
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Confirmação explícita → grava (endpoint inalterado). Só as linhas válidas.
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    const standsToImport = importPreview.rows.filter(r => r.valid).map(r => ({
+      code: r.code, name: r.name, maxRegistrations: r.maxRegistrations,
+      description: r.description, location: r.location,
+      responsibleName: r.responsibleName, responsibleEmail: r.responsibleEmail,
+      responsiblePhone: r.responsiblePhone, isActive: r.isActive,
+    }));
+    if (standsToImport.length === 0) { alert('Nenhum stand válido para importar'); return; }
+    setImporting(true);
+    try {
       const response = await fetch(`/api/admin/eventos/${slug}/stands/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -513,6 +563,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
       });
       if (response.ok) {
         const result = await response.json();
+        setImportPreview(null);
         alert(`✅ Importação concluída!\n\n${result.created} stands criados\n${result.updated} stands atualizados`);
         loadStands();
       } else {
@@ -521,9 +572,10 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
       }
     } catch (error) {
       console.error('Error importing:', error);
-      alert('Erro ao processar arquivo Excel');
+      alert('Erro ao processar importação');
+    } finally {
+      setImporting(false);
     }
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const exportStands = () => {
@@ -639,6 +691,88 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                 📤 Importar Excel
                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleImport} className="hidden" />
               </label>
+
+              {importPreview && (() => {
+                const validRows = importPreview.rows.filter(r => r.valid);
+                const invalid = importPreview.rows.length - validRows.length;
+                const creates = validRows.filter(r => r.action === 'create').length;
+                const updates = validRows.filter(r => r.action === 'update').length;
+                return (
+                  <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[88vh] flex flex-col">
+                      <div className="px-6 py-4 border-b">
+                        <h2 className="text-lg font-bold text-gray-900">Pré-visualização da importação</h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Arquivo: <strong>{importPreview.fileName}</strong> · Nada foi gravado ainda — confira antes de confirmar.
+                        </p>
+                        <div className="flex flex-wrap gap-3 mt-2 text-sm">
+                          <span className="text-green-700">✓ Válidas: <strong>{validRows.length}</strong></span>
+                          <span className="text-blue-700">🆕 Novos (CREATE): <strong>{creates}</strong></span>
+                          <span className="text-amber-700">♻️ Sobrescritas (UPDATE): <strong>{updates}</strong></span>
+                          {invalid > 0 && <span className="text-red-700">✗ Com erro: <strong>{invalid}</strong></span>}
+                        </div>
+                      </div>
+                      <div className="overflow-auto p-4 flex-1">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="text-left text-gray-600 border-b">
+                              <th className="py-2 px-2">Linha</th>
+                              <th className="py-2 px-2">Ação</th>
+                              <th className="py-2 px-2">Código</th>
+                              <th className="py-2 px-2">Nome</th>
+                              <th className="py-2 px-2">Limite</th>
+                              <th className="py-2 px-2">Ativo</th>
+                              <th className="py-2 px-2">Email do Responsável</th>
+                              <th className="py-2 px-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importPreview.rows.map((r) => (
+                              <tr key={r.rowNum} className={`border-b ${r.valid ? '' : 'bg-red-50'}`}>
+                                <td className="py-2 px-2 text-gray-500">{r.rowNum}</td>
+                                <td className="py-2 px-2">
+                                  {r.action === 'create' && <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">CREATE</span>}
+                                  {r.action === 'update' && <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-medium">UPDATE ⚠</span>}
+                                  {!r.action && <span className="text-gray-400">—</span>}
+                                </td>
+                                <td className="py-2 px-2 font-mono">{r.code || <span className="text-red-500 italic">vazio</span>}</td>
+                                <td className="py-2 px-2">{r.name || <span className="text-red-500 italic">vazio</span>}</td>
+                                <td className="py-2 px-2">{r.maxRegistrations ?? <span className="text-red-500 italic">—</span>}</td>
+                                <td className="py-2 px-2">{r.isActive ? 'Sim' : 'Não'}</td>
+                                <td className="py-2 px-2">
+                                  {r.responsibleEmail
+                                    ? <span className="px-2 py-0.5 rounded bg-teal-50 text-teal-800 font-medium border border-teal-200">{r.responsibleEmail}</span>
+                                    : <span className="text-gray-400 italic">sem email</span>}
+                                </td>
+                                <td className="py-2 px-2">
+                                  {r.valid
+                                    ? <span className="text-green-600">✓ válida</span>
+                                    : <span className="text-red-600">✗ {r.error}</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="px-6 py-4 border-t flex items-center justify-between gap-3 bg-gray-50">
+                        <p className="text-xs text-gray-500 max-w-md">
+                          ⚠ UPDATE sobrescreve um stand existente com o mesmo código. Confira os e-mails (canal do link de gestão). Nenhum e-mail é enviado nesta etapa.
+                        </p>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => setImportPreview(null)} disabled={importing}
+                            className="px-5 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50">
+                            Cancelar
+                          </button>
+                          <button onClick={confirmImport} disabled={importing || validRows.length === 0}
+                            className="px-5 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50">
+                            {importing ? 'Importando…' : `Confirmar importação (${validRows.length})`}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {stands.length > 0 && (
                 <button onClick={exportStands} className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium">
                   📊 Exportar Stands
