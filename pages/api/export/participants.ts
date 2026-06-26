@@ -84,6 +84,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     let participants = await prisma.participant.findMany({
       where,
+      include: { stand: { select: { code: true, name: true } } },
       skip: isPaginatedFormat ? (parseInt(page as string) - 1) * parseInt(limit as string) : undefined,
       take: isPaginatedFormat ? parseInt(limit as string) : undefined,
       orderBy: { createdAt: 'desc' }
@@ -148,7 +149,7 @@ function exportAsExcel(participants: any[], res: NextApiResponse) {
   // Prepare data for Excel
   const excelData = participants.map((p, index) => {
     const customData = p.customData as any
-    const standCode = customData?.standCode || customData?.estande || '-'
+    const standCode = p.stand?.name || customData?.standCode || customData?.estande || '-'
 
     return {
       'ID': p.id,
@@ -196,7 +197,7 @@ function exportAsPDF(participants: any[], res: NextApiResponse) {
   // Generate HTML table
   const tableRows = participants.map((p, index) => {
     const customData = p.customData as any
-    const standCode = customData?.standCode || customData?.estande || '-'
+    const standCode = p.stand?.name || customData?.standCode || customData?.estande || '-'
 
     return `
     <tr>
