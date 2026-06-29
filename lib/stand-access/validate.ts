@@ -12,6 +12,9 @@ const TOKEN_SHAPE = /^[A-Za-z0-9_-]{40,48}$/
 
 export interface ValidStandAccess {
   tokenId: string
+  // Nível de acesso concedido pelo token (Fatia 2: apenas exposto; o
+  // enforcement — restringir exclusão/lista/fotos ao 'manage' — vem na Fatia 3).
+  scope: 'register' | 'manage'
   stand: {
     id: string
     name: string
@@ -39,6 +42,7 @@ export async function validateStandToken(rawToken: string): Promise<ValidStandAc
 
   const hash = createHash('sha256').update(rawToken).digest('hex')
 
+  // include traz todos os campos escalares do token (inclusive `scope`)
   const tokenRow = await prisma.standAccessToken.findUnique({
     where: { tokenHash: hash },
     include: {
@@ -67,6 +71,7 @@ export async function validateStandToken(rawToken: string): Promise<ValidStandAc
 
   return {
     tokenId: tokenRow.id,
+    scope: tokenRow.scope as 'register' | 'manage',
     stand: {
       id: tokenRow.stand.id,
       name: tokenRow.stand.name,
