@@ -427,13 +427,19 @@ model StandAccessToken {
   // Id of the admin who generated the token (no FK per ADENDO section 1)
   createdBy String?
 
+  // Access level granted by this token:
+  //   'register' = só cadastra a equipe (não vê lista/fotos/CPF, não exclui)
+  //   'manage'   = painel completo (lista, fotos, exclusão) — só o responsável
+  // Default 'manage' para que tokens já emitidos mantenham o comportamento atual.
+  scope String @default("manage")
+
   // Lifecycle
   createdAt  DateTime  @default(now())
   expiresAt  DateTime? // NULL = no expiration (default: end of event)
   revokedAt  DateTime? // NULL = active
   lastUsedAt DateTime?
 
-  @@index([standId])
+  @@index([standId, scope])
   @@map("stand_access_tokens")
 }
 
