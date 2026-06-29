@@ -15,9 +15,14 @@ import { sendStandAccessEmail } from '../../../../../lib/email/stand-access'
  *
  * Fatia 4: a geração é POR SCOPE ('register' | 'manage'). O token em claro é
  * retornado UMA vez na resposta (não é persistido em claro) para o admin
- * copiar/encaminhar por outro canal (ex.: WhatsApp). O envio por e-mail com os
- * dois links ciente de scope vem na Fatia 5; por ora o e-mail só é disparado
- * para o link de gestão ('manage'), cujo template atual é orientado ao responsável.
+ * copiar/encaminhar por outro canal (ex.: WhatsApp).
+ *
+ * Sub-fatia 4.1: o envio por e-mail é OPT-IN — a geração NUNCA emaila sozinha.
+ * Passe { sendEmail: true } no POST para disparar o e-mail (hoje só para o link
+ * de gestão 'manage', cujo template é o de gestão; a Fatia 5 torna o e-mail
+ * ciente de scope e habilita outros canais). Sem sendEmail, só gera e retorna
+ * o link. Como o banco guarda apenas o hash, o e-mail é enviado no mesmo passo
+ * da geração (o link em claro só existe nesse instante).
  */
 
 // POST sem scope → 'manage' (semântica de hoje: o link único era o de gestão).
@@ -50,6 +55,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       return res.status(400).json({ error: "scope inválido — use 'register' ou 'manage'." })
     }
 
+    // Envio de e-mail é OPT-IN (Sub-fatia 4.1): a geração nunca emaila sozinha.
+    const sendEmail = req.body?.sendEmail === true
+
     const stand = await prisma.stand.findUnique({
       where: { id },
       include: { event: { select: { name: true } } }
@@ -58,18 +66,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       return res.status(404).json({ error: 'Stand não encontrado' })
     }
 
+    // Validações do envio ANTES de gerar, para não criar token à toa quando o
+    // e-mail pedido não pode ser entregue.
+    if (sendEmail && scope !== 'manage') {
+      return res.status(400).json({
+        error: 'Envio por e-mail disponível apenas para o link de gestão (cadastro: Fatia 5).'
+      })
+    }
+    if (sendEmail && !stand.responsibleEmail) {
+      return res.status(400).json({
+        error: 'Stand sem e-mail de responsável. Cadastre o e-mail antes de enviar.'
+      })
+    }
+
     const { token, expiresAt } = await generateStandAccessToken(id, actor, scope)
     const link = buildStandLink(token)
 
-    // E-mail (Fatia 4): só para 'manage' e quando há e-mail do responsável —
-    // o template atual é orientado à gestão. A Fatia 5 torna o e-mail ciente
-    // de scope e envia os dois links. Para 'register' (ou sem e-mail), o link
-    // em claro segue na resposta para o admin copiar/encaminhar.
+    // E-mail só quando explicitamente pedido (sendEmail=true). O template atual
+    // é o de gestão; a Fatia 5 o torna ciente de scope / outros canais.
     let sentTo: string | null = null
-    if (scope === 'manage' && stand.responsibleEmail) {
+    if (sendEmail) {
       try {
         await sendStandAccessEmail({
-          to: stand.responsibleEmail,
+          to: stand.responsibleEmail!,
           responsibleName: stand.responsibleName,
           standName: stand.name,
           standCode: stand.code,
@@ -77,7 +96,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
           link,
           expiresAt
         })
-        sentTo = stand.responsibleEmail
+        sentTo = stand.responsibleEmail!
       } catch (emailError: any) {
         // Falha no e-mail: revoga só este scope para o admin tentar de novo
         await revokeStandAccessTokens(id, actor, scope)
