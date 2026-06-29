@@ -120,9 +120,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
       },
       accessTokens: {
         where: { revokedAt: null },
-        select: { createdAt: true, expiresAt: true, lastUsedAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 1
+        select: { scope: true, createdAt: true, expiresAt: true, lastUsedAt: true },
+        orderBy: { createdAt: 'desc' }
       }
     },
     orderBy: [
@@ -132,18 +131,30 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse): Promise<voi
   });
 
   // Calcular estatísticas
+  const now = new Date();
   const stats = stands.map(({ accessTokens, ...stand }) => {
-    const activeToken = accessTokens[0];
-    const linkExpired = !!activeToken?.expiresAt && activeToken.expiresAt < new Date();
+    // Tokens ativos e não expirados (já ordenados createdAt desc → o 1º de
+    // cada scope é o mais recente). Fatia 4: flags por scope.
+    const live = accessTokens.filter((t) => !t.expiresAt || t.expiresAt >= now);
+    const reg = live.find((t) => t.scope === 'register');
+    const man = live.find((t) => t.scope === 'manage');
     return {
       ...stand,
       currentCount: stand._count.participants,
       availableSlots: stand.maxRegistrations - stand._count.participants,
       usagePercentage: (stand._count.participants / stand.maxRegistrations) * 100,
       isFull: stand._count.participants >= stand.maxRegistrations,
-      hasActiveLink: !!activeToken && !linkExpired,
-      linkGeneratedAt: activeToken?.createdAt ?? null,
-      linkLastUsedAt: activeToken?.lastUsedAt ?? null
+      // Flags por scope (Fatia 4)
+      hasRegisterLink: !!reg,
+      hasManageLink: !!man,
+      registerGeneratedAt: reg?.createdAt ?? null,
+      registerLastUsedAt: reg?.lastUsedAt ?? null,
+      manageGeneratedAt: man?.createdAt ?? null,
+      manageLastUsedAt: man?.lastUsedAt ?? null,
+      // Bridge p/ a UI atual (remover na Fatia 6, quando a UI usar os flags por scope)
+      hasActiveLink: !!reg || !!man,
+      linkGeneratedAt: (man ?? reg)?.createdAt ?? null,
+      linkLastUsedAt: (man ?? reg)?.lastUsedAt ?? null
     };
   });
 

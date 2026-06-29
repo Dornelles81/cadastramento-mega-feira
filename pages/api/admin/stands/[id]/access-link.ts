@@ -10,12 +10,24 @@ import {
 import { sendStandAccessEmail } from '../../../../../lib/email/stand-access'
 
 /**
- * POST   /api/admin/stands/:id/access-link  → gera token e envia e-mail ao responsável
- * DELETE /api/admin/stands/:id/access-link  → revoga o token ativo
+ * POST   /api/admin/stands/:id/access-link  → gera token de um scope e retorna o link
+ * DELETE /api/admin/stands/:id/access-link  → revoga o(s) link(s)
  *
- * O token em claro nunca é retornado na resposta — ele existe apenas no
- * e-mail enviado ao responsável (SPEC seção 2.1).
+ * Fatia 4: a geração é POR SCOPE ('register' | 'manage'). O token em claro é
+ * retornado UMA vez na resposta (não é persistido em claro) para o admin
+ * copiar/encaminhar por outro canal (ex.: WhatsApp). O envio por e-mail com os
+ * dois links ciente de scope vem na Fatia 5; por ora o e-mail só é disparado
+ * para o link de gestão ('manage'), cujo template atual é orientado ao responsável.
  */
+
+// POST sem scope → 'manage' (semântica de hoje: o link único era o de gestão).
+function parseScopeForPost(raw: unknown): 'register' | 'manage' | null {
+  const v = Array.isArray(raw) ? raw[0] : raw
+  if (v === undefined || v === null || v === '') return 'manage'
+  if (v === 'register' || v === 'manage') return v
+  return null
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   const { id } = req.query
   if (typeof id !== 'string') {
@@ -33,6 +45,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
   }
 
   if (req.method === 'POST') {
+    const scope = parseScopeForPost(req.body?.scope ?? req.query.scope)
+    if (!scope) {
+      return res.status(400).json({ error: "scope inválido — use 'register' ou 'manage'." })
+    }
+
     const stand = await prisma.stand.findUnique({
       where: { id },
       include: { event: { select: { name: true } } }
@@ -40,51 +57,68 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     if (!stand) {
       return res.status(404).json({ error: 'Stand não encontrado' })
     }
-    if (!stand.responsibleEmail) {
-      return res.status(400).json({
-        error: 'Stand sem e-mail de responsável. Cadastre o e-mail antes de gerar o link.'
-      })
+
+    const { token, expiresAt } = await generateStandAccessToken(id, actor, scope)
+    const link = buildStandLink(token)
+
+    // E-mail (Fatia 4): só para 'manage' e quando há e-mail do responsável —
+    // o template atual é orientado à gestão. A Fatia 5 torna o e-mail ciente
+    // de scope e envia os dois links. Para 'register' (ou sem e-mail), o link
+    // em claro segue na resposta para o admin copiar/encaminhar.
+    let sentTo: string | null = null
+    if (scope === 'manage' && stand.responsibleEmail) {
+      try {
+        await sendStandAccessEmail({
+          to: stand.responsibleEmail,
+          responsibleName: stand.responsibleName,
+          standName: stand.name,
+          standCode: stand.code,
+          eventName: stand.event?.name ?? 'Mega Feira',
+          link,
+          expiresAt
+        })
+        sentTo = stand.responsibleEmail
+      } catch (emailError: any) {
+        // Falha no e-mail: revoga só este scope para o admin tentar de novo
+        await revokeStandAccessTokens(id, actor, scope)
+        console.error('Erro ao enviar e-mail de acesso do stand:', emailError)
+        return res.status(502).json({
+          error: 'Token gerado, mas o envio do e-mail falhou. O token foi revogado — tente novamente.',
+          details: emailError.message
+        })
+      }
     }
 
-    const { token, expiresAt } = await generateStandAccessToken(id, actor)
-
-    try {
-      await sendStandAccessEmail({
-        to: stand.responsibleEmail,
-        responsibleName: stand.responsibleName,
-        standName: stand.name,
-        standCode: stand.code,
-        eventName: stand.event?.name ?? 'Mega Feira',
-        link: buildStandLink(token),
-        expiresAt
-      })
-    } catch (emailError: any) {
-      // Sem e-mail entregue o link não chega a ninguém: revoga o token recém
-      // criado para o admin poder simplesmente tentar de novo
-      await revokeStandAccessTokens(id, actor)
-      console.error('Erro ao enviar e-mail de acesso do stand:', emailError)
-      return res.status(502).json({
-        error: 'Token gerado, mas o envio do e-mail falhou. O token foi revogado — tente novamente.',
-        details: emailError.message
-      })
-    }
-
+    // Token em claro retornado UMA vez (não persistido em claro).
     return res.status(200).json({
       success: true,
-      sentTo: stand.responsibleEmail,
+      scope,
+      link,
+      sentTo,
       expiresAt
     })
   }
 
   if (req.method === 'DELETE') {
-    const revoked = await revokeStandAccessTokens(id, actor).catch((e: Error) => {
+    // scope opcional: ausente → revoga ambos os links; informado → só aquele
+    const rawScope = req.body?.scope ?? req.query.scope
+    let scope: 'register' | 'manage' | undefined
+    if (rawScope !== undefined && rawScope !== null && rawScope !== '') {
+      const v = Array.isArray(rawScope) ? rawScope[0] : rawScope
+      if (v !== 'register' && v !== 'manage') {
+        return res.status(400).json({ error: "scope inválido — use 'register' ou 'manage'." })
+      }
+      scope = v
+    }
+
+    const revoked = await revokeStandAccessTokens(id, actor, scope).catch((e: Error) => {
       if (e.message === 'Stand não encontrado') return null
       throw e
     })
     if (revoked === null) {
       return res.status(404).json({ error: 'Stand não encontrado' })
     }
-    return res.status(200).json({ success: true, revoked })
+    return res.status(200).json({ success: true, revoked, scope: scope ?? 'all' })
   }
 
   res.setHeader('Allow', 'POST, DELETE')

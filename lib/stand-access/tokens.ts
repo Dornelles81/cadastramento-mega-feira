@@ -37,8 +37,9 @@ export function buildStandLink(token: string): string {
  */
 export async function generateStandAccessToken(
   standId: string,
-  actor: StandTokenActor
-): Promise<{ token: string; expiresAt: Date | null }> {
+  actor: StandTokenActor,
+  scope: 'register' | 'manage'
+): Promise<{ token: string; expiresAt: Date | null; scope: 'register' | 'manage' }> {
   const stand = await prisma.stand.findUnique({
     where: { id: standId },
     include: { event: { select: { id: true, endDate: true } } }
@@ -50,8 +51,10 @@ export async function generateStandAccessToken(
   const expiresAt = stand.event?.endDate ?? null
 
   await prisma.$transaction([
+    // Revoga apenas os ativos do MESMO scope — o outro scope (ex.: o link de
+    // cadastro) permanece válido ao regenerar este (Fatia 4)
     prisma.standAccessToken.updateMany({
-      where: { standId, revokedAt: null },
+      where: { standId, scope, revokedAt: null },
       data: { revokedAt: new Date() }
     }),
     prisma.standAccessToken.create({
@@ -59,7 +62,8 @@ export async function generateStandAccessToken(
         standId,
         tokenHash: hashToken(token),
         createdBy: actor.adminId ?? null,
-        expiresAt
+        expiresAt,
+        scope
       }
     }),
     prisma.auditLog.create({
@@ -74,13 +78,13 @@ export async function generateStandAccessToken(
         adminEmail: actor.adminEmail,
         ip: actor.ip ?? null,
         userAgent: actor.userAgent ?? null,
-        description: `Link de acesso gerado para o stand ${stand.code}`,
+        description: `Link de acesso (${scope}) gerado para o stand ${stand.code}`,
         severity: 'INFO'
       }
     })
   ])
 
-  return { token, expiresAt }
+  return { token, expiresAt, scope }
 }
 
 /**
@@ -89,7 +93,8 @@ export async function generateStandAccessToken(
  */
 export async function revokeStandAccessTokens(
   standId: string,
-  actor: StandTokenActor
+  actor: StandTokenActor,
+  scope?: 'register' | 'manage'
 ): Promise<number> {
   const stand = await prisma.stand.findUnique({
     where: { id: standId },
@@ -97,9 +102,16 @@ export async function revokeStandAccessTokens(
   })
   if (!stand) throw new Error('Stand não encontrado')
 
+  // scope omitido → revoga ambos os links; informado → só aquele
+  const where: { standId: string; revokedAt: null; scope?: 'register' | 'manage' } = {
+    standId,
+    revokedAt: null
+  }
+  if (scope) where.scope = scope
+
   const [revoked] = await prisma.$transaction([
     prisma.standAccessToken.updateMany({
-      where: { standId, revokedAt: null },
+      where,
       data: { revokedAt: new Date() }
     }),
     prisma.auditLog.create({
@@ -114,7 +126,7 @@ export async function revokeStandAccessTokens(
         adminEmail: actor.adminEmail,
         ip: actor.ip ?? null,
         userAgent: actor.userAgent ?? null,
-        description: `Link de acesso revogado para o stand ${stand.code}`,
+        description: `Link de acesso${scope ? ` (${scope})` : ''} revogado para o stand ${stand.code}`,
         severity: 'INFO'
       }
     })
