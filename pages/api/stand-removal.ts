@@ -67,6 +67,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         message: 'Link inválido ou expirado. Contate a organização.'
       })
     }
+
+    // Enforcement de permissão (Fatia 3): só o link de gestão ('manage')
+    // pode excluir. O link de cadastro ('register') é compartilhável com a
+    // equipe e nunca exclui. Gate vem ANTES de qualquer leitura/escrita.
+    if (access.scope !== 'manage') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message:
+          'Este link permite apenas cadastro. A exclusão é restrita ao responsável do stand.'
+      })
+    }
+
     const standId = access.stand.id
 
     // O credenciado precisa pertencer ao stand do token e estar ativo —
