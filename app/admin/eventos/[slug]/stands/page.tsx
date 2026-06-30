@@ -4,6 +4,7 @@ import { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import StandLinksCell from '../../../../../components/admin/StandLinksCell';
 
 interface Participant {
   id: string;
@@ -32,9 +33,13 @@ interface Stand {
   responsiblePhone?: string;
   location?: string;
   isActive: boolean;
-  hasActiveLink?: boolean;
-  linkGeneratedAt?: string | null;
-  linkLastUsedAt?: string | null;
+  // Flags por scope (Fatia 4/6) — substituem o antigo hasActiveLink na UI
+  hasRegisterLink?: boolean;
+  hasManageLink?: boolean;
+  registerGeneratedAt?: string | null;
+  registerLastUsedAt?: string | null;
+  manageGeneratedAt?: string | null;
+  manageLastUsedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   participants?: Participant[];
@@ -396,52 +401,6 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
       location: '',
       isActive: true
     });
-  };
-
-  const [sendingLinkId, setSendingLinkId] = useState<string | null>(null);
-
-  const handleSendAccessLink = async (stand: Stand) => {
-    if (!stand.responsibleEmail) {
-      alert('Este stand não tem e-mail de responsável cadastrado. Edite o stand e informe o e-mail antes de gerar o link.');
-      return;
-    }
-    const action = stand.hasActiveLink ? 'reenviar (o link atual será invalidado)' : 'gerar e enviar';
-    if (!confirm(`Deseja ${action} o link de acesso para ${stand.responsibleEmail}?`)) return;
-
-    try {
-      setSendingLinkId(stand.id);
-      const response = await fetch(`/api/admin/stands/${stand.id}/access-link`, { method: 'POST' });
-      const data = await response.json();
-      if (response.ok) {
-        alert(`✅ Link enviado para ${data.sentTo}`);
-        loadStands();
-      } else {
-        alert(data.error || 'Erro ao enviar link de acesso');
-      }
-    } catch (error) {
-      console.error('Error sending access link:', error);
-      alert('Erro ao enviar link de acesso');
-    } finally {
-      setSendingLinkId(null);
-    }
-  };
-
-  const handleRevokeAccessLink = async (stand: Stand) => {
-    if (!confirm(`Revogar o link de acesso do stand ${stand.name}? O responsável perderá o acesso ao painel até um novo link ser enviado.`)) return;
-
-    try {
-      const response = await fetch(`/api/admin/stands/${stand.id}/access-link`, { method: 'DELETE' });
-      const data = await response.json();
-      if (response.ok) {
-        alert('🔒 Link revogado');
-        loadStands();
-      } else {
-        alert(data.error || 'Erro ao revogar link');
-      }
-    } catch (error) {
-      console.error('Error revoking access link:', error);
-      alert('Erro ao revogar link');
-    }
   };
 
   const downloadTemplate = () => {
@@ -1107,7 +1066,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-6">
                 <h2 className="text-xl font-bold mb-4">Lista de Stands</h2>
-                {loading ? (
+                {loading && stands.length === 0 ? (
                   <div className="text-center py-8"><p className="text-gray-500">Carregando...</p></div>
                 ) : stands.length === 0 ? (
                   <div className="text-center py-8">
@@ -1179,31 +1138,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                                 )}
                               </td>
                               <td className="px-4 py-3">
-                                <div className="flex flex-col gap-1">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium w-fit ${
-                                    stand.hasActiveLink ? 'bg-teal-100 text-teal-800' : 'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    {stand.hasActiveLink ? 'Link ativo' : 'Sem link'}
-                                  </span>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => handleSendAccessLink(stand)}
-                                      disabled={sendingLinkId === stand.id || !stand.responsibleEmail}
-                                      title={!stand.responsibleEmail ? 'Cadastre o e-mail do responsável primeiro' : undefined}
-                                      className="text-teal-600 hover:text-teal-800 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
-                                      {sendingLinkId === stand.id ? 'Enviando...' : stand.hasActiveLink ? 'Reenviar' : 'Enviar link'}
-                                    </button>
-                                    {stand.hasActiveLink && (
-                                      <button
-                                        onClick={() => handleRevokeAccessLink(stand)}
-                                        className="text-orange-600 hover:text-orange-800 text-xs font-medium"
-                                      >
-                                        Revogar
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
+                                <StandLinksCell stand={stand} onChanged={loadStands} />
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <button onClick={() => handleEdit(stand)} className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3">
