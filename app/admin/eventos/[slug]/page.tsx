@@ -141,14 +141,16 @@ export default function EventAdminPage() {
     const standCounts: Record<string, { name: string, count: number }> = {}
 
     participants.forEach(participant => {
-      const standCode = participant.customData?.standCode || participant.customData?.estande || 'Sem stand'
-      if (!standCounts[standCode]) {
-        standCounts[standCode] = {
-          name: standCode,
+      // Stand REAL vem do relacionamento (standName via standId no endpoint).
+      // 'Sem stand' só para quem realmente não tem stand vinculado (standName nulo).
+      const standName = (participant as any).standName || 'Sem stand'
+      if (!standCounts[standName]) {
+        standCounts[standName] = {
+          name: standName,
           count: 0
         }
       }
-      standCounts[standCode].count++
+      standCounts[standName].count++
     })
 
     const standsArray: Stand[] = Object.entries(standCounts).map(([code, data]) => ({
@@ -393,15 +395,17 @@ export default function EventAdminPage() {
 
   // Filter participants by search term and selected stand
   const filteredParticipants = participants.filter(participant => {
-    // Filter by search term
+    // Filter by search term (inclui o nome do stand real)
     const matchesSearch = !searchTerm ||
       participant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       participant.cpf.includes(searchTerm) ||
       participant.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      participant.phone?.includes(searchTerm)
+      participant.phone?.includes(searchTerm) ||
+      (participant as any).standName?.toLowerCase().includes(searchTerm.toLowerCase())
 
-    // Filter by selected stand
-    const participantStand = participant.customData?.standCode || participant.customData?.estande || ''
+    // Filter by selected stand — usa o standName REAL (relação via standId),
+    // com o MESMO fallback 'Sem stand' do dropdown p/ o filtro casar.
+    const participantStand = (participant as any).standName || 'Sem stand'
     const matchesStand = selectedStand === 'all' || participantStand === selectedStand
 
     return matchesSearch && matchesStand
@@ -1183,6 +1187,12 @@ export default function EventAdminPage() {
               >
                 🔄 Atualizar
               </button>
+              <a
+                href={`/admin/eventos/${eventSlug}/stands`}
+                className="text-xs sm:text-sm bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 whitespace-nowrap inline-flex items-center"
+              >
+                🏪 Gerenciar Stands
+              </a>
             </div>
           </div>
         </div>
@@ -1967,44 +1977,25 @@ export default function EventAdminPage() {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="text-center mt-8 p-4 space-x-4">
-          <a
-            href="/"
-            className="inline-flex items-center px-4 py-2 bg-mega-500 text-white rounded-lg hover:bg-mega-600 transition-colors"
-          >
-            ← Voltar para o Cadastro
-          </a>
-          {isSuperAdmin && (
+        {/* Footer — só ações de super admin (Campos/Documentos + Logs).
+            "Gerenciar Stands" foi para o topo; "Voltar para o Cadastro" e
+            "Histórico de Aprovações" (redundante com Logs) foram removidos. */}
+        {isSuperAdmin && (
+          <div className="text-center mt-8 p-4 space-x-4">
             <button
               onClick={() => router.push(`/admin/eventos/${eventSlug}/fields`)}
               className="inline-flex items-center px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
             >
               🔧 Gerenciar Campos e Documentos
             </button>
-          )}
-          <a
-            href={`/admin/eventos/${eventSlug}/stands`}
-            className="inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-          >
-            🏪 Gerenciar Stands
-          </a>
-          <a
-            href={`/admin/eventos/${eventSlug}/approvals`}
-            className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            title="Visualizar o histórico de aprovações/rejeições. Para aprovar ou rejeitar, use os botões em cada participante."
-          >
-            📋 Histórico de Aprovações
-          </a>
-          {isSuperAdmin && (
             <a
               href="/admin/logs"
               className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
             >
               📋 Ver Logs de Auditoria
             </a>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
