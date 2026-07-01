@@ -43,6 +43,12 @@ interface DynamicFormProps {
   cpfReadOnly?: boolean
 }
 
+// Campo file com OCR é renderizado como DocumentField, cujo valor vive em
+// documentData (não em formData). A validação de "obrigatório" precisa olhar lá.
+function isOcrDocumentField(field: { type: string; validation?: any }): boolean {
+  return field.type === 'file' && !!field.validation?.enableOCR
+}
+
 export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, fixedStand, cpfReadOnly }: DynamicFormProps) {
   const [fields, setFields] = useState<FormField[]>([])
   const [documentFields, setDocumentFields] = useState<DocumentFieldConfig[]>([])
@@ -241,7 +247,12 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
     let isValid = true
 
     fields.forEach(field => {
-      if (field.required && !formData[field.fieldName]) {
+      // Campos file com OCR (DocumentField) guardam o valor em documentData, não
+      // em formData — validar onde o valor realmente vive.
+      const filled = isOcrDocumentField(field)
+        ? !!documentData[field.fieldName]?.imageData
+        : !!formData[field.fieldName]
+      if (field.required && !filled) {
         newErrors[field.fieldName] = `${field.label} é obrigatório`
         isValid = false
       }
@@ -519,7 +530,9 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
               console.log('Rendering field:', field.fieldName, field.type)
               return (
                 <div key={field.fieldName}>
-                  {field.type !== 'checkbox' && (
+                  {/* Campos file (FileField/DocumentField) renderizam o próprio
+                      label — não duplicar com o do wrapper. */}
+                  {field.type !== 'checkbox' && field.type !== 'file' && (
                     <label className="block text-sm font-medium text-white mb-2">
                       {field.label} {field.required && <span className="text-red-400">*</span>}
                     </label>
