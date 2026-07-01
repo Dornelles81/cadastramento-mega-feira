@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback, useEffect } from 'react'
+import { resizeDrawableToJpegDataUrl, compressImageFile } from '../lib/image/resize'
 
 interface FileFieldProps {
   fieldName: string
@@ -104,32 +105,24 @@ export default function FileField({
 
   // Capture from camera
   const captureFromCamera = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
+    const video = videoRef.current
+    if (!video || !video.videoWidth) return
 
-      if (ctx) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        ctx.drawImage(video, 0, 0)
+    // Reduz para ≤1280px / JPEG q0.7 ANTES de gerar o base64 (evita 413 na Vercel)
+    const imageData = resizeDrawableToJpegDataUrl(video, video.videoWidth, video.videoHeight)
+    setPreview(imageData)
+    setFileName(`camera_${Date.now()}.jpg`)
+    stopCamera()
+    setMode('preview')
 
-        const imageData = canvas.toDataURL('image/jpeg', 0.9)
-        setPreview(imageData)
-        setFileName(`camera_${Date.now()}.jpg`)
-        stopCamera()
-        setMode('preview')
-
-        // Save file data
-        onChange({
-          fieldName,
-          imageData,
-          fileName: `camera_${Date.now()}.jpg`,
-          timestamp: new Date().toISOString(),
-          source: 'camera'
-        })
-      }
-    }
+    // Save file data
+    onChange({
+      fieldName,
+      imageData,
+      fileName: `camera_${Date.now()}.jpg`,
+      timestamp: new Date().toISOString(),
+      source: 'camera'
+    })
   }
 
   // Handle file upload
@@ -152,25 +145,30 @@ export default function FileField({
         }
       }
 
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const imageData = e.target?.result as string
-        setPreview(imageData)
-        setFileName(file.name)
-        setMode('preview')
-        setError(null)
+      // Imagens são reduzidas (≤1280px / q0.7) ANTES do base64 — evita 413 na
+      // Vercel. PDFs/outros não-imagem passam intactos (não se redimensiona PDF).
+      ;(async () => {
+        try {
+          const imageData = await compressImageFile(file)
+          setPreview(imageData)
+          setFileName(file.name)
+          setMode('preview')
+          setError(null)
 
-        // Save file data
-        onChange({
-          fieldName,
-          imageData,
-          fileName: file.name,
-          fileSize: file.size,
-          timestamp: new Date().toISOString(),
-          source: 'upload'
-        })
-      }
-      reader.readAsDataURL(file)
+          // Save file data
+          onChange({
+            fieldName,
+            imageData,
+            fileName: file.name,
+            fileSize: file.size,
+            timestamp: new Date().toISOString(),
+            source: 'upload'
+          })
+        } catch (err) {
+          console.error('Erro ao processar arquivo:', err)
+          setError('Não foi possível processar a imagem. Tente outra foto.')
+        }
+      })()
     }
   }
 

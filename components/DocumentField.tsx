@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback, useEffect } from 'react'
+import { resizeDrawableToJpegDataUrl, compressImageFile } from '../lib/image/resize'
 
 interface DocumentFieldProps {
   documentType: string
@@ -117,33 +118,25 @@ export default function DocumentField({
 
   // Capture from camera
   const captureFromCamera = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
-      
-      if (ctx) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        ctx.drawImage(video, 0, 0)
-        
-        const imageData = canvas.toDataURL('image/jpeg', 0.9)
-        setPreview(imageData)
-        stopCamera()
-        setMode('preview')
-        
-        // Save document data
-        onChange({
-          documentType,
-          imageData,
-          timestamp: new Date().toISOString()
-        })
+    const video = videoRef.current
+    if (!video || !video.videoWidth) return
 
-        // Process with OCR if enabled
-        if (enableOCR) {
-          processOCR(imageData)
-        }
-      }
+    // Reduz para ≤1280px / JPEG q0.7 ANTES de gerar o base64 (evita 413 na Vercel)
+    const imageData = resizeDrawableToJpegDataUrl(video, video.videoWidth, video.videoHeight)
+    setPreview(imageData)
+    stopCamera()
+    setMode('preview')
+
+    // Save document data
+    onChange({
+      documentType,
+      imageData,
+      timestamp: new Date().toISOString()
+    })
+
+    // Process with OCR if enabled
+    if (enableOCR) {
+      processOCR(imageData)
     }
   }
 
@@ -167,28 +160,33 @@ export default function DocumentField({
         }
       }
 
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const imageData = e.target?.result as string
-        setPreview(imageData)
-        setMode('preview')
-        setError(null)
-        
-        // Save document data
-        onChange({
-          documentType,
-          imageData,
-          fileName: file.name,
-          fileSize: file.size,
-          timestamp: new Date().toISOString()
-        })
+      // Imagens são reduzidas (≤1280px / q0.7) ANTES do base64 — evita 413 na
+      // Vercel. PDFs/outros não-imagem passam intactos (não se redimensiona PDF).
+      ;(async () => {
+        try {
+          const imageData = await compressImageFile(file)
+          setPreview(imageData)
+          setMode('preview')
+          setError(null)
 
-        // Process with OCR if enabled
-        if (enableOCR) {
-          processOCR(imageData)
+          // Save document data
+          onChange({
+            documentType,
+            imageData,
+            fileName: file.name,
+            fileSize: file.size,
+            timestamp: new Date().toISOString()
+          })
+
+          // Process with OCR if enabled
+          if (enableOCR) {
+            processOCR(imageData)
+          }
+        } catch (err) {
+          console.error('Erro ao processar arquivo:', err)
+          setError('Não foi possível processar a imagem. Tente outra foto.')
         }
-      }
-      reader.readAsDataURL(file)
+      })()
     }
   }
 
