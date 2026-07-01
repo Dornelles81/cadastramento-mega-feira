@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { detectFace as mpDetectFace, decideFromReads, nextGateState, type FaceReason } from '../lib/face/detector'
+import { computePose, type Pose } from '../lib/face/pose'
 
 interface EnhancedFaceCaptureProps {
   onCapture: (imageData: string, faceData?: any) => void
@@ -27,6 +28,17 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const detectingRef = useRef(false) // guarda contra detecção concorrente
   const [showUploadOption, setShowUploadOption] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // [Fase A] Debug de pose (yaw/pitch/roll) atrás do flag ?debugPose=1 — SÓ EXIBE,
+  // não afeta o gate nem a habilitação do botão. Sem o flag, o fluxo é idêntico.
+  const debugPoseRef = useRef(false)
+  const [showPoseDebug, setShowPoseDebug] = useState(false)
+  const [poseDebug, setPoseDebug] = useState<Pose | null>(null)
+  useEffect(() => {
+    const on = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugPose') === '1'
+    debugPoseRef.current = on
+    setShowPoseDebug(on)
+  }, [])
 
   // Desenha o frame atual do vídeo redimensionado para ≤800px (a MESMA imagem
   // que será submetida) num canvas offscreen — contrato da régua do detector.
@@ -75,6 +87,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const frame = buildFrameCanvas()
       if (!frame) return
       const m = await mpDetectFace(frame)
+      // [Fase A] Overlay de debug de pose (atrás de flag) — só EXIBE os números,
+      // NÃO interfere no gate abaixo.
+      if (debugPoseRef.current) setPoseDebug(m.faceCount > 0 && m.keypoints ? computePose(m.keypoints) : null)
       // SEM ROSTO = no_face IMEDIATO: zera a janela da mediana e cai pro vermelho
       // na hora, SEM suavização. A mediana/histerese só vale p/ o tamanho
       // (tooSmall↔ok) com rosto presente — nunca pode segurar 'ok' verde depois
@@ -329,6 +344,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* [Fase A] Overlay de debug de pose (só com ?debugPose=1) — apenas exibe
+                os números; não afeta o gate nem a captura. */}
+            {showPoseDebug && (
+              <div className="absolute top-16 left-2 bg-black/70 text-green-300 text-[11px] font-mono px-2 py-1 rounded leading-tight z-10">
+                <div>yaw: {poseDebug ? poseDebug.yaw.toFixed(3) : '—'}</div>
+                <div>pitch: {poseDebug ? poseDebug.pitch.toFixed(3) : '—'}</div>
+                <div>roll: {poseDebug ? poseDebug.roll.toFixed(1) + '°' : '—'}</div>
               </div>
             )}
 

@@ -28,6 +28,9 @@ export interface FaceMeasurement {
   faceCount: number
   interocularPx: number // 0 se nenhum rosto
   bbox?: { x: number; y: number; w: number; h: number } // px na imagem
+  // [Fase A] Aditivo: os 6 keypoints em PIXELS (0 olho dir,1 olho esq,2 nariz,
+  // 3 boca,4 orelha dir,5 orelha esq) — usados só para o cálculo de pose/overlay.
+  keypoints?: { x: number; y: number }[]
 }
 
 export interface FaceValidation {
@@ -62,10 +65,13 @@ async function getDetector(): Promise<FaceDetection> {
     const dy = (rEye.y - lEye.y) * _lastH
     const interocularPx = Math.round(Math.sqrt(dx * dx + dy * dy))
     const bb = d.boundingBox
+    // [Fase A] keypoints em pixels (aditivo — NÃO altera a interocular acima).
+    const keypoints = (k as any[]).map((p) => ({ x: p.x * _lastW, y: p.y * _lastH }))
     resolve({
       faceCount: dets.length,
       interocularPx,
-      bbox: { x: Math.round((bb.xCenter - bb.width / 2) * _lastW), y: Math.round((bb.yCenter - bb.height / 2) * _lastH), w: Math.round(bb.width * _lastW), h: Math.round(bb.height * _lastH) }
+      bbox: { x: Math.round((bb.xCenter - bb.width / 2) * _lastW), y: Math.round((bb.yCenter - bb.height / 2) * _lastH), w: Math.round(bb.width * _lastW), h: Math.round(bb.height * _lastH) },
+      keypoints
     })
   })
   await detector.initialize()

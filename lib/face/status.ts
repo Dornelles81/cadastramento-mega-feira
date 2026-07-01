@@ -10,6 +10,18 @@
  */
 export const MIN_INTEROCULAR_PX = 60
 
+// ── Limiares de POSE (yaw/pitch/roll) — FASE A: DEFINIDOS, ainda NÃO aplicados ──
+// A Fase C é que liga estes limiares ao gate de captura. Aqui só existem para o
+// cálculo/overlay de debug e para a calibração da Fase B.
+//   • roll é GRAU real (barato, do eixo dos olhos) → limiar em graus.
+//   • yaw/pitch são RAZÕES normalizadas pela interocular (recomendação 2b:
+//     calibrar razão, NÃO converter para grau). Os valores abaixo são
+//     PLACEHOLDER permissivos (alvo ~20° de yaw/pitch, ~15° de roll) — calibrar
+//     na Fase B com fotos de ângulo conhecido antes de aplicar.
+export const ROLL_MAX_DEG = 15      // inclinação (tilt) máx, em GRAUS
+export const YAW_MAX_RATIO = 0.35   // RAZÃO (offset/interocular); PLACEHOLDER — calibrar Fase B
+export const PITCH_MAX_RATIO = 0.30 // RAZÃO (offset/interocular); PLACEHOLDER — calibrar Fase B
+
 export type FaceStatus = 'unmeasured' | 'no_face' | 'too_small' | 'valid'
 
 /**
