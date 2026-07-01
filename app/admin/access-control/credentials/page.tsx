@@ -325,6 +325,9 @@ export default function CredentialsPage() {
 
       const res = await fetch(`/api/admin/eventos/${event.slug}/participantes?${params}`)
       const data = await res.json()
+      // 'approved' já é filtrado no servidor (via approvalStatus na query). Aqui só
+      // resta o caso 'no-credential', que é exclusivamente client-side (o endpoint
+      // não filtra por presença de número). 'all' passa direto.
       const list: ParticipantCredential[] = (data.participants || data || []).filter((p: ParticipantCredential) => {
         if (filterStatus === 'no-credential') return !p.credentialNumber
         return true

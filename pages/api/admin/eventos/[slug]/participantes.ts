@@ -41,12 +41,18 @@ export default async function handler(
     const limit = Math.min(parseInt(req.query.limit as string || '200', 10), 500)
     const skip = (page - 1) * limit
 
+    // Filtro opcional por status de aprovação: SÓ aplica se o parâmetro vier.
+    // Sem ele, retorna todos (comportamento preservado p/ callers que veem tudo,
+    // ex.: gestão/aprovação). A tela de credenciais manda approvalStatus=approved
+    // no modo "Somente aprovados" → passa a receber só os aprovados.
+    const approvalStatus =
+      typeof req.query.approvalStatus === 'string' ? req.query.approvalStatus : undefined
+    const where: any = { eventId: event.id, isDeleted: false } // ← ISOLAMENTO GARANTIDO
+    if (approvalStatus) where.approvalStatus = approvalStatus
+
     const [participants, total] = await Promise.all([
       prisma.participant.findMany({
-        where: {
-          eventId: event.id, // ← ISOLAMENTO GARANTIDO
-          isDeleted: false
-        },
+        where,
         select: {
           id: true, name: true, cpf: true, email: true, phone: true,
           createdAt: true, approvalStatus: true, approvedAt: true,
@@ -60,7 +66,7 @@ export default async function handler(
         take: limit,
         skip
       }),
-      prisma.participant.count({ where: { eventId: event.id, isDeleted: false } })
+      prisma.participant.count({ where })
     ])
 
     // ========================================================================
