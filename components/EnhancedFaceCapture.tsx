@@ -34,6 +34,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const debugPoseRef = useRef(false)
   const [showPoseDebug, setShowPoseDebug] = useState(false)
   const [poseDebug, setPoseDebug] = useState<Pose | null>(null)
+  // [Fase B] Modo "só pose" do upload debug: exibe a pose da foto e PARA (não grava,
+  // não avança). Distingue do preview de uma captura real (que processa e navega).
+  const [poseOnly, setPoseOnly] = useState(false)
   useEffect(() => {
     const on = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugPose') === '1'
     debugPoseRef.current = on
@@ -209,12 +212,33 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         // falso-positivo do detector não pode liberar foto sem rosto) E
         // interocular ≥ 60. Imagem única é mais sujeita a ruído que a câmera.
         const reads: number[] = []
+        let poseKps: { x: number; y: number }[] | null = null
         for (let i = 0; i < 3; i++) {
           const m = await mpDetectFace(canvas)
           reads.push(m.faceCount > 0 ? m.interocularPx : 0)
+          if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
         }
         const v = decideFromReads(reads)
         const ip = v.interocularPx
+
+        // [Fase B] Debug de pose no UPLOAD (mesmo flag ?debugPose=1): calcula e EXIBE
+        // yaw/pitch/roll da foto enviada e PARA — NÃO chama onCapture, não grava, não
+        // navega. Ignora o gate de tamanho de propósito (a pose interessa mesmo perto
+        // do limite). A foto some ao "Tirar Nova Foto". Sem o flag, este bloco não roda
+        // e o fluxo abaixo é byte-a-byte idêntico ao de produção.
+        if (debugPoseRef.current) {
+          const pose = computePose(poseKps)
+          setPoseDebug(pose)
+          if (!pose) {
+            setError('❌ [debugPose] Não detectei rosto para medir a pose. Tire outra foto com o rosto bem visível.')
+            input.value = ''
+            return
+          }
+          setError(null)
+          setPoseOnly(true)
+          setCapturedImage(canvas.toDataURL('image/jpeg', 0.6))
+          return
+        }
 
         if (!v.ok) {
           // BLOQUEIO TOTAL: NÃO chama onCapture; mostra o motivo; limpa o input.
@@ -301,6 +325,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     setCapturedImage(null)
     setIsCapturing(false)
     setError(null)
+    setPoseOnly(false)
     startCamera()
   }
 
@@ -375,10 +400,18 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         ) : (
           <>
             <img src={capturedImage} alt="Captured" className="w-full h-full object-cover" />
+            {/* [Fase B] Pose da foto enviada (só com ?debugPose=1 no caminho de upload) */}
+            {showPoseDebug && poseOnly && poseDebug && (
+              <div className="absolute top-2 left-2 bg-black/70 text-green-300 text-[11px] font-mono px-2 py-1 rounded leading-tight z-10">
+                <div>yaw: {poseDebug.yaw.toFixed(3)}</div>
+                <div>pitch: {poseDebug.pitch.toFixed(3)}</div>
+                <div>roll: {poseDebug.roll.toFixed(1)}°</div>
+              </div>
+            )}
             <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
               <div className="bg-white rounded-lg p-4 text-center">
-                <div className="text-4xl mb-2">✅</div>
-                <p className="text-lg font-semibold text-gray-800">Foto capturada!</p>
+                <div className="text-4xl mb-2">{poseOnly ? '📐' : '✅'}</div>
+                <p className="text-lg font-semibold text-gray-800">{poseOnly ? 'Pose medida (nada salvo)' : 'Foto capturada!'}</p>
               </div>
             </div>
           </>
@@ -487,7 +520,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             >
               🔄 Tirar Nova Foto
             </button>
-            <p className="text-center text-sm text-white/60">Processando... Aguarde</p>
+            <p className="text-center text-sm text-white/60">{poseOnly ? 'Modo debug de pose — nada foi salvo' : 'Processando... Aguarde'}</p>
           </>
         )}
         </div>

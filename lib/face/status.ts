@@ -10,17 +10,23 @@
  */
 export const MIN_INTEROCULAR_PX = 60
 
-// ── Limiares de POSE (yaw/pitch/roll) — FASE A: DEFINIDOS, ainda NÃO aplicados ──
-// A Fase C é que liga estes limiares ao gate de captura. Aqui só existem para o
-// cálculo/overlay de debug e para a calibração da Fase B.
+// ── Limiares de POSE (yaw/pitch/roll) — CALIBRADOS na FASE B, ainda NÃO aplicados ──
+// A Fase C é que liga estes limiares ao gate de captura. Hoje só alimentam o
+// cálculo/overlay de debug (?debugPose=1).
 //   • roll é GRAU real (barato, do eixo dos olhos) → limiar em graus.
 //   • yaw/pitch são RAZÕES normalizadas pela interocular (recomendação 2b:
-//     calibrar razão, NÃO converter para grau). Os valores abaixo são
-//     PLACEHOLDER permissivos (alvo ~20° de yaw/pitch, ~15° de roll) — calibrar
-//     na Fase B com fotos de ângulo conhecido antes de aplicar.
-export const ROLL_MAX_DEG = 15      // inclinação (tilt) máx, em GRAUS
-export const YAW_MAX_RATIO = 0.35   // RAZÃO (offset/interocular); PLACEHOLDER — calibrar Fase B
-export const PITCH_MAX_RATIO = 0.30 // RAZÃO (offset/interocular); PLACEHOLDER — calibrar Fase B
+//     calibrar razão, NÃO converter para grau).
+// Valores CALIBRADOS no PC (Fase B, fotos de ângulo conhecido via ?debugPose=1),
+// inclinados de propósito para o PERMISSIVO (não travar o balcão) — a APERTAR na
+// Fase D com o terminal Hikvision real. Dados brutos da calibração na memória
+// deteccao-pose-facial.md. ⚠ AINDA NÃO aplicados ao gate.
+//   yaw:   0.401 ainda aceitável · 0.682 já ruim · 10.49 perfil → corte 0.45
+//   pitch: pose extrema chega só a ~0.19 (BAIXA sensibilidade do pitch coarse;
+//          o placeholder 0.30 nunca dispararia — estava quebrado) → corte 0.15
+//   roll:  −11.6° aceitável · −36.3° ruim (bate com referência da indústria) → 15°
+export const ROLL_MAX_DEG = 15      // inclinação (tilt) máx, em GRAUS — calibrado Fase B
+export const YAW_MAX_RATIO = 0.45   // RAZÃO (offset/interocular) — calibrado Fase B
+export const PITCH_MAX_RATIO = 0.15 // RAZÃO (offset/interocular) — calibrado Fase B (eixo frágil)
 
 export type FaceStatus = 'unmeasured' | 'no_face' | 'too_small' | 'valid'
 
