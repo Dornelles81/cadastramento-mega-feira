@@ -56,14 +56,14 @@ check("tilt (roll alto)", decideCapture(base({ pose: pose(0, 30) })) === 'tilt')
 check("turn (yaw alto)", decideCapture(base({ pose: pose(0.7, 0) })) === 'turnRight')
 
 console.log('\n=== 4) HISTERESE (não tremular na fronteira) ===')
-// YAW: enter exige > 0.45+0.05=0.50; exit só sai de turn com < 0.45-0.05=0.40
-const yawBorder = 0.47 // entre exit(0.40) e enter(0.50)
-check("yaw 0.47 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ pose: pose(yawBorder, 0) }), 'ok') === 'ok')
-check("yaw 0.47 vindo de 'turnRight' → MANTÉM turnRight", decideCapture(base({ pose: pose(yawBorder, 0) }), 'turnRight') === 'turnRight')
-// ROLL: enter >15+3=18; exit sai de tilt com <15-3=12
-const rollBorder = 16 // entre 12 e 18
-check("roll 16 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ pose: pose(0, rollBorder) }), 'ok') === 'ok')
-check("roll 16 vindo de 'tilt' → MANTÉM tilt", decideCapture(base({ pose: pose(0, rollBorder) }), 'tilt') === 'tilt')
+// YAW (C1): base 0.25 → enter (ok→block) em 0.25+0.05=0.30; exit (block→ok) em 0.20
+const yawBorder = 0.25 // entre exit(0.20) e enter(0.30)
+check("yaw 0.25 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ pose: pose(yawBorder, 0) }), 'ok') === 'ok')
+check("yaw 0.25 vindo de 'turnRight' → MANTÉM turnRight", decideCapture(base({ pose: pose(yawBorder, 0) }), 'turnRight') === 'turnRight')
+// ROLL (C1): base 10 → enter em 10+3=13; exit em 7
+const rollBorder = 10 // entre exit(7) e enter(13)
+check("roll 10 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ pose: pose(0, rollBorder) }), 'ok') === 'ok')
+check("roll 10 vindo de 'tilt' → MANTÉM tilt", decideCapture(base({ pose: pose(0, rollBorder) }), 'tilt') === 'tilt')
 // ENQUADRAMENTO: tolX enter=0.20, exit=0.16 (hyst 0.02); usa desvio 0.19 (entre os dois)
 const offBorder = bboxAt(0.5 + 0.19, 0.45, 120, 140)
 check("desvio 0.19 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ bbox: offBorder }), 'ok') === 'ok')

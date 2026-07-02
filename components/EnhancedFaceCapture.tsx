@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { detectFace as mpDetectFace, decideFromReads, nextGateState, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
+import { decideCapture, type CaptureReason } from '../lib/face/gate'
 
 interface EnhancedFaceCaptureProps {
   onCapture: (imageData: string, faceData?: any) => void
@@ -10,6 +11,7 @@ interface EnhancedFaceCaptureProps {
 }
 
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
+const MSG_DEBOUNCE_FRAMES = 2 // [C1] frames estáveis antes de trocar o TEXTO da mensagem
 
 export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -37,10 +39,25 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   // [Fase B] Modo "só pose" do upload debug: exibe a pose da foto e PARA (não grava,
   // não avança). Distingue do preview de uma captura real (que processa e navega).
   const [poseOnly, setPoseOnly] = useState(false)
+
+  // [Fase C1] Gate de POSE ao vivo, atrás de ?poseGate=1 (default OFF → produção
+  // IDÊNTICA). liveReason é o reason combinado (imediato → okState/oval/botão);
+  // msgReason é o texto (com debounce SÓ quando a flag está ligada).
+  const poseGateRef = useRef(false)
+  const posePrevRef = useRef<CaptureReason>('noFace') // reason anterior p/ histerese
+  const [liveReason, setLiveReason] = useState<CaptureReason>('noFace')
+  const liveReasonRef = useRef<CaptureReason>('noFace')
+  const [msgReason, setMsgReason] = useState<CaptureReason>('noFace')
+  const msgReasonRef = useRef<CaptureReason>('noFace')
+  const msgPendingRef = useRef<CaptureReason>('noFace')
+  const msgCountRef = useRef(0)
+
   useEffect(() => {
-    const on = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugPose') === '1'
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+    const on = params?.get('debugPose') === '1'
     debugPoseRef.current = on
     setShowPoseDebug(on)
+    poseGateRef.current = params?.get('poseGate') === '1'
   }, [])
 
   // Desenha o frame atual do vídeo redimensionado para ≤800px (a MESMA imagem
@@ -64,8 +81,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     return c
   }
 
-  // Desenha o oval-guia colorido pelo estado do gate.
-  const drawOval = (state: FaceReason) => {
+  // Desenha o oval-guia colorido pelo estado do gate. Cores da tabela da Fase C:
+  // ok=verde; tooSmall/offCenter/cutOff=amarelo; noFace/tilt/turn=vermelho.
+  const drawOval = (state: CaptureReason) => {
     const video = videoRef.current
     const oc = canvasRef.current
     if (!video || !oc || !video.videoWidth) return
@@ -73,13 +91,46 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     const ctx = oc.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, oc.width, oc.height)
-    const color = state === 'ok' ? '#22c55e' : state === 'tooSmall' ? '#eab308' : '#ef4444'
+    const color = state === 'ok' ? '#22c55e'
+      : (state === 'tooSmall' || state === 'offCenter' || state === 'cutOff') ? '#eab308'
+        : '#ef4444'
     ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.setLineDash([14, 9])
     ctx.beginPath()
     ctx.ellipse(oc.width / 2, oc.height * 0.45, oc.width * 0.30, oc.height * 0.34, 0, 0, 2 * Math.PI)
     ctx.stroke()
     ctx.setLineDash([])
   }
+
+  // [C1] Aplica o reason combinado do frame: okState/oval imediatos (a histerese do
+  // gate já os mantém estáveis) e a MENSAGEM com debounce SÓ quando ?poseGate=1
+  // (evita o texto piscar entre dois bloqueios na fronteira). Sem a flag, o texto
+  // troca na hora → idêntico ao de hoje.
+  const applyReason = (reason: CaptureReason) => {
+    posePrevRef.current = reason
+    if (liveReasonRef.current !== reason) { liveReasonRef.current = reason; setLiveReason(reason) }
+    drawOval(reason)
+    if (poseGateRef.current) {
+      if (msgPendingRef.current !== reason) { msgPendingRef.current = reason; msgCountRef.current = 1 }
+      else { msgCountRef.current++ }
+      if (msgCountRef.current >= MSG_DEBOUNCE_FRAMES && msgReasonRef.current !== reason) {
+        msgReasonRef.current = reason; setMsgReason(reason)
+      }
+    } else {
+      msgPendingRef.current = reason; msgCountRef.current = MSG_DEBOUNCE_FRAMES
+      if (msgReasonRef.current !== reason) { msgReasonRef.current = reason; setMsgReason(reason) }
+    }
+  }
+
+  // Texto do indicador por reason (tabela da Fase C). turn* → frase NEUTRA (achado
+  // MIRROR: não arriscar direção). cutOff/offCenter só aparecem a partir do C2.
+  const captureMsg = (r: CaptureReason): string =>
+    r === 'ok' ? 'Rosto OK ✓'
+      : r === 'tooSmall' ? 'Aproxime o rosto'
+        : r === 'tilt' ? 'Endireite a cabeça'
+          : (r === 'turnLeft' || r === 'turnRight') ? 'Vire o rosto para frente'
+            : r === 'cutOff' ? 'Afaste um pouco — rosto cortado'
+              : r === 'offCenter' ? 'Centralize o rosto no oval'
+                : 'Centralize seu rosto'
 
   // Loop de detecção ao vivo: mede no frame redimensionado, suaviza (mediana +
   // histerese) e atualiza o estado do gate + o oval. Sem heurística de pele.
@@ -90,9 +141,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const frame = buildFrameCanvas()
       if (!frame) return
       const m = await mpDetectFace(frame)
-      // [Fase A] Overlay de debug de pose (atrás de flag) — só EXIBE os números,
-      // NÃO interfere no gate abaixo.
-      if (debugPoseRef.current) setPoseDebug(m.faceCount > 0 && m.keypoints ? computePose(m.keypoints) : null)
+      // [C1] Pose calculada a CADA frame (barato) — alimenta o overlay de debug E
+      // o gate combinado (quando ?poseGate=1). Sem rosto/keypoints → null.
+      const pose = m.faceCount > 0 && m.keypoints ? computePose(m.keypoints) : null
+      if (debugPoseRef.current) setPoseDebug(pose)
       // SEM ROSTO = no_face IMEDIATO: zera a janela da mediana e cai pro vermelho
       // na hora, SEM suavização. A mediana/histerese só vale p/ o tamanho
       // (tooSmall↔ok) com rosto presente — nunca pode segurar 'ok' verde depois
@@ -100,15 +152,23 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       if (m.faceCount === 0) {
         historyRef.current = []
         if (gateStateRef.current !== 'noFace') { gateStateRef.current = 'noFace'; setGateState('noFace') }
-        drawOval('noFace')
+        applyReason('noFace')
         return
       }
       const hist = historyRef.current
       hist.push(m.interocularPx)
       if (hist.length > 8) hist.shift()
+      // DISTÂNCIA (INTOCADA): fonte de verdade do gate de tamanho.
       const next = nextGateState(hist, gateStateRef.current)
       if (next !== gateStateRef.current) { gateStateRef.current = next; setGateState(next) }
-      drawOval(next)
+      // [C1] Combina POSE (yaw+roll) SÓ com ?poseGate=1. Sem a flag, reason = next
+      // (distância pura) → comportamento byte-a-byte idêntico ao de hoje. bbox vazio
+      // → enquadramento ignorado por degradação segura (o C2 é quem o adiciona).
+      let reason: CaptureReason = next
+      if (poseGateRef.current) {
+        reason = decideCapture({ distanceReason: next, pose, mirrored: false }, posePrevRef.current)
+      }
+      applyReason(reason)
     } catch {
       // detector indisponível: mantém estado; o gate da captura ainda revalida
     } finally {
@@ -292,9 +352,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     // (um único falso-positivo NÃO libera foto sem rosto) E interocular ≥ 60.
     // Mesmo critério do upload (Fatia 4).
     const reads: number[] = []
+    let poseKps: { x: number; y: number }[] | null = null
     for (let i = 0; i < 3; i++) {
       const m = await mpDetectFace(frame)
       reads.push(m.faceCount > 0 ? m.interocularPx : 0)
+      if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
     }
     const v = decideFromReads(reads)
     const ip = v.interocularPx
@@ -307,6 +369,21 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       setIsCapturing(false)
       startDetectionLoop()
       return
+    }
+
+    // [C1] POSE no INSTANTE da captura (mesma regra do gate ao vivo, via decideCapture:
+    // yaw+roll, pitch fora). Fecha o furo do countdown de 3s — se a pessoa virar o
+    // rosto durante a contagem, a distância passa mas a pose barra. SÓ com ?poseGate=1
+    // → sem a flag, handleCapture segue byte-a-byte como hoje (só distância). prev='ok'
+    // pois o botão só habilitou com o gate ao vivo já em 'ok' (re-check tolerante).
+    if (poseGateRef.current) {
+      const poseReason = decideCapture({ distanceReason: 'ok', pose: computePose(poseKps), mirrored: false }, 'ok')
+      if (poseReason !== 'ok') {
+        setError(captureMsg(poseReason))
+        setIsCapturing(false)
+        startDetectionLoop()
+        return
+      }
     }
 
     const imageData = frame.toDataURL('image/jpeg', 0.7)
@@ -335,7 +412,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopCamera])
 
-  const okState = gateState === 'ok'
+  // [C1] okState vem do reason combinado. Com ?poseGate=1 inclui pose; sem a flag,
+  // liveReason == gateState (distância) → idêntico ao comportamento de hoje.
+  const okState = liveReason === 'ok'
 
   return (
     <>
@@ -363,9 +442,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               <div className="absolute top-4 left-4 right-4 flex justify-center">
                 <div className="bg-black bg-opacity-50 rounded-lg px-3 py-2">
                   <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${okState ? 'bg-green-500' : gateState === 'tooSmall' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                    <div className={`w-2 h-2 rounded-full ${okState ? 'bg-green-500' : (liveReason === 'tooSmall' || liveReason === 'offCenter' || liveReason === 'cutOff') ? 'bg-yellow-500' : 'bg-red-500'}`} />
                     <span className="text-white text-xs">
-                      {okState ? 'Rosto OK ✓' : gateState === 'tooSmall' ? 'Aproxime o rosto' : 'Centralize seu rosto'}
+                      {captureMsg(msgReason)}
                     </span>
                   </div>
                 </div>
@@ -470,8 +549,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               >
                 {isCapturing ? '⏳ Capturando...' :
                   okState ? '📸 Capturar Foto' :
-                    gateState === 'tooSmall' ? '👤 Aproxime o rosto' :
-                      '👤 Centralize seu rosto'}
+                    liveReason === 'tooSmall' ? '👤 Aproxime o rosto' :
+                      liveReason === 'tilt' ? '🙂 Endireite a cabeça' :
+                        (liveReason === 'turnLeft' || liveReason === 'turnRight') ? '🙂 Vire o rosto pra frente' :
+                          '👤 Centralize seu rosto'}
               </button>
             )}
 

@@ -10,23 +10,24 @@
  */
 export const MIN_INTEROCULAR_PX = 60
 
-// ── Limiares de POSE (yaw/pitch/roll) — CALIBRADOS na FASE B, ainda NÃO aplicados ──
-// A Fase C é que liga estes limiares ao gate de captura. Hoje só alimentam o
-// cálculo/overlay de debug (?debugPose=1).
-//   • roll é GRAU real (barato, do eixo dos olhos) → limiar em graus.
-//   • yaw/pitch são RAZÕES normalizadas pela interocular (recomendação 2b:
-//     calibrar razão, NÃO converter para grau).
-// Valores CALIBRADOS no PC (Fase B, fotos de ângulo conhecido via ?debugPose=1),
-// inclinados de propósito para o PERMISSIVO (não travar o balcão) — a APERTAR na
-// Fase D com o terminal Hikvision real. Dados brutos da calibração na memória
-// deteccao-pose-facial.md. ⚠ AINDA NÃO aplicados ao gate.
-//   yaw:   0.401 ainda aceitável · 0.682 já ruim · 10.49 perfil → corte 0.45
-//   pitch: pose extrema chega só a ~0.19 (BAIXA sensibilidade do pitch coarse;
-//          o placeholder 0.30 nunca dispararia — estava quebrado) → corte 0.15
-//   roll:  −11.6° aceitável · −36.3° ruim (bate com referência da indústria) → 15°
-export const ROLL_MAX_DEG = 15      // inclinação (tilt) máx, em GRAUS — calibrado Fase B
-export const YAW_MAX_RATIO = 0.45   // RAZÃO (offset/interocular) — calibrado Fase B
-export const PITCH_MAX_RATIO = 0.15 // RAZÃO (offset/interocular) — calibrado Fase B (eixo frágil)
+// ── Limiares de POSE (yaw/pitch/roll) — Fase B + APERTADOS ao vivo no C1 ──
+// A Fase C liga estes limiares ao gate (via decideCapture → decidePose). yaw/pitch
+// são RAZÕES (offset/interocular); roll é GRAU real (do eixo dos olhos).
+//
+// ⚠ HISTERESE (pose.ts DEFAULT_POSE_THRESHOLDS: hystRatio=0.05, hystDeg=3): o gate
+// bloqueia (ok→vermelho) em BASE+hyst e só volta a 'ok' em BASE−hyst. Logo o
+// bloqueio VISUAL acontece em base+hyst, NÃO na base. Por isso a base é fixada em
+// (ALVO − hyst): assim o bloqueio efetivo cai no alvo calibrado e ainda sobra
+// margem anti-flicker. A "zona pegajosa" de volta favorece foto frontal/nivelada.
+//
+// Recalibração C1 (ao vivo, PC): com base 0.45/15 a histerese empurrava o bloqueio
+// pra ~0.50/18° (frouxo). No teste, 0.47 yaw já é PERFIL e 16° roll já fica torto.
+//   yaw:  ALVO 0.30 → base 0.25 (bloqueia em 0.25+0.05=0.30; volta em 0.20)
+//   roll: ALVO 13°  → base 10  (bloqueia em 10+3=13°; volta em 7°)
+//   pitch: FORA do gate por ora (eixo frágil, ~0.19 máx) — reativa na Fase D
+export const ROLL_MAX_DEG = 10      // base; bloqueio efetivo 13° (base+hystDeg) — C1
+export const YAW_MAX_RATIO = 0.25   // base; bloqueio efetivo 0.30 (base+hystRatio) — C1
+export const PITCH_MAX_RATIO = 0.15 // fora do gate na Fase C (reativa na Fase D)
 
 export type FaceStatus = 'unmeasured' | 'no_face' | 'too_small' | 'valid'
 
