@@ -314,10 +314,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         // interocular ≥ 60. Imagem única é mais sujeita a ruído que a câmera.
         const reads: number[] = []
         let poseKps: { x: number; y: number }[] | null = null
+        let uploadBbox: { x: number; y: number; w: number; h: number } | null = null // [C3]
         for (let i = 0; i < 3; i++) {
           const m = await mpDetectFace(canvas)
           reads.push(m.faceCount > 0 ? m.interocularPx : 0)
           if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
+          if (m.faceCount > 0 && m.bbox) uploadBbox = m.bbox
         }
         const v = decideFromReads(reads)
         const ip = v.interocularPx
@@ -348,6 +350,30 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             : '❌ Rosto muito pequeno/distante. Aproxime o rosto — chegue mais perto na próxima foto.')
           input.value = ''
           return
+        }
+
+        // [C3] POSE + ENQUADRAMENTO no UPLOAD (mesma regra da câmera, via decideCapture:
+        // yaw+roll+bbox, pitch fora). Veredito ÚNICO por foto — não há estado anterior,
+        // então prev='ok' (limiar tolerante/relaxado da histerese: bloqueia só além de
+        // base+hyst — os mesmos cortes efetivos 0.30 yaw / 13° roll / dx 0.12 da câmera).
+        // MIRROR: mirrored:false — a foto do upload é medida E exibida SEM espelho (o
+        // sinal do yaw inverte vs PC, mas os limiares são |valor| e a frase é neutra).
+        // SÓ com ?poseGate=1 → sem a flag, o upload segue byte-a-byte como hoje.
+        if (poseGateRef.current) {
+          const gateReason = decideCapture({
+            distanceReason: 'ok',
+            pose: computePose(poseKps),
+            bbox: uploadBbox ?? undefined,
+            frameW: width,
+            frameH: height,
+            mirrored: false
+          }, 'ok')
+          if (gateReason !== 'ok') {
+            // REJEITA o envio: não grava nada; a pessoa tira outra foto.
+            setError(`❌ ${captureMsg(gateReason)}. Tire outra foto.`)
+            input.value = ''
+            return
+          }
         }
 
         const processedImage = canvas.toDataURL('image/jpeg', 0.6)
