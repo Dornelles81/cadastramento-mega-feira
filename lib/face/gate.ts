@@ -34,7 +34,12 @@ export type CaptureReason =
 // (sem 'chinUp'/'chinDown' por ora — pitch está FORA do gate na Fase C)
 
 export interface FramingThresholds {
-  /** Alvo do centro do rosto (fração 0–1). centerY=0.45 casa com o oval-guia. */
+  /**
+   * Alvo do centro do BBOX (fração 0–1). Calibrado no C2-a: centerY=0.65 — o bbox do
+   * MediaPipe corta o topo da cabeça, então o centro do bbox de um rosto bem enquadrado
+   * cai ~0.07 ABAIXO do centro visual. O OVAL-guia DESENHADO fica mais ALTO (~0.58,
+   * em OVAL_CENTER_Y no EnhancedFaceCapture) — encaixar a cabeça no oval → bbox no alvo.
+   */
   centerX: number
   centerY: number
   /** Tolerância do desvio do centro (fração da largura/altura do frame). */
@@ -47,18 +52,21 @@ export interface FramingThresholds {
 }
 
 /**
- * PLACEHOLDER PERMISSIVO — a CALIBRAR na fatia C2-a (instrumentar bbox/centro no
- * overlay, medir casos reais, e então FIXAR estes valores em status.ts como fonte
- * única). NÃO são chutes definitivos; existem só para o combinador ser testável.
+ * CALIBRADO no C2-a (medição ao vivo, PC — ver memória deteccao-pose-facial.md).
+ * Com a histerese, o bloqueio EFETIVO (ok→bloqueio) é tol+hyst / margin−hyst:
+ *   tolX 0.10  → barra |dx| > 0.12 (limite horizontal medido ~0.10)
+ *   tolY 0.12  → barra |dy| > 0.14 (vertical mais permissivo: ruído do crop/cabeça)
+ *   margin 0.12 → corta em folga < 0.10 (folga mínima medida 0.14; permissivo de
+ *                 propósito — barra só o claramente cortado; apertar na Fase D)
  * INVARIANTE: `hyst` < `margin` e `hyst` < `tol*` (senão o limiar de ENTRAR no
  * bloqueio fica negativo/inalcançável).
  */
 export const DEFAULT_FRAMING_THRESHOLDS: FramingThresholds = {
-  centerX: 0.5,
-  centerY: 0.45,
-  tolX: 0.18,
-  tolY: 0.18,
-  margin: 0.04,
+  centerX: 0.50, // calibrado C2-a
+  centerY: 0.65, // calibrado C2-a (alvo do bbox; ver comentário do centerY acima)
+  tolX: 0.10,    // calibrado C2-a
+  tolY: 0.12,    // calibrado C2-a
+  margin: 0.12,  // calibrado C2-a
   hyst: 0.02
 }
 

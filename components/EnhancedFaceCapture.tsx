@@ -3,15 +3,36 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { detectFace as mpDetectFace, decideFromReads, nextGateState, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
-import { decideCapture, type CaptureReason } from '../lib/face/gate'
+import { decideCapture, DEFAULT_FRAMING_THRESHOLDS, type CaptureReason } from '../lib/face/gate'
 
 interface EnhancedFaceCaptureProps {
   onCapture: (imageData: string, faceData?: any) => void
   onBack?: () => void
 }
 
+// [C2-a] Métricas de ENQUADRAMENTO só para o overlay de debug (calibração do bbox).
+interface FrameDebug {
+  cx: number; cy: number   // centro do rosto normalizado (0–1) no frame ≤800
+  dx: number; dy: number   // desvio do ALVO do bbox (gate.ts centerX/Y = 0.50/0.65)
+  l: number; r: number; t: number; b: number // folgas às bordas (normalizadas)
+  bx: number; by: number; bw: number; bh: number // bbox bruto (px)
+}
+
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
 const MSG_DEBOUNCE_FRAMES = 2 // [C1] frames estáveis antes de trocar o TEXTO da mensagem
+
+// [C2-a] DESACOPLADO (medido ao vivo): o OVAL DESENHADO (guia visual — onde a CABEÇA
+// inteira cabe) e o ALVO do bbox (medição/gate) ficam SEPARADOS, porque o bbox do
+// MediaPipe corta o topo da cabeça (não pega testa/cabelo) → o centro do bbox de um
+// rosto bem enquadrado cai ~0.07 ABAIXO do centro visual (offset~crop).
+//  • ALVO do bbox = fonte única em gate.ts (DEFAULT_FRAMING_THRESHOLDS.centerX/Y =
+//    0.50/0.65), usado pelo GATE e por este overlay (Δalvo).
+//  • OVAL_* = só o desenho visual. Encaixar a cabeça no oval (0.58) → bbox no alvo
+//    (0.65) → Δalvo ~0.
+const OVAL_CENTER_X = 0.50
+const OVAL_CENTER_Y = 0.58 // centro visual da cabeça = alvo bbox 0.65 − offset 0.07
+const OVAL_RADIUS_X = 0.30
+const OVAL_RADIUS_Y = 0.32 // cobre cabeça ~[0.26,0.90]; não corta queixo (folga B pequena)
 
 export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -36,6 +57,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const debugPoseRef = useRef(false)
   const [showPoseDebug, setShowPoseDebug] = useState(false)
   const [poseDebug, setPoseDebug] = useState<Pose | null>(null)
+  const [frameDebug, setFrameDebug] = useState<FrameDebug | null>(null) // [C2-a] enquadramento (só overlay)
   // [Fase B] Modo "só pose" do upload debug: exibe a pose da foto e PARA (não grava,
   // não avança). Distingue do preview de uma captura real (que processa e navega).
   const [poseOnly, setPoseOnly] = useState(false)
@@ -96,7 +118,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         : '#ef4444'
     ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.setLineDash([14, 9])
     ctx.beginPath()
-    ctx.ellipse(oc.width / 2, oc.height * 0.45, oc.width * 0.30, oc.height * 0.34, 0, 0, 2 * Math.PI)
+    ctx.ellipse(oc.width * OVAL_CENTER_X, oc.height * OVAL_CENTER_Y, oc.width * OVAL_RADIUS_X, oc.height * OVAL_RADIUS_Y, 0, 0, 2 * Math.PI)
     ctx.stroke()
     ctx.setLineDash([])
   }
@@ -121,15 +143,18 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     }
   }
 
+  // [C2-a] Formata número com sinal (+0.03 / −0.12) p/ o desvio do alvo no overlay.
+  const fmtSigned = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
+
   // Texto do indicador por reason (tabela da Fase C). turn* → frase NEUTRA (achado
-  // MIRROR: não arriscar direção). cutOff/offCenter só aparecem a partir do C2.
+  // MIRROR: não arriscar direção).
   const captureMsg = (r: CaptureReason): string =>
     r === 'ok' ? 'Rosto OK ✓'
       : r === 'tooSmall' ? 'Aproxime o rosto'
         : r === 'tilt' ? 'Endireite a cabeça'
           : (r === 'turnLeft' || r === 'turnRight') ? 'Vire o rosto para frente'
-            : r === 'cutOff' ? 'Afaste um pouco — rosto cortado'
-              : r === 'offCenter' ? 'Centralize o rosto no oval'
+            : r === 'cutOff' ? 'Enquadre o rosto no círculo'
+              : r === 'offCenter' ? 'Centralize o rosto'
                 : 'Centralize seu rosto'
 
   // Loop de detecção ao vivo: mede no frame redimensionado, suaviza (mediana +
@@ -144,7 +169,21 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       // [C1] Pose calculada a CADA frame (barato) — alimenta o overlay de debug E
       // o gate combinado (quando ?poseGate=1). Sem rosto/keypoints → null.
       const pose = m.faceCount > 0 && m.keypoints ? computePose(m.keypoints) : null
-      if (debugPoseRef.current) setPoseDebug(pose)
+      if (debugPoseRef.current) {
+        setPoseDebug(pose)
+        // [C2-a] Overlay de enquadramento (SÓ display — o gate usa o mesmo bbox via
+        // decideCapture abaixo, C2-b). Δalvo = desvio do ALVO DO BBOX (gate.ts
+        // DEFAULT_FRAMING_THRESHOLDS = 0.50/0.65 — fonte única). O oval visual fica mais alto.
+        if (m.faceCount > 0 && m.bbox) {
+          const W = frame.width, H = frame.height, bb = m.bbox
+          const cx = (bb.x + bb.w / 2) / W, cy = (bb.y + bb.h / 2) / H
+          setFrameDebug({
+            cx, cy, dx: cx - DEFAULT_FRAMING_THRESHOLDS.centerX, dy: cy - DEFAULT_FRAMING_THRESHOLDS.centerY,
+            l: bb.x / W, r: (W - (bb.x + bb.w)) / W, t: bb.y / H, b: (H - (bb.y + bb.h)) / H,
+            bx: bb.x, by: bb.y, bw: bb.w, bh: bb.h
+          })
+        } else setFrameDebug(null)
+      }
       // SEM ROSTO = no_face IMEDIATO: zera a janela da mediana e cai pro vermelho
       // na hora, SEM suavização. A mediana/histerese só vale p/ o tamanho
       // (tooSmall↔ok) com rosto presente — nunca pode segurar 'ok' verde depois
@@ -161,12 +200,14 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       // DISTÂNCIA (INTOCADA): fonte de verdade do gate de tamanho.
       const next = nextGateState(hist, gateStateRef.current)
       if (next !== gateStateRef.current) { gateStateRef.current = next; setGateState(next) }
-      // [C1] Combina POSE (yaw+roll) SÓ com ?poseGate=1. Sem a flag, reason = next
-      // (distância pura) → comportamento byte-a-byte idêntico ao de hoje. bbox vazio
-      // → enquadramento ignorado por degradação segura (o C2 é quem o adiciona).
+      // [C1+C2-b] Combina POSE (yaw+roll) e ENQUADRAMENTO (bbox) SÓ com ?poseGate=1.
+      // Sem a flag, reason = next (distância pura) → byte-a-byte idêntico ao de hoje.
       let reason: CaptureReason = next
       if (poseGateRef.current) {
-        reason = decideCapture({ distanceReason: next, pose, mirrored: false }, posePrevRef.current)
+        reason = decideCapture(
+          { distanceReason: next, pose, bbox: m.bbox, frameW: frame.width, frameH: frame.height, mirrored: false },
+          posePrevRef.current
+        )
       }
       applyReason(reason)
     } catch {
@@ -353,10 +394,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     // Mesmo critério do upload (Fatia 4).
     const reads: number[] = []
     let poseKps: { x: number; y: number }[] | null = null
+    let captureBbox: { x: number; y: number; w: number; h: number } | null = null // [C2-b]
     for (let i = 0; i < 3; i++) {
       const m = await mpDetectFace(frame)
       reads.push(m.faceCount > 0 ? m.interocularPx : 0)
       if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
+      if (m.faceCount > 0 && m.bbox) captureBbox = m.bbox
     }
     const v = decideFromReads(reads)
     const ip = v.interocularPx
@@ -371,15 +414,23 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       return
     }
 
-    // [C1] POSE no INSTANTE da captura (mesma regra do gate ao vivo, via decideCapture:
-    // yaw+roll, pitch fora). Fecha o furo do countdown de 3s — se a pessoa virar o
-    // rosto durante a contagem, a distância passa mas a pose barra. SÓ com ?poseGate=1
-    // → sem a flag, handleCapture segue byte-a-byte como hoje (só distância). prev='ok'
-    // pois o botão só habilitou com o gate ao vivo já em 'ok' (re-check tolerante).
+    // [C1+C2-b] POSE + ENQUADRAMENTO no INSTANTE da captura (mesma regra do gate ao
+    // vivo, via decideCapture: yaw+roll+bbox, pitch fora). Fecha o furo do countdown
+    // de 3s — se a pessoa virar/descentrar durante a contagem, a distância passa mas
+    // o gate combinado barra. SÓ com ?poseGate=1 → sem a flag, handleCapture segue
+    // byte-a-byte como hoje (só distância). prev='ok' pois o botão só habilitou com
+    // o gate ao vivo já em 'ok' (re-check tolerante).
     if (poseGateRef.current) {
-      const poseReason = decideCapture({ distanceReason: 'ok', pose: computePose(poseKps), mirrored: false }, 'ok')
-      if (poseReason !== 'ok') {
-        setError(captureMsg(poseReason))
+      const gateReason = decideCapture({
+        distanceReason: 'ok',
+        pose: computePose(poseKps),
+        bbox: captureBbox ?? undefined,
+        frameW: frame.width,
+        frameH: frame.height,
+        mirrored: false
+      }, 'ok')
+      if (gateReason !== 'ok') {
+        setError(captureMsg(gateReason))
         setIsCapturing(false)
         startDetectionLoop()
         return
@@ -458,6 +509,14 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 <div>yaw: {poseDebug ? poseDebug.yaw.toFixed(3) : '—'}</div>
                 <div>pitch: {poseDebug ? poseDebug.pitch.toFixed(3) : '—'}</div>
                 <div>roll: {poseDebug ? poseDebug.roll.toFixed(1) + '°' : '—'}</div>
+                {/* [C2-a] Enquadramento — alvo bbox 0.50/0.65; oval visual 0.50/0.58 */}
+                <div className="mt-1 border-t border-green-300/30 pt-1">
+                  c: {frameDebug ? `${frameDebug.cx.toFixed(2)},${frameDebug.cy.toFixed(2)}` : '—'}
+                </div>
+                <div>Δalvo: {frameDebug ? `${fmtSigned(frameDebug.dx)},${fmtSigned(frameDebug.dy)}` : '—'}</div>
+                <div>folga L{frameDebug ? frameDebug.l.toFixed(2) : '—'} R{frameDebug ? frameDebug.r.toFixed(2) : '—'}</div>
+                <div>folga T{frameDebug ? frameDebug.t.toFixed(2) : '—'} B{frameDebug ? frameDebug.b.toFixed(2) : '—'}</div>
+                <div className="text-green-300/60">bbox: {frameDebug ? `${frameDebug.bx},${frameDebug.by} ${frameDebug.bw}×${frameDebug.bh}` : '—'}</div>
               </div>
             )}
 
@@ -552,7 +611,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                     liveReason === 'tooSmall' ? '👤 Aproxime o rosto' :
                       liveReason === 'tilt' ? '🙂 Endireite a cabeça' :
                         (liveReason === 'turnLeft' || liveReason === 'turnRight') ? '🙂 Vire o rosto pra frente' :
-                          '👤 Centralize seu rosto'}
+                          liveReason === 'cutOff' ? '👤 Enquadre o rosto no círculo' :
+                            liveReason === 'offCenter' ? '👤 Centralize o rosto' :
+                              '👤 Centralize seu rosto'}
               </button>
             )}
 

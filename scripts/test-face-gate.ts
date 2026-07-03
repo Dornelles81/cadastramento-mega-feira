@@ -23,7 +23,7 @@ const pose = (yaw: number, roll: number, pitch = 0): Pose => ({ yaw, pitch, roll
 function bboxAt(cxFrac: number, cyFrac: number, w = 200, h = 240) {
   return { x: Math.round(cxFrac * W - w / 2), y: Math.round(cyFrac * H - h / 2), w, h }
 }
-const CENTERED = bboxAt(0.5, 0.45)           // centro no alvo, longe das bordas
+const CENTERED = bboxAt(0.5, 0.65)           // centro no alvo (C2-a: 0.50/0.65), longe das bordas
 const base = (over: Partial<CaptureInput> = {}): CaptureInput => ({
   distanceReason: 'ok', bbox: CENTERED, frameW: W, frameH: H, pose: pose(0, 0), ...over
 })
@@ -41,7 +41,7 @@ console.log('\n=== 2) PRIORIDADE (um blocker por vez): cutOff → offCenter → 
 // bbox cortado (x quase 0) + off-center + tilt + turn → cutOff
 check("cutOff vence offCenter+tilt+turn", decideCapture(base({ bbox: { x: 2, y: 240, w: 200, h: 240 }, pose: pose(0.9, 40) })) === 'cutOff')
 // off-center (dentro do frame) + tilt + turn → offCenter
-check("offCenter vence tilt+turn", decideCapture(base({ bbox: bboxAt(0.75, 0.45, 120, 140), pose: pose(0.9, 40) })) === 'offCenter')
+check("offCenter vence tilt+turn", decideCapture(base({ bbox: bboxAt(0.75, 0.65, 120, 140), pose: pose(0.9, 40) })) === 'offCenter')
 // centrado + tilt + turn → tilt (tilt antes de turn)
 check("tilt vence turn", decideCapture(base({ pose: pose(0.9, 40) })) === 'tilt')
 // centrado + só turn → turnRight (yaw>0)
@@ -50,8 +50,8 @@ check("turnLeft isolado (yaw<0)", decideCapture(base({ pose: pose(-0.9, 0) })) =
 
 console.log('\n=== 3) CADA BLOQUEIO isolado ===')
 check("cutOff (borda superior)", decideCapture(base({ bbox: { x: 300, y: 2, w: 200, h: 240 } })) === 'cutOff')
-check("offCenter (horizontal)", decideCapture(base({ bbox: bboxAt(0.78, 0.45, 120, 140) })) === 'offCenter')
-check("offCenter (vertical)", decideCapture(base({ bbox: bboxAt(0.5, 0.80, 120, 140) })) === 'offCenter')
+check("offCenter (horizontal)", decideCapture(base({ bbox: bboxAt(0.78, 0.65, 120, 140) })) === 'offCenter')
+check("offCenter (vertical)", decideCapture(base({ bbox: bboxAt(0.5, 0.40, 120, 140) })) === 'offCenter')
 check("tilt (roll alto)", decideCapture(base({ pose: pose(0, 30) })) === 'tilt')
 check("turn (yaw alto)", decideCapture(base({ pose: pose(0.7, 0) })) === 'turnRight')
 
@@ -64,15 +64,15 @@ check("yaw 0.25 vindo de 'turnRight' → MANTÉM turnRight", decideCapture(base(
 const rollBorder = 10 // entre exit(7) e enter(13)
 check("roll 10 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ pose: pose(0, rollBorder) }), 'ok') === 'ok')
 check("roll 10 vindo de 'tilt' → MANTÉM tilt", decideCapture(base({ pose: pose(0, rollBorder) }), 'tilt') === 'tilt')
-// ENQUADRAMENTO: tolX enter=0.20, exit=0.16 (hyst 0.02); usa desvio 0.19 (entre os dois)
-const offBorder = bboxAt(0.5 + 0.19, 0.45, 120, 140)
-check("desvio 0.19 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ bbox: offBorder }), 'ok') === 'ok')
-check("desvio 0.19 vindo de 'offCenter' → MANTÉM offCenter", decideCapture(base({ bbox: offBorder }), 'offCenter') === 'offCenter')
+// ENQUADRAMENTO (C2-a): tolX 0.10 → enter=0.12, exit=0.08 (hyst 0.02); usa desvio 0.10 (entre os dois)
+const offBorder = bboxAt(0.5 + 0.10, 0.65, 120, 140)
+check("desvio 0.10 vindo de 'ok' → NÃO bloqueia (ok)", decideCapture(base({ bbox: offBorder }), 'ok') === 'ok')
+check("desvio 0.10 vindo de 'offCenter' → MANTÉM offCenter", decideCapture(base({ bbox: offBorder }), 'offCenter') === 'offCenter')
 
 console.log('\n=== 5) DEGRADAÇÃO SEGURA (sem keypoints/bbox → não trava) ===')
 check("sem pose e sem bbox → ok (só distância)", decideCapture({ distanceReason: 'ok' }) === 'ok')
 check("sem pose, bbox centrado → ok", decideCapture({ distanceReason: 'ok', bbox: CENTERED, frameW: W, frameH: H }) === 'ok')
-check("sem pose, bbox off-center → ainda pega offCenter", decideCapture({ distanceReason: 'ok', bbox: bboxAt(0.78, 0.45, 120, 140), frameW: W, frameH: H }) === 'offCenter')
+check("sem pose, bbox off-center → ainda pega offCenter", decideCapture({ distanceReason: 'ok', bbox: bboxAt(0.78, 0.65, 120, 140), frameW: W, frameH: H }) === 'offCenter')
 check("sem bbox, pose ruim → ainda pega turn", decideCapture({ distanceReason: 'ok', pose: pose(0.7, 0) }) === 'turnRight')
 check("bbox sem frameW/H → pula enquadramento (ok)", decideCapture({ distanceReason: 'ok', bbox: bboxAt(0.9, 0.9) }) === 'ok')
 
