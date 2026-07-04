@@ -16,6 +16,7 @@ interface FrameDebug {
   dx: number; dy: number   // desvio do ALVO do bbox (gate.ts centerX/Y = 0.50/0.65)
   l: number; r: number; t: number; b: number // folgas às bordas (normalizadas)
   bx: number; by: number; bw: number; bh: number // bbox bruto (px)
+  fw: number; fh: number // [C3.1] dimensões do frame medido (buffer do vídeo, ≤800)
 }
 
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
@@ -31,8 +32,15 @@ const MSG_DEBOUNCE_FRAMES = 2 // [C1] frames estáveis antes de trocar o TEXTO d
 //    (0.65) → Δalvo ~0.
 const OVAL_CENTER_X = 0.50
 const OVAL_CENTER_Y = 0.58 // centro visual da cabeça = alvo bbox 0.65 − offset 0.07
-const OVAL_RADIUS_X = 0.30
-const OVAL_RADIUS_Y = 0.32 // cobre cabeça ~[0.26,0.90]; não corta queixo (folga B pequena)
+// [C3.1] O oval tem PROPORÇÃO DE ROSTO FIXA **NA TELA** (largura/altura = 0.75, "ovo
+// em pé"), independente do aspect do vídeo E do stretch do canvas. Motivo: o canvas
+// do overlay é esticado pra caixa (w-full h-full) enquanto o buffer tem as dimensões
+// do vídeo — raios em fração do buffer distorcem na tela (no celular retrato o oval
+// aparecia DEITADO, impossível de encaixar um rosto). Os raios são calculados no
+// espaço EXIBIDO e convertidos de volta pro buffer no drawOval.
+const OVAL_RADIUS_Y = 0.32 // raio vertical: fração da ALTURA EXIBIDA da caixa
+const OVAL_ASPECT = 0.75   // largura/altura do oval NA TELA (formato rosto)
+const OVAL_MAX_RX = 0.44   // clamp: raio horizontal ≤ fração da largura exibida
 
 export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -118,7 +126,19 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         : '#ef4444'
     ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.setLineDash([14, 9])
     ctx.beginPath()
-    ctx.ellipse(oc.width * OVAL_CENTER_X, oc.height * OVAL_CENTER_Y, oc.width * OVAL_RADIUS_X, oc.height * OVAL_RADIUS_Y, 0, 0, 2 * Math.PI)
+    // [C3.1] Raios no espaço EXIBIDO (proporção de rosto fixa na tela) → buffer.
+    // clientWidth/Height = tamanho CSS da caixa; oc.width/height = buffer do vídeo.
+    const dispW = oc.clientWidth || oc.width
+    const dispH = oc.clientHeight || oc.height
+    let ryDisp = OVAL_RADIUS_Y * dispH
+    let rxDisp = ryDisp * OVAL_ASPECT
+    if (rxDisp > OVAL_MAX_RX * dispW) { // caixa estreita: encolhe mantendo a proporção
+      rxDisp = OVAL_MAX_RX * dispW
+      ryDisp = rxDisp / OVAL_ASPECT
+    }
+    const rx = rxDisp * (oc.width / dispW)
+    const ry = ryDisp * (oc.height / dispH)
+    ctx.ellipse(oc.width * OVAL_CENTER_X, oc.height * OVAL_CENTER_Y, rx, ry, 0, 0, 2 * Math.PI)
     ctx.stroke()
     ctx.setLineDash([])
   }
@@ -180,7 +200,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           setFrameDebug({
             cx, cy, dx: cx - DEFAULT_FRAMING_THRESHOLDS.centerX, dy: cy - DEFAULT_FRAMING_THRESHOLDS.centerY,
             l: bb.x / W, r: (W - (bb.x + bb.w)) / W, t: bb.y / H, b: (H - (bb.y + bb.h)) / H,
-            bx: bb.x, by: bb.y, bw: bb.w, bh: bb.h
+            bx: bb.x, by: bb.y, bw: bb.w, bh: bb.h,
+            fw: W, fh: H
           })
         } else setFrameDebug(null)
       }
@@ -543,6 +564,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 <div>folga L{frameDebug ? frameDebug.l.toFixed(2) : '—'} R{frameDebug ? frameDebug.r.toFixed(2) : '—'}</div>
                 <div>folga T{frameDebug ? frameDebug.t.toFixed(2) : '—'} B{frameDebug ? frameDebug.b.toFixed(2) : '—'}</div>
                 <div className="text-green-300/60">bbox: {frameDebug ? `${frameDebug.bx},${frameDebug.by} ${frameDebug.bw}×${frameDebug.bh}` : '—'}</div>
+                {/* [C3.1] frame real do vídeo (buffer ≤800) — crava a geometria no celular */}
+                <div className="text-green-300/60">frame: {frameDebug ? `${frameDebug.fw}×${frameDebug.fh}` : '—'}</div>
               </div>
             )}
 
