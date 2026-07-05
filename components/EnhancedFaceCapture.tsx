@@ -38,7 +38,14 @@ const OVAL_CENTER_Y = 0.58 // centro visual da cabeça = alvo bbox 0.65 − offs
 // do vídeo — raios em fração do buffer distorcem na tela (no celular retrato o oval
 // aparecia DEITADO, impossível de encaixar um rosto). Os raios são calculados no
 // espaço EXIBIDO e convertidos de volta pro buffer no drawOval.
+// [C3.2] TAMANHO: dimensionar só pela altura exibida (0.32·H) saía PEQUENO DEMAIS no
+// celular — lá a caixa é BAIXA E LARGA (42svh com barra do navegador → ~250px) e o
+// rosto em distância válida (interocular ≥60) fica maior que o guia. O raio vertical
+// agora cresce pela LARGURA quando a caixa é baixa: ry = max(0.32·H, 0.28·W), com
+// clamp inferior derivado do centro ((1−OVAL_CENTER_Y)·H) pra não estourar a caixa.
+// Caixas altas (retrato estreito) e o PC ficam praticamente como estavam.
 const OVAL_RADIUS_Y = 0.32 // raio vertical: fração da ALTURA EXIBIDA da caixa
+const OVAL_RADIUS_W = 0.28 // piso do raio vertical: fração da LARGURA EXIBIDA (caixa baixa)
 const OVAL_ASPECT = 0.75   // largura/altura do oval NA TELA (formato rosto)
 const OVAL_MAX_RX = 0.44   // clamp: raio horizontal ≤ fração da largura exibida
 
@@ -130,7 +137,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     // clientWidth/Height = tamanho CSS da caixa; oc.width/height = buffer do vídeo.
     const dispW = oc.clientWidth || oc.width
     const dispH = oc.clientHeight || oc.height
-    let ryDisp = OVAL_RADIUS_Y * dispH
+    // [C3.2] base pela altura OU largura (caixa baixa/larga → cresce pela largura),
+    // limitada embaixo pelo centro (oval inteiro dentro da caixa: 0.58 + ry/H ≤ 1).
+    let ryDisp = Math.max(OVAL_RADIUS_Y * dispH, OVAL_RADIUS_W * dispW)
+    ryDisp = Math.min(ryDisp, (1 - OVAL_CENTER_Y) * dispH)
     let rxDisp = ryDisp * OVAL_ASPECT
     if (rxDisp > OVAL_MAX_RX * dispW) { // caixa estreita: encolhe mantendo a proporção
       rxDisp = OVAL_MAX_RX * dispW
