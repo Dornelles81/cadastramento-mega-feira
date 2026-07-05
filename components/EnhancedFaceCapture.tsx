@@ -17,6 +17,15 @@ interface FrameDebug {
   l: number; r: number; t: number; b: number // folgas às bordas (normalizadas)
   bx: number; by: number; bw: number; bh: number // bbox bruto (px)
   fw: number; fh: number // [C3.1] dimensões do frame medido (buffer do vídeo, ≤800)
+  // [C3.3] Métricas EXIBIDAS (mesma régua na tela) p/ calibrar o oval vs o rosto real:
+  // o vídeo aparece via object-cover (escala UNIFORME + crop), o canvas do oval via
+  // stretch — comparar exige converter os dois pro espaço exibido.
+  boxW: number; boxH: number   // caixa exibida (clientWidth/Height)
+  cover: number                // fator de escala do vídeo na caixa (object-cover)
+  dbw: number; dbh: number     // bbox EXIBIDO (bw·cover × bh·cover)
+  dbcx: number; dbcy: number   // centro do bbox EXIBIDO (px na caixa, já descontado o crop)
+  ovw: number; ovh: number     // oval EXIBIDO (diâmetros 2rx × 2ry)
+  ovcx: number; ovcy: number   // centro do oval EXIBIDO (px na caixa)
 }
 
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
@@ -48,6 +57,19 @@ const OVAL_RADIUS_Y = 0.32 // raio vertical: fração da ALTURA EXIBIDA da caixa
 const OVAL_RADIUS_W = 0.28 // piso do raio vertical: fração da LARGURA EXIBIDA (caixa baixa)
 const OVAL_ASPECT = 0.75   // largura/altura do oval NA TELA (formato rosto)
 const OVAL_MAX_RX = 0.44   // clamp: raio horizontal ≤ fração da largura exibida
+
+// [C3.3] Raios do oval NO ESPAÇO EXIBIDO — fonte única usada pelo drawOval E pela
+// instrumentação de calibração (?debugPose=1), pra medida e desenho nunca divergirem.
+function ovalDisplayRadii(dispW: number, dispH: number): { rx: number; ry: number } {
+  let ry = Math.max(OVAL_RADIUS_Y * dispH, OVAL_RADIUS_W * dispW)
+  ry = Math.min(ry, (1 - OVAL_CENTER_Y) * dispH) // oval inteiro dentro da caixa
+  let rx = ry * OVAL_ASPECT
+  if (rx > OVAL_MAX_RX * dispW) { // caixa estreita: encolhe mantendo a proporção
+    rx = OVAL_MAX_RX * dispW
+    ry = rx / OVAL_ASPECT
+  }
+  return { rx, ry }
+}
 
 export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -137,15 +159,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     // clientWidth/Height = tamanho CSS da caixa; oc.width/height = buffer do vídeo.
     const dispW = oc.clientWidth || oc.width
     const dispH = oc.clientHeight || oc.height
-    // [C3.2] base pela altura OU largura (caixa baixa/larga → cresce pela largura),
-    // limitada embaixo pelo centro (oval inteiro dentro da caixa: 0.58 + ry/H ≤ 1).
-    let ryDisp = Math.max(OVAL_RADIUS_Y * dispH, OVAL_RADIUS_W * dispW)
-    ryDisp = Math.min(ryDisp, (1 - OVAL_CENTER_Y) * dispH)
-    let rxDisp = ryDisp * OVAL_ASPECT
-    if (rxDisp > OVAL_MAX_RX * dispW) { // caixa estreita: encolhe mantendo a proporção
-      rxDisp = OVAL_MAX_RX * dispW
-      ryDisp = rxDisp / OVAL_ASPECT
-    }
+    // [C3.2/C3.3] raios no espaço exibido (helper = fonte única com a instrumentação)
+    const { rx: rxDisp, ry: ryDisp } = ovalDisplayRadii(dispW, dispH)
     const rx = rxDisp * (oc.width / dispW)
     const ry = ryDisp * (oc.height / dispH)
     ctx.ellipse(oc.width * OVAL_CENTER_X, oc.height * OVAL_CENTER_Y, rx, ry, 0, 0, 2 * Math.PI)
@@ -207,11 +222,26 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         if (m.faceCount > 0 && m.bbox) {
           const W = frame.width, H = frame.height, bb = m.bbox
           const cx = (bb.x + bb.w / 2) / W, cy = (bb.y + bb.h / 2) / H
+          // [C3.3] Conversões pro ESPAÇO EXIBIDO (mesma régua do olho):
+          //  • vídeo: object-cover → escala uniforme `cover` + crop centrado;
+          //  • oval: helper ovalDisplayRadii (o mesmo que desenha).
+          const oc = canvasRef.current
+          const boxW = oc?.clientWidth || W
+          const boxH = oc?.clientHeight || H
+          const cover = Math.max(boxW / W, boxH / H)
+          const cropX = (W - boxW / cover) / 2 // buffer px cortados de cada lado
+          const cropY = (H - boxH / cover) / 2
+          const { rx: orx, ry: ory } = ovalDisplayRadii(boxW, boxH)
           setFrameDebug({
             cx, cy, dx: cx - DEFAULT_FRAMING_THRESHOLDS.centerX, dy: cy - DEFAULT_FRAMING_THRESHOLDS.centerY,
             l: bb.x / W, r: (W - (bb.x + bb.w)) / W, t: bb.y / H, b: (H - (bb.y + bb.h)) / H,
             bx: bb.x, by: bb.y, bw: bb.w, bh: bb.h,
-            fw: W, fh: H
+            fw: W, fh: H,
+            boxW, boxH, cover,
+            dbw: bb.w * cover, dbh: bb.h * cover,
+            dbcx: (bb.x + bb.w / 2 - cropX) * cover, dbcy: (bb.y + bb.h / 2 - cropY) * cover,
+            ovw: 2 * orx, ovh: 2 * ory,
+            ovcx: OVAL_CENTER_X * boxW, ovcy: OVAL_CENTER_Y * boxH
           })
         } else setFrameDebug(null)
       }
@@ -576,6 +606,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 <div className="text-green-300/60">bbox: {frameDebug ? `${frameDebug.bx},${frameDebug.by} ${frameDebug.bw}×${frameDebug.bh}` : '—'}</div>
                 {/* [C3.1] frame real do vídeo (buffer ≤800) — crava a geometria no celular */}
                 <div className="text-green-300/60">frame: {frameDebug ? `${frameDebug.fw}×${frameDebug.fh}` : '—'}</div>
+                {/* [C3.3] MESMA RÉGUA (px exibidos): rosto vs oval — calibração do tamanho */}
+                <div className="mt-1 border-t border-green-300/30 pt-1 text-yellow-300">
+                  oval-exib: {frameDebug ? `${Math.round(frameDebug.ovw)}×${Math.round(frameDebug.ovh)} @ ${Math.round(frameDebug.ovcx)},${Math.round(frameDebug.ovcy)}` : '—'}
+                </div>
+                <div className="text-yellow-300">
+                  bbox-exib: {frameDebug ? `${Math.round(frameDebug.dbw)}×${Math.round(frameDebug.dbh)} @ ${Math.round(frameDebug.dbcx)},${Math.round(frameDebug.dbcy)}` : '—'}
+                </div>
+                <div className="text-yellow-300/70">
+                  box: {frameDebug ? `${frameDebug.boxW}×${frameDebug.boxH} cover:${frameDebug.cover.toFixed(2)}` : '—'}
+                </div>
               </div>
             )}
 
