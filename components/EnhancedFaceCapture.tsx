@@ -47,22 +47,28 @@ const OVAL_CENTER_Y = 0.58 // centro visual da cabeça = alvo bbox 0.65 − offs
 // do vídeo — raios em fração do buffer distorcem na tela (no celular retrato o oval
 // aparecia DEITADO, impossível de encaixar um rosto). Os raios são calculados no
 // espaço EXIBIDO e convertidos de volta pro buffer no drawOval.
-// [C3.2] TAMANHO: dimensionar só pela altura exibida (0.32·H) saía PEQUENO DEMAIS no
-// celular — lá a caixa é BAIXA E LARGA (42svh com barra do navegador → ~250px) e o
-// rosto em distância válida (interocular ≥60) fica maior que o guia. O raio vertical
-// agora cresce pela LARGURA quando a caixa é baixa: ry = max(0.32·H, 0.28·W), com
-// clamp inferior derivado do centro ((1−OVAL_CENTER_Y)·H) pra não estourar a caixa.
-// Caixas altas (retrato estreito) e o PC ficam praticamente como estavam.
-const OVAL_RADIUS_Y = 0.32 // raio vertical: fração da ALTURA EXIBIDA da caixa
-const OVAL_RADIUS_W = 0.28 // piso do raio vertical: fração da LARGURA EXIBIDA (caixa baixa)
+// [C3.2→C3.3] TAMANHO (histórico): 0.32·H da caixa (C3.1) e depois max com 0.28·W
+// (C3.2) saíam PEQUENOS no celular — a caixa é baixa/larga (42svh) e o cover corta
+// 45% do vídeo retrato, então frações da CAIXA não acompanham a escala do rosto.
+// [C3.3-fix] O raio é fração da ALTURA DO VÍDEO EXIBIDO (bufH·cover), NÃO da caixa.
+// Medição no celular (600×800 em caixa 328×253, cover .55) provou: o rosto escala
+// pela transformação do VÍDEO (object-cover), então frações da caixa deixam o oval
+// pequeno quando o cover corta muito (45% no celular). Pela régua do vídeo, o 0.32
+// calibrado do PC vale em qualquer aparelho (no PC vídeo exibido ≈ caixa; −3%).
+// O clamp inferior saiu: o oval pode sangrar embaixo (o queixo do rosto real também
+// sangra na caixa baixa); o topo fica dentro (ry ≤ centro·boxH).
+const OVAL_RADIUS_Y = 0.32 // raio vertical: fração da altura do VÍDEO exibido
 const OVAL_ASPECT = 0.75   // largura/altura do oval NA TELA (formato rosto)
 const OVAL_MAX_RX = 0.44   // clamp: raio horizontal ≤ fração da largura exibida
 
 // [C3.3] Raios do oval NO ESPAÇO EXIBIDO — fonte única usada pelo drawOval E pela
 // instrumentação de calibração (?debugPose=1), pra medida e desenho nunca divergirem.
-function ovalDisplayRadii(dispW: number, dispH: number): { rx: number; ry: number } {
-  let ry = Math.max(OVAL_RADIUS_Y * dispH, OVAL_RADIUS_W * dispW)
-  ry = Math.min(ry, (1 - OVAL_CENTER_Y) * dispH) // oval inteiro dentro da caixa
+// bufW/bufH = dimensões do vídeo (buffer); dispW/dispH = caixa exibida (CSS).
+function ovalDisplayRadii(dispW: number, dispH: number, bufW: number, bufH: number): { rx: number; ry: number } {
+  const cover = bufW > 0 && bufH > 0 ? Math.max(dispW / bufW, dispH / bufH) : 1
+  const vidH = bufH > 0 ? bufH * cover : dispH // altura do vídeo INTEIRO na escala exibida
+  let ry = OVAL_RADIUS_Y * vidH
+  ry = Math.min(ry, OVAL_CENTER_Y * dispH) // topo do oval dentro da caixa
   let rx = ry * OVAL_ASPECT
   if (rx > OVAL_MAX_RX * dispW) { // caixa estreita: encolhe mantendo a proporção
     rx = OVAL_MAX_RX * dispW
@@ -160,7 +166,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     const dispW = oc.clientWidth || oc.width
     const dispH = oc.clientHeight || oc.height
     // [C3.2/C3.3] raios no espaço exibido (helper = fonte única com a instrumentação)
-    const { rx: rxDisp, ry: ryDisp } = ovalDisplayRadii(dispW, dispH)
+    const { rx: rxDisp, ry: ryDisp } = ovalDisplayRadii(dispW, dispH, oc.width, oc.height)
     const rx = rxDisp * (oc.width / dispW)
     const ry = ryDisp * (oc.height / dispH)
     ctx.ellipse(oc.width * OVAL_CENTER_X, oc.height * OVAL_CENTER_Y, rx, ry, 0, 0, 2 * Math.PI)
@@ -231,7 +237,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           const cover = Math.max(boxW / W, boxH / H)
           const cropX = (W - boxW / cover) / 2 // buffer px cortados de cada lado
           const cropY = (H - boxH / cover) / 2
-          const { rx: orx, ry: ory } = ovalDisplayRadii(boxW, boxH)
+          const { rx: orx, ry: ory } = ovalDisplayRadii(boxW, boxH, W, H)
           setFrameDebug({
             cx, cy, dx: cx - DEFAULT_FRAMING_THRESHOLDS.centerX, dy: cy - DEFAULT_FRAMING_THRESHOLDS.centerY,
             l: bb.x / W, r: (W - (bb.x + bb.w)) / W, t: bb.y / H, b: (H - (bb.y + bb.h)) / H,
