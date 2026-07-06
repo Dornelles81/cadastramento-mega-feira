@@ -292,6 +292,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   // Inicia a câmera (com detecção de HTTP → fallback p/ upload nativo)
   const startCamera = async () => {
     try {
+      // [CAM-2] Idempotente: se já há stream ativo, PARA antes de re-adquirir — nunca
+      // empilhar getUserMedia (reabrir/retry/corrida → preto em aparelho de câmera única).
+      if (streamRef.current) stopCamera()
       setError(null)
       historyRef.current = []
       gateStateRef.current = 'noFace'
@@ -552,7 +555,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   useEffect(() => {
     startCamera()
-    return () => { stopCamera() }
+    // [CAM-1] Libera a câmera no reload/fechar/navegação. `pagehide` (não `beforeunload`,
+    // não-confiável no mobile) cobre reload/close/bfcache — era o gap que deixava o stream
+    // preso e a próxima abertura vinha PRETA (agravado pelo webview do WhatsApp). stopCamera
+    // é idempotente (guarda em streamRef + clearInterval seguro), então disparo concorrente
+    // com um startCamera legítimo não causa double-stop/erro.
+    window.addEventListener('pagehide', stopCamera)
+    return () => {
+      window.removeEventListener('pagehide', stopCamera)
+      stopCamera()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopCamera])
 
