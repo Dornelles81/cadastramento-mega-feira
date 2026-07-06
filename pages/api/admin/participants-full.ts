@@ -34,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ========================================================================
     // EVENT FILTER: Support optional eventCode or eventId query parameter
     // ========================================================================
-    const { eventCode, eventId } = req.query
+    const { eventCode, eventId, excludeRemoved } = req.query
 
     let whereClause: any = {}
 
@@ -49,6 +49,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       // No filter - return all (for backward compatibility)
       console.log('⚠️  No event filter - returning all participants')
+    }
+
+    // Opt-in: oculta excluídos-pelo-dono (status='removed') e purgados LGPD
+    // (isDeleted=true). SÓ quando ?excludeRemoved=1 — default INALTERADO, para não
+    // afetar consumidores que não passam o param (ex.: telas de HikCentral).
+    // Mantém pending/approved/rejected visíveis (approvalStatus é independente).
+    if (excludeRemoved === '1' || excludeRemoved === 'true') {
+      whereClause.status = 'active'
+      whereClause.isDeleted = false
     }
 
     // ========================================================================

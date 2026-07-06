@@ -284,8 +284,10 @@ export default function EventAdminPage() {
         queryParam
       })
 
-      // Use admin API with event filter - CRITICAL: Only load this event's participants
-      const response = await fetch(`/api/admin/participants-full?${queryParam}`)
+      // Use admin API with event filter - CRITICAL: Only load this event's participants.
+      // excludeRemoved=1: oculta excluídos-pelo-dono (status='removed') e purgados LGPD
+      // (isDeleted=true) — server-side, só nesta tela (HikCentral não passa o param).
+      const response = await fetch(`/api/admin/participants-full?${queryParam}&excludeRemoved=1`)
       if (response.ok) {
         const data = await response.json()
         let participants = data.participants || []
