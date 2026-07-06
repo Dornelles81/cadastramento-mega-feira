@@ -77,6 +77,29 @@ function ovalDisplayRadii(dispW: number, dispH: number, bufW: number, bufH: numb
   return { rx, ry }
 }
 
+// [CAM-3] Espera o vídeo ficar PRONTO (loadedmetadata + videoWidth>0) com timeout.
+// Resolve UMA vez (settled) — 'loadedmetadata' e o timeout competem, o 1º vence e o
+// outro vira no-op; sempre limpa listener+timer no settle (sem órfãos). `forceFail`
+// (hook de teste ?forceBlack) ignora a prontidão e deixa só o timeout vencer → simula
+// vídeo preto sem câmera preta real. Função PURA (sem estado do componente).
+function waitForVideoReady(video: HTMLVideoElement, timeoutMs: number, forceFail: boolean): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const finish = (ready: boolean) => {
+      if (settled) return
+      settled = true
+      video.removeEventListener('loadedmetadata', onMeta)
+      if (timer !== undefined) clearTimeout(timer)
+      resolve(ready)
+    }
+    function onMeta() { if (video.videoWidth > 0) finish(true) }
+    if (!forceFail && video.videoWidth > 0) { finish(true); return }
+    if (!forceFail) video.addEventListener('loadedmetadata', onMeta)
+    timer = setTimeout(() => finish(false), timeoutMs)
+  })
+}
+
 export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null) // overlay (oval)
@@ -117,12 +140,27 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const msgPendingRef = useRef<CaptureReason>('noFace')
   const msgCountRef = useRef(0)
 
+  // [CAM-3] Guardas de concorrência (#5) + recuperação de vídeo preto.
+  const mountedRef = useRef(true)               // não setState após unmount
+  const startTokenRef = useRef(0)               // só o ciclo de startCamera MAIS RECENTE vence
+  const forceBlackRef = useRef<'off' | 'always' | 'once'>('off') // hook de teste ?forceBlack
+  const [cameraFailed, setCameraFailed] = useState(false) // erro terminal → botão "Tentar novamente"
+
   useEffect(() => {
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
     const on = params?.get('debugPose') === '1'
     debugPoseRef.current = on
     setShowPoseDebug(on)
     poseGateRef.current = params?.get('poseGate') === '1'
+    // [CAM-3] ?forceBlack=1|true → sempre preto; =once → só a 1ª tentativa (testa retry ok)
+    const fb = params?.get('forceBlack')
+    forceBlackRef.current = (fb === '1' || fb === 'true') ? 'always' : fb === 'once' ? 'once' : 'off'
+  }, [])
+
+  // [CAM-3/#5] Marca desmontagem para as guardas de startCamera não tocarem state morto.
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
   }, [])
 
   // Desenha o frame atual do vídeo redimensionado para ≤800px (a MESMA imagem
@@ -289,13 +327,18 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     detectionIntervalRef.current = setInterval(runDetection, DETECT_MS)
   }, [runDetection])
 
-  // Inicia a câmera (com detecção de HTTP → fallback p/ upload nativo)
-  const startCamera = async () => {
+  // Inicia a câmera. [CAM-2] idempotente; [CAM-3] espera prontidão + recuperação de vídeo
+  // preto (retry 1× → erro + fallback upload); [#5] guardas mountedRef/token após cada await.
+  const startCamera = async (attempt = 0) => {
+    const myToken = ++startTokenRef.current
+    // guarda pós-await: seguir só se ainda montado E este é o ciclo mais recente
+    const alive = () => mountedRef.current && startTokenRef.current === myToken
     try {
       // [CAM-2] Idempotente: se já há stream ativo, PARA antes de re-adquirir — nunca
       // empilhar getUserMedia (reabrir/retry/corrida → preto em aparelho de câmera única).
       if (streamRef.current) stopCamera()
       setError(null)
+      setCameraFailed(false)
       historyRef.current = []
       gateStateRef.current = 'noFace'
       setGateState('noFace')
@@ -323,14 +366,42 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         audio: false
       })
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
+      // [#5] Pós-await: se desmontou ou um ciclo mais novo assumiu, solta ESTE stream e
+      // sai SEM tocar state (evita stream órfão e setState pós-unmount).
+      const video = videoRef.current
+      if (!alive() || !video) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
+      video.srcObject = stream
+      streamRef.current = stream
+
+      // [CAM-3] Espera 'loadedmetadata' + videoWidth>0 (timeout 3s). forceBlack simula
+      // preto: 'always' sempre; 'once' só na 1ª tentativa (testa o recupera-no-retry).
+      const forceFail = forceBlackRef.current === 'always' ||
+        (forceBlackRef.current === 'once' && attempt === 0)
+      const ready = await waitForVideoReady(video, 3000, forceFail)
+
+      if (!alive()) { stopCamera(); return } // [#5] guarda pós-await
+
+      if (ready) {
         setIsStreaming(true)
         startDetectionLoop()
+        return
       }
+
+      // Vídeo PRETO: para e re-adquire UMA vez (contador na PILHA de chamada → sem loop).
+      stopCamera()
+      if (attempt < 1) return startCamera(attempt + 1)
+
+      // Falhou mesmo após o retry → erro terminal + fallback pro upload (reusa o C3).
+      setError('❌ Não foi possível iniciar a câmera.\n\n' +
+        'Toque em "Tentar novamente" — ou abra este link no navegador (Chrome/Safari), não no WhatsApp.')
+      setShowUploadOption(true)
+      setCameraFailed(true)
     } catch (err: any) {
       console.error('Camera error:', err)
+      if (!alive()) return
       setError('❌ Erro ao acessar câmera.\n\nUse o upload de foto abaixo.')
       setShowUploadOption(true)
     }
@@ -731,6 +802,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                           liveReason === 'cutOff' ? '👤 Enquadre o rosto no círculo' :
                             liveReason === 'offCenter' ? '👤 Centralize o rosto' :
                               '👤 Centralize seu rosto'}
+              </button>
+            )}
+
+            {/* [CAM-3] Erro terminal de câmera: reinicia o ciclo limpo (startCamera(0)) */}
+            {cameraFailed && (
+              <button
+                onClick={() => startCamera(0)}
+                className="w-full py-4 bg-azul-medio text-white rounded-xl font-semibold hover:bg-azul-medio-dark transition-all duration-200"
+              >
+                🔄 Tentar novamente
               </button>
             )}
 
