@@ -16,6 +16,7 @@ interface FrameDebug {
   dx: number; dy: number   // desvio do ALVO do bbox (gate.ts centerX/Y = 0.50/0.65)
   l: number; r: number; t: number; b: number // folgas às bordas (normalizadas)
   bx: number; by: number; bw: number; bh: number // bbox bruto (px)
+  io: number // [A1] interocular (px no buffer) — sinal do limite de distância (calibrar teto)
   fw: number; fh: number // [C3.1] dimensões do frame medido (buffer do vídeo, ≤800)
   // [C3.3] Métricas EXIBIDAS (mesma régua na tela) p/ calibrar o oval vs o rosto real:
   // o vídeo aparece via object-cover (escala UNIFORME + crop), o canvas do oval via
@@ -280,6 +281,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             cx, cy, dx: cx - DEFAULT_FRAMING_THRESHOLDS.centerX, dy: cy - DEFAULT_FRAMING_THRESHOLDS.centerY,
             l: bb.x / W, r: (W - (bb.x + bb.w)) / W, t: bb.y / H, b: (H - (bb.y + bb.h)) / H,
             bx: bb.x, by: bb.y, bw: bb.w, bh: bb.h,
+            io: m.interocularPx,
             fw: W, fh: H,
             boxW, boxH, cover,
             dbw: bb.w * cover, dbh: bb.h * cover,
@@ -685,6 +687,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 <div>yaw: {poseDebug ? poseDebug.yaw.toFixed(3) : '—'}</div>
                 <div>pitch: {poseDebug ? poseDebug.pitch.toFixed(3) : '—'}</div>
                 <div>roll: {poseDebug ? poseDebug.roll.toFixed(1) + '°' : '—'}</div>
+                {/* [A1] interocular (px) — sinal do limite de distância; calibrar o TETO
+                    afastando devagar até o número aparecer (borda de falha do detector) */}
+                <div className="text-cyan-300">io: {frameDebug ? frameDebug.io + 'px' : '—'}</div>
                 {/* [C2-a] Enquadramento — alvo bbox 0.50/0.65; oval visual 0.50/0.58 */}
                 <div className="mt-1 border-t border-green-300/30 pt-1">
                   c: {frameDebug ? `${frameDebug.cx.toFixed(2)},${frameDebug.cy.toFixed(2)}` : '—'}
