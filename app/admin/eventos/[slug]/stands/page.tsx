@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use, useRef } from 'react';
+import { useState, useEffect, use, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
@@ -125,6 +125,11 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   const [filter, setFilter] = useState<OccupancyFilter>('all');
   const [expandedStandId, setExpandedStandId] = useState<string | null>(null);
 
+  // Filtros da tabela principal (client-side, só visual — não afeta export/stats/import)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pavilhaoFilter, setPavilhaoFilter] = useState('');            // '' = todos
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'full' | 'no-reg'>('all');
+
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -165,6 +170,45 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
     } finally {
       setLoading(false);
     }
+  };
+
+  // Pavilhão/setor = prefixo do location antes do " - " (texto livre com convenção forte).
+  const standPavilhao = (loc?: string) => (loc || '').trim().split(/\s*[-–]\s*/)[0].trim();
+
+  // Dropdown de pavilhões: valores distintos derivados da lista, com contagem, ordenados (pt-BR).
+  const pavilhoes = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of stands) {
+      const pav = standPavilhao(s.location);
+      if (pav) counts.set(pav, (counts.get(pav) || 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+  }, [stands]);
+
+  // Filtros combináveis (AND). Status usa os MESMOS campos dos cards do topo (stands.ts:192-195):
+  //  active = isActive · full = isFull (currentCount>=max) · no-reg = currentCount===0.
+  const filteredStands = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return stands.filter((s) => {
+      const matchSearch =
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        (s.location || '').toLowerCase().includes(q);
+      const matchPavilhao = !pavilhaoFilter || standPavilhao(s.location) === pavilhaoFilter;
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && s.isActive) ||
+        (statusFilter === 'full' && s.isFull) ||
+        (statusFilter === 'no-reg' && (s.currentCount ?? 0) === 0);
+      return matchSearch && matchPavilhao && matchStatus;
+    });
+  }, [stands, searchQuery, pavilhaoFilter, statusFilter]);
+
+  const filtersActive = searchQuery.trim() !== '' || pavilhaoFilter !== '' || statusFilter !== 'all';
+  const clearFilters = () => {
+    setSearchQuery('');
+    setPavilhaoFilter('');
+    setStatusFilter('all');
   };
 
   const loadOccupancyReport = async () => {
@@ -1066,6 +1110,56 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-6">
                 <h2 className="text-xl font-bold mb-4">Lista de Stands</h2>
+
+                {/* Filtros da tabela — client-side, combináveis (AND). Só visual: não afetam
+                    export/stats/import, que seguem na lista completa `stands`. */}
+                {stands.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    <div className="relative flex-1 min-w-[220px]">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Buscar por nome ou local..."
+                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <select
+                      value={pavilhaoFilter}
+                      onChange={(e) => setPavilhaoFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Local: todos</option>
+                      {pavilhoes.map(([pav, count]) => (
+                        <option key={pav} value={pav}>{pav} ({count})</option>
+                      ))}
+                    </select>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="all">Status: todos</option>
+                      <option value="active">Ativo</option>
+                      <option value="full">Cheio</option>
+                      <option value="no-reg">Sem cadastro</option>
+                    </select>
+                    {filtersActive && (
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 underline"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                    <span className="text-sm text-gray-500 ml-auto whitespace-nowrap">
+                      Mostrando <strong>{filteredStands.length}</strong> de {stands.length}
+                    </span>
+                  </div>
+                )}
+
                 {loading && stands.length === 0 ? (
                   <div className="text-center py-8"><p className="text-gray-500">Carregando...</p></div>
                 ) : stands.length === 0 ? (
@@ -1090,7 +1184,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {stands.map(stand => {
+                        {filteredStands.map(stand => {
                           const occ = getOccupancyStatus(stand);
                           return (
                             <tr key={stand.id} className="hover:bg-gray-50">
@@ -1153,6 +1247,14 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                         })}
                       </tbody>
                     </table>
+                    {filteredStands.length === 0 && (
+                      <div className="text-center py-10 text-gray-500 text-sm">
+                        Nenhum stand corresponde aos filtros.{' '}
+                        <button type="button" onClick={clearFilters} className="text-blue-600 hover:text-blue-800 underline">
+                          Limpar filtros
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
