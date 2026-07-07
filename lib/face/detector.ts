@@ -44,6 +44,39 @@ let _pending: ((m: FaceMeasurement) => void) | null = null
 let _lastW = 0
 let _lastH = 0
 
+// [robustez] Recuperação de detecção-lixo. Em alguns Androids o MediaPipe passa a emitir
+// coords FORA de 0–1 após ~1s (bbox/landmarks gigantes/negativos). Sem validar, isso é
+// multiplicado por _lastW e estoura o gate (io gigante → "Afaste" falso). Validamos a saída;
+// se o lixo persistir, re-inicializamos o detector (recria a instância → volta o output normal).
+let _lastGarbage = false        // o último frame teve detecção REJEITADA por coords insanas
+let _garbageStreak = 0          // frames-lixo consecutivos
+let _reinitCount = 0            // re-inits na "sessão ruim" atual (evita loop de re-init)
+let _lastReinitAt = 0           // timestamp do último re-init (cooldown)
+let _reinitInFlight = false     // trava: nunca dois re-inits simultâneos (upload + loop, etc.)
+let _exhausted = false          // esgotou os re-inits e o lixo persiste → componente cai no upload
+const GARBAGE_REINIT_STREAK = 10 // ~2.5s a 250ms/frame de lixo seguido → dispara o re-init
+const REINIT_COOLDOWN_MS = 5000  // no máx. 1 re-init a cada 5s
+const MAX_REINITS = 3            // teto por sessão ruim (além disso, fica no fallback de upload)
+
+// Coord normalizada sã: 0–1 com folga p/ rosto na borda. Fora disso = lixo do MediaPipe.
+function inNormRange(v: number): boolean {
+  return Number.isFinite(v) && v >= -0.2 && v <= 1.2
+}
+// Rejeita detecção com bbox/landmarks fora da faixa normalizada (o sintoma do bug do Android).
+function isSaneDetection(d: any): boolean {
+  const b = d?.boundingBox
+  if (!b) return false
+  if (!inNormRange(b.xCenter) || !inNormRange(b.yCenter)) return false
+  if (!(b.width > 0 && b.width <= 1.2) || !(b.height > 0 && b.height <= 1.2)) return false
+  const k = d.landmarks
+  if (!k || k.length < 2) return false
+  // valida olhos (0,1) e nariz (2), se houver — os pontos que alimentam io/pose
+  for (let i = 0; i < Math.min(k.length, 3); i++) {
+    if (!inNormRange(k[i].x) || !inNormRange(k[i].y)) return false
+  }
+  return true
+}
+
 async function getDetector(): Promise<FaceDetection> {
   if (_detector) return _detector
   // import dinâmico: o pacote referencia globals de browser; não pode rodar no SSR
@@ -54,16 +87,24 @@ async function getDetector(): Promise<FaceDetection> {
     const resolve = _pending
     _pending = null
     if (!resolve) return
+    _lastGarbage = false
     const dets = res.detections || []
-    if (!dets.length) { resolve({ faceCount: 0, interocularPx: 0 }); return }
+    // guarda de dimensão: sem rosto OU dimensões inválidas → noFace (não calcula nada)
+    if (!dets.length || !(_lastW > 0) || !(_lastH > 0)) { resolve({ faceCount: 0, interocularPx: 0 }); return }
     // maior rosto do quadro
     const d = dets.reduce((a, b) =>
       a.boundingBox.width * a.boundingBox.height >= b.boundingBox.width * b.boundingBox.height ? a : b)
+    // [robustez] REJEITA detecção-lixo: se as coords não são normalizadas (0–1), o MediaPipe
+    // devolveu lixo (o bug do Android após ~1s) → trata como SEM ROSTO, em vez de multiplicar o
+    // lixo por _lastW e estourar o gate (io gigante → "Afaste" falso).
+    if (!isSaneDetection(d)) { _lastGarbage = true; resolve({ faceCount: 0, interocularPx: 0 }); return }
     const k = d.landmarks
     const rEye = k[0], lEye = k[1]
     const dx = (rEye.x - lEye.x) * _lastW
     const dy = (rEye.y - lEye.y) * _lastH
     const interocularPx = Math.round(Math.sqrt(dx * dx + dy * dy))
+    // sanidade final: a interocular não pode exceder a largura do frame
+    if (interocularPx > _lastW) { _lastGarbage = true; resolve({ faceCount: 0, interocularPx: 0 }); return }
     const bb = d.boundingBox
     // [Fase A] keypoints em pixels (aditivo — NÃO altera a interocular acima).
     const keypoints = (k as any[]).map((p) => ({ x: p.x * _lastW, y: p.y * _lastH }))
@@ -77,6 +118,18 @@ async function getDetector(): Promise<FaceDetection> {
   await detector.initialize()
   _detector = detector
   return detector
+}
+
+// [robustez] Recria o detector do zero (dispose + null → o próximo getDetector recria). Recupera
+// o output normalizado quando o MediaPipe flipa pra lixo de forma PERSISTENTE. Cooldown/teto
+// controlados no chamador (detectFace) pra não entrar em loop de re-init.
+async function reinitDetector(): Promise<void> {
+  const old = _detector
+  _detector = null
+  _pending = null
+  _lastReinitAt = Date.now()
+  _reinitCount++
+  try { await old?.close() } catch { /* ignora falha do dispose */ }
 }
 
 // Dimensões intrínsecas do elemento (a régua da interocular). MediaPipe devolve
@@ -118,7 +171,48 @@ export async function detectFace(
 ): Promise<FaceMeasurement> {
   const p = _chain.then(() => doDetect(image), () => doDetect(image))
   _chain = p.then(() => undefined, () => undefined)
-  return p
+  const m = await p
+  // [robustez] Conta lixo consecutivo; se persistir (e dentro do cooldown/teto), re-inicializa o
+  // detector pra recuperar. Serializado: detectFace só re-corre após este await (o loop da câmera
+  // é guardado por detectingRef), então o re-init nunca colide com um send em andamento.
+  if (_lastGarbage) {
+    _garbageStreak++
+    const streakHit = _garbageStreak >= GARBAGE_REINIT_STREAK
+    if (
+      streakHit &&
+      !_reinitInFlight &&
+      _reinitCount < MAX_REINITS &&
+      Date.now() - _lastReinitAt >= REINIT_COOLDOWN_MS
+    ) {
+      _reinitInFlight = true
+      try { await reinitDetector() } finally { _reinitInFlight = false }
+      _garbageStreak = 0
+    } else if (streakHit && _reinitCount >= MAX_REINITS) {
+      // já usou os re-inits e o lixo persiste → sinaliza o componente p/ cair no upload (A)
+      _exhausted = true
+    }
+  } else {
+    _garbageStreak = 0
+    _reinitCount = 0 // sequência boa → zera o teto (permite recuperar de episódios futuros)
+    _exhausted = false // recuperou → some o fallback
+  }
+  return m
+}
+
+// [A] Sinal p/ o componente: os re-inits esgotaram e o detector segue devolvendo lixo → cair no
+// fallback de upload (paralelo ao CAM-3). Só liga DEPOIS dos MAX_REINITS falharem; se o re-init
+// recuperar (caso comum), nunca liga. Em aparelho estável NUNCA liga (nenhum frame vira lixo).
+export function isDetectorExhausted(): boolean {
+  return _exhausted
+}
+
+// [A] Zera o estado de recuperação (lixo/re-init/esgotamento). Chamado ao (re)iniciar a câmera
+// pra dar uma chance limpa (ex.: "Tentar novamente" após o fallback).
+export function resetDetectorRecovery(): void {
+  _lastGarbage = false
+  _garbageStreak = 0
+  _reinitCount = 0
+  _exhausted = false
 }
 
 /** Aplica o gate espelhando o terminal: sem rosto / rosto pequeno / ok. */

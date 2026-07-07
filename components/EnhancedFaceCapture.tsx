@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback, memo, type RefObject } from 'react'
-import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, type FaceReason } from '../lib/face/detector'
+import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, isDetectorExhausted, resetDetectorRecovery, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
 import { decideCapture, DEFAULT_FRAMING_THRESHOLDS, type CaptureReason } from '../lib/face/gate'
 
@@ -303,6 +303,15 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       const frame = buildFrameCanvas()
       if (!frame) return
       const m = await mpDetectFace(frame)
+      // [A] Detector esgotou os re-inits e segue devolvendo lixo → fallback de upload (paralelo
+      // ao CAM-3). Só entra DEPOIS dos MAX_REINITS falharem; se o re-init recuperar, nunca entra.
+      if (isDetectorExhausted() && mountedRef.current) {
+        stopCamera() // para o stream + o loop (clearInterval)
+        setError('❌ Não foi possível usar a câmera.\n\nToque abaixo para enviar uma foto.')
+        setShowUploadOption(true)
+        setCameraFailed(true)
+        return
+      }
       // [C1] Pose calculada a CADA frame (barato) — alimenta o overlay de debug E
       // o gate combinado (quando ?poseGate=1). Sem rosto/keypoints → null.
       const pose = m.faceCount > 0 && m.keypoints ? computePose(m.keypoints) : null
@@ -400,6 +409,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       setError(null)
       setCameraFailed(false)
       historyRef.current = []
+      resetDetectorRecovery() // [A] chance limpa de detecção (zera lixo/re-init/esgotamento)
       gateStateRef.current = 'noFace'
       setGateState('noFace')
 
