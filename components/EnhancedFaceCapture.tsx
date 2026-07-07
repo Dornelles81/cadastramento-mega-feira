@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, memo, type RefObject } from 'react'
 import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
 import { decideCapture, DEFAULT_FRAMING_THRESHOLDS, type CaptureReason } from '../lib/face/gate'
@@ -28,6 +28,53 @@ interface FrameDebug {
   ovw: number; ovh: number     // oval EXIBIDO (diâmetros 2rx × 2ry)
   ovcx: number; ovcy: number   // centro do oval EXIBIDO (px na caixa)
 }
+
+// [B] Monta o HTML do overlay de debug (mesmos dados/cores de antes) para escrita IMPERATIVA
+// via innerHTML — sem passar por state/re-render do React. Strings estáticas (sem input do
+// usuário) → innerHTML seguro. yaw/pitch/roll vêm da pose; o resto do frame (fd).
+function buildDebugHTML(pose: Pose | null, fd: FrameDebug | null): string {
+  const s = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
+  const yaw = pose ? pose.yaw.toFixed(3) : '—'
+  const pitch = pose ? pose.pitch.toFixed(3) : '—'
+  const roll = pose ? pose.roll.toFixed(1) + '°' : '—'
+  const io = fd ? fd.io + 'px' : '—'
+  const c = fd ? `${fd.cx.toFixed(2)},${fd.cy.toFixed(2)}` : '—'
+  const dalvo = fd ? `${s(fd.dx)},${s(fd.dy)}` : '—'
+  const folgaLR = fd ? `folga L${fd.l.toFixed(2)} R${fd.r.toFixed(2)}` : 'folga L— R—'
+  const folgaTB = fd ? `folga T${fd.t.toFixed(2)} B${fd.b.toFixed(2)}` : 'folga T— B—'
+  const bbox = fd ? `${fd.bx},${fd.by} ${fd.bw}×${fd.bh}` : '—'
+  const frame = fd ? `${fd.fw}×${fd.fh}` : '—'
+  const ovalExib = fd ? `${Math.round(fd.ovw)}×${Math.round(fd.ovh)} @ ${Math.round(fd.ovcx)},${Math.round(fd.ovcy)}` : '—'
+  const bboxExib = fd ? `${Math.round(fd.dbw)}×${Math.round(fd.dbh)} @ ${Math.round(fd.dbcx)},${Math.round(fd.dbcy)}` : '—'
+  const box = fd ? `${fd.boxW}×${fd.boxH} cover:${fd.cover.toFixed(2)}` : '—'
+  return (
+    `<div>yaw: ${yaw}</div>` +
+    `<div>pitch: ${pitch}</div>` +
+    `<div>roll: ${roll}</div>` +
+    `<div class="text-cyan-300">io: ${io}</div>` +
+    `<div class="mt-1 border-t border-green-300/30 pt-1">c: ${c}</div>` +
+    `<div>Δalvo: ${dalvo}</div>` +
+    `<div>${folgaLR}</div>` +
+    `<div>${folgaTB}</div>` +
+    `<div class="text-green-300/60">bbox: ${bbox}</div>` +
+    `<div class="text-green-300/60">frame: ${frame}</div>` +
+    `<div class="mt-1 border-t border-green-300/30 pt-1 text-yellow-300">oval-exib: ${ovalExib}</div>` +
+    `<div class="text-yellow-300">bbox-exib: ${bboxExib}</div>` +
+    `<div class="text-yellow-300/70">box: ${box}</div>`
+  )
+}
+
+// [B] Container do overlay montado UMA vez (memo, prop estável → nunca re-renderiza). O conteúdo
+// é escrito imperativamente pelo loop de detecção (innerHTML no ref) → zero re-render por frame,
+// não starva a câmera em aparelhos fracos. Sem ?debugPose=1 nem é montado.
+const DebugOverlaySink = memo(function DebugOverlaySink({ innerRef }: { innerRef: RefObject<HTMLDivElement> }) {
+  return (
+    <div
+      ref={innerRef}
+      className="absolute top-16 left-2 bg-black/70 text-green-300 text-[11px] font-mono px-2 py-1 rounded leading-tight z-10"
+    />
+  )
+})
 
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
 const MSG_DEBOUNCE_FRAMES = 2 // [C1] frames estáveis antes de trocar o TEXTO da mensagem
@@ -124,8 +171,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   // não afeta o gate nem a habilitação do botão. Sem o flag, o fluxo é idêntico.
   const debugPoseRef = useRef(false)
   const [showPoseDebug, setShowPoseDebug] = useState(false)
-  const [poseDebug, setPoseDebug] = useState<Pose | null>(null)
-  const [frameDebug, setFrameDebug] = useState<FrameDebug | null>(null) // [C2-a] enquadramento (só overlay)
+  const [poseDebug, setPoseDebug] = useState<Pose | null>(null) // usado só no overlay da foto enviada
+  const liveDebugRef = useRef<HTMLDivElement>(null)             // [B] overlay ao vivo: escrita imperativa (innerHTML)
   // [Fase B] Modo "só pose" do upload debug: exibe a pose da foto e PARA (não grava,
   // não avança). Distingue do preview de uma captura real (que processa e navega).
   const [poseOnly, setPoseOnly] = useState(false)
@@ -234,8 +281,6 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     }
   }
 
-  // [C2-a] Formata número com sinal (+0.03 / −0.12) p/ o desvio do alvo no overlay.
-  const fmtSigned = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
 
   // Texto do indicador por reason (tabela da Fase C). turn* → frase NEUTRA (achado
   // MIRROR: não arriscar direção).
@@ -261,11 +306,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       // [C1] Pose calculada a CADA frame (barato) — alimenta o overlay de debug E
       // o gate combinado (quando ?poseGate=1). Sem rosto/keypoints → null.
       const pose = m.faceCount > 0 && m.keypoints ? computePose(m.keypoints) : null
-      if (debugPoseRef.current) {
-        setPoseDebug(pose)
-        // [C2-a] Overlay de enquadramento (SÓ display — o gate usa o mesmo bbox via
-        // decideCapture abaixo, C2-b). Δalvo = desvio do ALVO DO BBOX (gate.ts
-        // DEFAULT_FRAMING_THRESHOLDS = 0.50/0.65 — fonte única). O oval visual fica mais alto.
+      // [B] Debug IMPERATIVO: calcula o enquadramento e escreve direto no DOM (innerHTML no ref),
+      // SEM nenhum setState por frame → zero re-render → não starva a câmera em aparelhos fracos.
+      // Mesmos dados/cores de antes (buildDebugHTML). Δalvo = desvio do ALVO DO BBOX (gate.ts
+      // DEFAULT_FRAMING_THRESHOLDS = 0.50/0.65 — fonte única).
+      if (debugPoseRef.current && liveDebugRef.current) {
+        let fd: FrameDebug | null = null
         if (m.faceCount > 0 && m.bbox) {
           const W = frame.width, H = frame.height, bb = m.bbox
           const cx = (bb.x + bb.w / 2) / W, cy = (bb.y + bb.h / 2) / H
@@ -279,7 +325,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           const cropX = (W - boxW / cover) / 2 // buffer px cortados de cada lado
           const cropY = (H - boxH / cover) / 2
           const { rx: orx, ry: ory } = ovalDisplayRadii(boxW, boxH, W, H)
-          setFrameDebug({
+          fd = {
             cx, cy, dx: cx - DEFAULT_FRAMING_THRESHOLDS.centerX, dy: cy - DEFAULT_FRAMING_THRESHOLDS.centerY,
             l: bb.x / W, r: (W - (bb.x + bb.w)) / W, t: bb.y / H, b: (H - (bb.y + bb.h)) / H,
             bx: bb.x, by: bb.y, bw: bb.w, bh: bb.h,
@@ -290,8 +336,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             dbcx: (bb.x + bb.w / 2 - cropX) * cover, dbcy: (bb.y + bb.h / 2 - cropY) * cover,
             ovw: 2 * orx, ovh: 2 * ory,
             ovcx: OVAL_CENTER_X * boxW, ovcy: OVAL_CENTER_Y * boxH
-          })
-        } else setFrameDebug(null)
+          }
+        }
+        liveDebugRef.current.innerHTML = buildDebugHTML(pose, fd)
       }
       // SEM ROSTO = no_face IMEDIATO: zera a janela da mediana e cai pro vermelho
       // na hora, SEM suavização. A mediana/histerese só vale p/ o tamanho
@@ -695,38 +742,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               </div>
             )}
 
-            {/* [Fase A] Overlay de debug de pose (só com ?debugPose=1) — apenas exibe
-                os números; não afeta o gate nem a captura. */}
-            {showPoseDebug && (
-              <div className="absolute top-16 left-2 bg-black/70 text-green-300 text-[11px] font-mono px-2 py-1 rounded leading-tight z-10">
-                <div>yaw: {poseDebug ? poseDebug.yaw.toFixed(3) : '—'}</div>
-                <div>pitch: {poseDebug ? poseDebug.pitch.toFixed(3) : '—'}</div>
-                <div>roll: {poseDebug ? poseDebug.roll.toFixed(1) + '°' : '—'}</div>
-                {/* [A1] interocular (px) — sinal do limite de distância; calibrar o TETO
-                    afastando devagar até o número aparecer (borda de falha do detector) */}
-                <div className="text-cyan-300">io: {frameDebug ? frameDebug.io + 'px' : '—'}</div>
-                {/* [C2-a] Enquadramento — alvo bbox 0.50/0.65; oval visual 0.50/0.58 */}
-                <div className="mt-1 border-t border-green-300/30 pt-1">
-                  c: {frameDebug ? `${frameDebug.cx.toFixed(2)},${frameDebug.cy.toFixed(2)}` : '—'}
-                </div>
-                <div>Δalvo: {frameDebug ? `${fmtSigned(frameDebug.dx)},${fmtSigned(frameDebug.dy)}` : '—'}</div>
-                <div>folga L{frameDebug ? frameDebug.l.toFixed(2) : '—'} R{frameDebug ? frameDebug.r.toFixed(2) : '—'}</div>
-                <div>folga T{frameDebug ? frameDebug.t.toFixed(2) : '—'} B{frameDebug ? frameDebug.b.toFixed(2) : '—'}</div>
-                <div className="text-green-300/60">bbox: {frameDebug ? `${frameDebug.bx},${frameDebug.by} ${frameDebug.bw}×${frameDebug.bh}` : '—'}</div>
-                {/* [C3.1] frame real do vídeo (buffer ≤800) — crava a geometria no celular */}
-                <div className="text-green-300/60">frame: {frameDebug ? `${frameDebug.fw}×${frameDebug.fh}` : '—'}</div>
-                {/* [C3.3] MESMA RÉGUA (px exibidos): rosto vs oval — calibração do tamanho */}
-                <div className="mt-1 border-t border-green-300/30 pt-1 text-yellow-300">
-                  oval-exib: {frameDebug ? `${Math.round(frameDebug.ovw)}×${Math.round(frameDebug.ovh)} @ ${Math.round(frameDebug.ovcx)},${Math.round(frameDebug.ovcy)}` : '—'}
-                </div>
-                <div className="text-yellow-300">
-                  bbox-exib: {frameDebug ? `${Math.round(frameDebug.dbw)}×${Math.round(frameDebug.dbh)} @ ${Math.round(frameDebug.dbcx)},${Math.round(frameDebug.dbcy)}` : '—'}
-                </div>
-                <div className="text-yellow-300/70">
-                  box: {frameDebug ? `${frameDebug.boxW}×${frameDebug.boxH} cover:${frameDebug.cover.toFixed(2)}` : '—'}
-                </div>
-              </div>
-            )}
+            {/* [Fase A/B] Overlay de debug (só com ?debugPose=1) — conteúdo escrito
+                IMPERATIVAMENTE pelo loop (innerHTML no ref), sem re-render por frame. */}
+            {showPoseDebug && <DebugOverlaySink innerRef={liveDebugRef} />}
 
             {/* Guia central enquanto não está ok */}
             {isStreaming && !okState && (
