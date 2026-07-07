@@ -35,6 +35,7 @@ console.log(`(limiares: YAW_MAX=${YAW_MAX_RATIO} ROLL_MAX=${ROLL_MAX_DEG}° fram
 console.log('\n=== 1) DISTÂNCIA manda (regra de ouro) — pose/bbox NÃO reavaliados ===')
 check("noFace vence tudo", decideCapture(base({ distanceReason: 'noFace', pose: pose(0.9, 40), bbox: bboxAt(0.9, 0.9, 300, 300) })) === 'noFace')
 check("tooSmall vence pose/enquadramento ruins", decideCapture(base({ distanceReason: 'tooSmall', pose: pose(0.9, 40) })) === 'tooSmall')
+check("[A2] tooBig (perto demais) vence pose/enquadramento", decideCapture(base({ distanceReason: 'tooBig', pose: pose(0.9, 40) })) === 'tooBig')
 check("distância ok + tudo bom = ok", decideCapture(base()) === 'ok')
 
 console.log('\n=== 2) PRIORIDADE (um blocker por vez): cutOff → offCenter → tilt → turn ===')

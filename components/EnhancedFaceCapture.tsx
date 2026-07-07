@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { detectFace as mpDetectFace, decideFromReads, nextGateState, type FaceReason } from '../lib/face/detector'
+import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
 import { decideCapture, DEFAULT_FRAMING_THRESHOLDS, type CaptureReason } from '../lib/face/gate'
 
@@ -114,6 +114,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const streamRef = useRef<MediaStream | null>(null)
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval>>()
   const historyRef = useRef<number[]>([]) // últimas interoculares (0 = sem rosto)
+  const wasTooCloseRef = useRef(false) // [A2] sticky: rosto estava perto/grande demais → msg noFace vira "Afaste"
   const gateStateRef = useRef<FaceReason>('noFace') // espelha gateState p/ o loop/captura
   const detectingRef = useRef(false) // guarda contra detecção concorrente
   const [showUploadOption, setShowUploadOption] = useState(false)
@@ -196,7 +197,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     if (!ctx) return
     ctx.clearRect(0, 0, oc.width, oc.height)
     const color = state === 'ok' ? '#22c55e'
-      : (state === 'tooSmall' || state === 'offCenter' || state === 'cutOff') ? '#eab308'
+      : (state === 'tooSmall' || state === 'tooBig' || state === 'offCenter' || state === 'cutOff') ? '#eab308'
         : '#ef4444'
     ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.setLineDash([14, 9])
     ctx.beginPath()
@@ -241,6 +242,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const captureMsg = (r: CaptureReason): string =>
     r === 'ok' ? 'Rosto OK ✓'
       : r === 'tooSmall' ? 'Aproxime o rosto'
+        : r === 'tooBig' ? 'Afaste um pouco o rosto'
         : r === 'tilt' ? 'Endireite a cabeça'
           : (r === 'turnLeft' || r === 'turnRight') ? 'Vire o rosto para frente'
             : r === 'cutOff' ? 'Enquadre o rosto no círculo'
@@ -297,13 +299,22 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       // que o rosto saiu do quadro (era o furo: o verde segurava ~500ms).
       if (m.faceCount === 0) {
         historyRef.current = []
-        if (gateStateRef.current !== 'noFace') { gateStateRef.current = 'noFace'; setGateState('noFace') }
-        applyReason('noFace')
+        // [A2/(b)-refinada] Se o rosto ACABOU de sumir estando perto/grande demais
+        // (wasTooCloseRef sticky), o mais provável é PROXIMIDADE (o short-range perde
+        // rosto colado) → mostra "Afaste um pouco" (tooBig) em vez de "Centralize"
+        // (noFace). O ref só zera quando um rosto volta pra distância confortável.
+        const reason: FaceReason = wasTooCloseRef.current ? 'tooBig' : 'noFace'
+        if (gateStateRef.current !== reason) { gateStateRef.current = reason; setGateState(reason) }
+        applyReason(reason)
         return
       }
       const hist = historyRef.current
       hist.push(m.interocularPx)
       if (hist.length > 8) hist.shift()
+      // [A2] Marca "estava perto demais" com histerese (mesmas bordas do gate): liga ao
+      // atingir o teto, desliga ao voltar pra faixa confortável. Alimenta a (b)-refinada.
+      if (m.interocularPx >= INTEROCULAR_MAX) wasTooCloseRef.current = true
+      else if (m.interocularPx <= GATE_BIG_EXIT_PX) wasTooCloseRef.current = false
       // DISTÂNCIA (INTOCADA): fonte de verdade do gate de tamanho.
       const next = nextGateState(hist, gateStateRef.current)
       if (next !== gateStateRef.current) { gateStateRef.current = next; setGateState(next) }
@@ -671,7 +682,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               <div className="absolute top-4 left-4 right-4 flex justify-center">
                 <div className="bg-black bg-opacity-50 rounded-lg px-3 py-2">
                   <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${okState ? 'bg-green-500' : (liveReason === 'tooSmall' || liveReason === 'offCenter' || liveReason === 'cutOff') ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                    <div className={`w-2 h-2 rounded-full ${okState ? 'bg-green-500' : (liveReason === 'tooSmall' || liveReason === 'tooBig' || liveReason === 'offCenter' || liveReason === 'cutOff') ? 'bg-yellow-500' : 'bg-red-500'}`} />
                     <span className="text-white text-xs">
                       {captureMsg(msgReason)}
                     </span>
@@ -717,7 +728,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             {isStreaming && !okState && (
               <div className="absolute bottom-4 left-0 right-0 text-center">
                 <span className="bg-black bg-opacity-50 text-white px-3 py-1 rounded text-sm">
-                  {gateState === 'tooSmall' ? 'Chegue mais perto da câmera' : 'Deixe seu rosto preencher o oval'}
+                  {liveReason === 'tooSmall' ? 'Aproxime um pouco' : liveReason === 'tooBig' ? 'Afaste um pouco' : 'Enquadre o rosto no oval, sem colar'}
                 </span>
               </div>
             )}
@@ -755,7 +766,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
           <h3 className="font-semibold text-white text-sm mb-2">📝 Dicas para melhor foto:</h3>
           <ul className="text-sm text-white/80 space-y-1">
-            <li>• Deixe seu rosto preencher o oval (chegue perto)</li>
+            <li>• Enquadre o rosto no oval — <strong>sem colar</strong> (distância confortável, um braço)</li>
             <li>• Procure um local com boa iluminação</li>
             <li>• Evite contraluz (janela atrás)</li>
             <li>• Mantenha expressão neutra</li>
@@ -802,6 +813,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 {isCapturing ? '⏳ Capturando...' :
                   okState ? '📸 Capturar Foto' :
                     liveReason === 'tooSmall' ? '👤 Aproxime o rosto' :
+                      liveReason === 'tooBig' ? '👤 Afaste um pouco o rosto' :
                       liveReason === 'tilt' ? '🙂 Endireite a cabeça' :
                         (liveReason === 'turnLeft' || liveReason === 'turnRight') ? '🙂 Vire o rosto pra frente' :
                           liveReason === 'cutOff' ? '👤 Enquadre o rosto no círculo' :

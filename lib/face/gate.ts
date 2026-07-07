@@ -25,6 +25,7 @@ import { decidePose, DEFAULT_POSE_THRESHOLDS, type Pose } from './pose'
 export type CaptureReason =
   | 'noFace'
   | 'tooSmall'
+  | 'tooBig'
   | 'cutOff'
   | 'offCenter'
   | 'tilt'
@@ -130,9 +131,10 @@ function evalFraming(input: CaptureInput, prev: CaptureReason): 'cutOff' | 'offC
  * enquadramento. Ver REGRA DE OURO e ORDEM no topo do arquivo.
  */
 export function decideCapture(input: CaptureInput, prev: CaptureReason = 'ok'): CaptureReason {
-  // 1–2) DISTÂNCIA manda. Se não é ok, retorna direto (não avalia o resto).
+  // 1–3) DISTÂNCIA manda. Se não é ok, retorna direto (não avalia o resto).
   if (input.distanceReason === 'noFace') return 'noFace'
   if (input.distanceReason === 'tooSmall') return 'tooSmall'
+  if (input.distanceReason === 'tooBig') return 'tooBig' // [A2] perto/grande demais
   // input.distanceReason === 'ok' daqui pra baixo.
 
   // 3) ENQUADRAMENTO (cutOff antes de offCenter). null = sem dados → pula.

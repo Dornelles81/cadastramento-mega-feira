@@ -10,6 +10,12 @@
  */
 export const MIN_INTEROCULAR_PX = 60
 
+// [A2] Teto de distância (interocular MÁXIMA): acima disso o rosto está perto/grande
+// demais → "Afaste um pouco". Calibrado no celular (2026-07-06): bom~138, preenche o
+// oval~167, ainda detecta até ~326, noFace acima de 326. 180 deixa passar até preencher
+// o oval e avisa "afaste" MUITO antes do detector quebrar (326). Fonte única.
+export const INTEROCULAR_MAX = 180
+
 // ── Limiares de POSE (yaw/pitch/roll) — Fase B + APERTADOS ao vivo no C1 ──
 // A Fase C liga estes limiares ao gate (via decideCapture → decidePose). yaw/pitch
 // são RAZÕES (offset/interocular); roll é GRAU real (do eixo dos olhos).

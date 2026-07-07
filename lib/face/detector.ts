@@ -19,10 +19,10 @@ const ASSET_BASE = '/mediapipe/face_detection/'
 // (Fatia 2): acima da zona de sobreposição ~41–53 do MediaPipe com margem de ruído.
 // No upload (Fatia 4) medimos 2–3× + MEDIANA; na câmera ao vivo o ruído se dilui
 // em vários frames + histerese.
-import { MIN_INTEROCULAR_PX } from './status'
-export { MIN_INTEROCULAR_PX }
+import { MIN_INTEROCULAR_PX, INTEROCULAR_MAX } from './status'
+export { MIN_INTEROCULAR_PX, INTEROCULAR_MAX }
 
-export type FaceReason = 'noFace' | 'tooSmall' | 'ok'
+export type FaceReason = 'noFace' | 'tooSmall' | 'tooBig' | 'ok'
 
 export interface FaceMeasurement {
   faceCount: number
@@ -149,8 +149,11 @@ export function decideFromReads(reads: number[], minPx: number = MIN_INTEROCULAR
 // (aproxime/ok/aproxime). Combinamos MEDIANA dos últimos N frames (mata o spike
 // solto) + HISTERESE (faixa morta 55–65): só vira 'ok' com mediana ≥65, só sai
 // de 'ok' com mediana <55. Funções PURAS, testáveis sem câmera.
-export const GATE_ENTER_PX = MIN_INTEROCULAR_PX + 5 // 65 — entra em ok
-export const GATE_EXIT_PX = MIN_INTEROCULAR_PX - 5  // 55 — sai de ok
+export const GATE_ENTER_PX = MIN_INTEROCULAR_PX + 5 // 65 — entra em ok (borda inferior)
+export const GATE_EXIT_PX = MIN_INTEROCULAR_PX - 5  // 55 — sai de ok (pra tooSmall)
+// [A2] Borda SUPERIOR (perto/grande demais), histerese espelhando a inferior:
+export const GATE_BIG_ENTER_PX = INTEROCULAR_MAX + 5  // 185 — sai de ok pra 'tooBig'
+export const GATE_BIG_EXIT_PX = INTEROCULAR_MAX - 10  // 170 — volta a ok (fica acima do preenche-oval ~167)
 
 export function median(nums: number[]): number {
   if (!nums.length) return 0
@@ -170,6 +173,16 @@ export function nextGateState(history: number[], prev: FaceReason): FaceReason {
   const noFace = recent.filter(x => x === 0).length
   if (noFace > recent.length / 2) return 'noFace'
   const m = median(recent.filter(x => x > 0))
-  if (prev === 'ok') return m < GATE_EXIT_PX ? 'tooSmall' : 'ok'
-  return m >= GATE_ENTER_PX ? 'ok' : 'tooSmall'
+  // [A2] Histerese em torno das DUAS bordas. De 'ok', sai imediato ao cruzar a EXIT
+  // (pra baixo → tooSmall; pra cima → tooBig). Fora de 'ok', só entra dentro da faixa
+  // com folga [GATE_ENTER .. GATE_BIG_EXIT]; senão fica no lado correspondente (robusto
+  // a saltos, ex.: pular de tooBig direto pra tooSmall).
+  if (prev === 'ok') {
+    if (m < GATE_EXIT_PX) return 'tooSmall'
+    if (m > GATE_BIG_ENTER_PX) return 'tooBig'
+    return 'ok'
+  }
+  if (m < GATE_ENTER_PX) return 'tooSmall'
+  if (m > GATE_BIG_EXIT_PX) return 'tooBig'
+  return 'ok'
 }
