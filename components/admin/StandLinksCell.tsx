@@ -29,6 +29,7 @@ export interface StandLinksCellStand {
   id: string;
   name: string;
   responsibleEmail?: string;
+  responsiblePhone?: string;
   hasRegisterLink?: boolean;
   hasManageLink?: boolean;
   registerGeneratedAt?: string | null;
@@ -41,6 +42,9 @@ interface StandLinksCellProps {
   stand: StandLinksCellStand;
   /** Recarrega a lista de stands após gerar/revogar/enviar (ex.: loadStands). */
   onChanged: () => void;
+  /** Nome do evento p/ montar os textos do WhatsApp. Ausente (tela legada sem
+   *  event.name) → botões de WhatsApp ficam de fora; o resto funciona igual. */
+  eventName?: string;
 }
 
 function formatDateTime(value?: string | null): string | null {
@@ -50,7 +54,88 @@ function formatDateTime(value?: string | null): string | null {
   return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export default function StandLinksCell({ stand, onChanged }: StandLinksCellProps) {
+/* ===================== WhatsApp (dois comunicados, ambos pro GESTOR) =====================
+ * Dois textos enviados em MOMENTOS DIFERENTES: o de gestão (perigoso — permite excluir) e o
+ * de cadastro (o gestor repassa à equipe). [EVENTO]/[STAND]/[LINK_*] preenchidos na hora.
+ * O link de cadastro usa a ROTA DIRETA /cadastro (pula a landing). Ambos só existem no
+ * instante da geração (o banco guarda só o hash) → o botão vive no bloco recém-gerado. */
+// Emojis montados em RUNTIME via String.fromCodePoint — o arquivo-fonte não contém nenhum byte
+// astral (emoji) nem escape backslash-u, só números (code points). Imune a qualquer corrupção
+// de encoding/editor/bundler (o SWC/Turbopack estava quebrando o char astral, virando U+FFFD).
+const WA_EMOJI = {
+  wave: String.fromCodePoint(0x1f44b),        // acena
+  tent: String.fromCodePoint(0x1f3aa),        // tenda (evento)
+  key: String.fromCodePoint(0x1f511),         // chave
+  check: String.fromCodePoint(0x2705),        // check verde
+  point: String.fromCodePoint(0x1f449),       // dedo apontando
+  warn: String.fromCodePoint(0x26a0, 0xfe0f), // atencao
+  lock: String.fromCodePoint(0x1f512),        // cadeado
+  people: String.fromCodePoint(0x1f465),      // pessoas
+  smile: String.fromCodePoint(0x1f60a),       // sorriso
+  phone: String.fromCodePoint(0x1f4f2),       // celular c/ seta
+  memo: String.fromCodePoint(0x1f4dd),        // formulario
+  selfie: String.fromCodePoint(0x1f933),      // selfie
+  mobile: String.fromCodePoint(0x1f4f1),      // celular
+};
+
+function waTextGestao(evento: string, stand: string, link: string): string {
+  const e = WA_EMOJI;
+  return `Olá! ${e.wave} Aqui é a organização do ${evento}.
+Você foi definido(a) como responsável pelo stand ${stand}. ${e.tent}
+${e.key} Este é o seu link de gestão — com ele você acompanha, aprova ${e.check} e gerencia as credenciais da sua equipe:
+${e.point} ${link}
+${e.warn} Importante: este link é exclusivo do responsável. Ele permite excluir participantes, então NÃO compartilhe com a sua equipe. ${e.lock}
+${e.people} Para as pessoas com direito à credencial se cadastrarem, use o link de cadastro (enviado à parte).
+Qualquer dúvida, é só falar com a organização. ${e.smile}`;
+}
+
+function waTextCadastro(evento: string, stand: string, link: string): string {
+  const e = WA_EMOJI;
+  return `Olá! ${e.wave} Aqui é a organização do ${evento}.
+${e.phone} Este é o link de cadastro do stand ${stand} — encaminhe às pessoas com direito à credencial para fazerem o cadastro. ${e.tent}
+${e.memo} Cada pessoa preenche os dados e tira uma foto ${e.selfie} para a sua credencial.
+${e.mobile} Para uma melhor experiência, abra o link no navegador do celular (Chrome ou Safari).
+${e.point} ${link}
+Qualquer dúvida, é só falar com a organização. ${e.smile}`;
+}
+
+// DDDs válidos no Brasil — pega typos (ex.: "58" não existe) e manda pro fallback.
+const DDDS_BR = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35,
+  37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62, 63, 64,
+  65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88,
+  89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+]);
+
+/**
+ * Normaliza o telefone do responsável para envio DIRETO no wa.me (55 + DDD + 9 dígitos).
+ * CONSERVADOR: na dúvida devolve null → o chamador cai no fallback (escolher contato).
+ * Nunca adivinha dígito faltando (número errado é pior que fallback). Detecção por
+ * COMPRIMENTO, nunca por prefixo — DDD 55 (noroeste do RS) NÃO é código de país.
+ *   - 13 díg começando com 55 (55 + DDD + 9) → usa direto
+ *   - 11 díg (DDD + 9)                        → prefixa 55
+ *   - 10 díg (celular sem o 9, ou fixo), DDD inválido, ou qualquer outro tamanho → null
+ */
+function normalizePhoneBR(raw?: string | null): string | null {
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, '');
+  let out: string | null = null;
+  if (d.length === 13 && d.startsWith('55')) out = d;
+  else if (d.length === 11) out = '55' + d;
+  if (!out) return null;
+  return DDDS_BR.has(Number(out.slice(2, 4))) ? out : null;
+}
+
+// Abre o WhatsApp: com número normalizado → conversa direta; senão → picker de contato.
+function openWhatsApp(texto: string, phone?: string | null): void {
+  const num = normalizePhoneBR(phone);
+  const url = num
+    ? `https://wa.me/${num}?text=${encodeURIComponent(texto)}`
+    : `https://wa.me/?text=${encodeURIComponent(texto)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+export default function StandLinksCell({ stand, onChanged, eventName }: StandLinksCellProps) {
   const [open, setOpen] = useState(false);
   // Link em claro retornado pela última geração, por scope (some ao fechar o modal).
   const [generated, setGenerated] = useState<{ register?: string; manage?: string }>({});
@@ -197,6 +282,26 @@ export default function StandLinksCell({ stand, onChanged }: StandLinksCellProps
     }
   };
 
+  // CADASTRO: rota DIRETA /cadastro (pula a landing), Texto 2, sem fricção.
+  // Envio direto pro telefone do responsável se ele validar; senão, picker de contato.
+  const shareRegisterWhatsApp = (generatedLink: string) => {
+    if (!eventName) return;
+    openWhatsApp(waTextCadastro(eventName, stand.name, `${generatedLink}/cadastro`), stand.responsiblePhone);
+  };
+
+  // GESTÃO: link "perigoso" (permite excluir) → confirm() antes; Texto 1, link como está.
+  // Envio direto pro telefone cadastrado é mais seguro (o link restrito vai pro responsável certo).
+  const shareManageWhatsApp = (generatedLink: string) => {
+    if (!eventName) return;
+    if (
+      !confirm(
+        'Este link permite EXCLUIR participantes. Envie APENAS ao responsável do stand, nunca à equipe. Continuar?'
+      )
+    )
+      return;
+    openWhatsApp(waTextGestao(eventName, stand.name, generatedLink), stand.responsiblePhone);
+  };
+
   return (
     <>
       {/* ===== Resumo compacto na célula ===== */}
@@ -274,6 +379,14 @@ export default function StandLinksCell({ stand, onChanged }: StandLinksCellProps
                 onGenerate={() => handleGenerate('register')}
                 onRevoke={() => handleRevoke('register')}
                 onCopy={(link) => handleCopy('register', link)}
+                whatsapp={
+                  eventName
+                    ? {
+                        label: `${WA_EMOJI.phone} Compartilhar por WhatsApp — Cadastro da equipe`,
+                        onShare: shareRegisterWhatsApp,
+                      }
+                    : undefined
+                }
               />
 
               {/* ---------- CARD GESTÃO (âmbar/vermelho) ---------- */}
@@ -293,6 +406,14 @@ export default function StandLinksCell({ stand, onChanged }: StandLinksCellProps
                 onGenerate={() => handleGenerate('manage')}
                 onRevoke={() => handleRevoke('manage')}
                 onCopy={(link) => handleCopy('manage', link)}
+                whatsapp={
+                  eventName
+                    ? {
+                        label: `${WA_EMOJI.lock} Enviar SÓ ao responsável (WhatsApp) — Gestão`,
+                        onShare: shareManageWhatsApp,
+                      }
+                    : undefined
+                }
                 email={{
                   responsibleEmail: stand.responsibleEmail,
                   sending: emailingScope === 'manage',
@@ -326,6 +447,12 @@ interface ScopeCardEmail {
   onSend: () => void;
 }
 
+interface ScopeCardWhatsApp {
+  label: string;
+  /** Recebe o link em claro recém-gerado (o card monta o texto e abre o WhatsApp). */
+  onShare: (generatedLink: string) => void;
+}
+
 interface ScopeCardProps {
   tone: Scope;
   title: string;
@@ -343,6 +470,7 @@ interface ScopeCardProps {
   onRevoke: () => void;
   onCopy: (link: string) => void;
   email?: ScopeCardEmail;
+  whatsapp?: ScopeCardWhatsApp;
 }
 
 function ScopeCard({
@@ -362,6 +490,7 @@ function ScopeCard({
   onRevoke,
   onCopy,
   email,
+  whatsapp,
 }: ScopeCardProps) {
   const isManage = tone === 'manage';
 
@@ -434,6 +563,25 @@ function ScopeCard({
               {copied ? '✓ Copiado' : 'Copiar'}
             </button>
           </div>
+
+          {/* Compartilhar por WhatsApp — cadastro (verde, primário) × gestão (âmbar, outline) */}
+          {whatsapp && (
+            <div className="mt-2.5 border-t border-gray-100 pt-2.5">
+              <button
+                type="button"
+                onClick={() => whatsapp.onShare(generatedLink)}
+                className={
+                  isManage
+                    ? 'inline-flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium border border-amber-500 bg-white text-amber-800 hover:bg-amber-100'
+                    : 'inline-flex w-full justify-center items-center gap-2 px-3 py-2 rounded text-sm font-semibold bg-green-600 text-white hover:bg-green-700'
+                }
+              >
+                {whatsapp.label}
+              </button>
+              <p className="text-xs text-gray-500 mt-1.5">disponível só agora; pra reenviar, gere outro</p>
+            </div>
+          )}
+
           <p className="text-xs text-gray-500 mt-1.5">
             Mostrado uma única vez — o link não fica salvo. Se precisar dele de novo, gere outro
             (o atual será invalidado).

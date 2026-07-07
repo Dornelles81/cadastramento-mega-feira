@@ -1138,7 +1138,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                                 )}
                               </td>
                               <td className="px-4 py-3">
-                                <StandLinksCell stand={stand} onChanged={loadStands} />
+                                <StandLinksCell stand={stand} onChanged={loadStands} eventName={event?.name} />
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <button onClick={() => handleEdit(stand)} className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3">
