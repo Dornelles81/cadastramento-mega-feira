@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
@@ -68,6 +68,118 @@ async function generateQR(payload: string): Promise<string> {
   })
 }
 
+// ─── Layouts de ETIQUETA (rota B: config parametrizada por template) ─────────
+// O gerador de PDF de participantes lê daqui. A entrada `label` (8×4) tem os números
+// EXATOS de hoje → saída byte-idêntica. `label6` (6×4, SEM QR) é aditiva. Só
+// participantes; o gerador de VEÍCULOS não usa isto. Ajuste fino do 6×4 é na Elgin.
+type LabelStyle = 'label' | 'label6'
+interface LabelLayout {
+  PW: number; PH: number; stripe: number; textX: number
+  showQR: boolean; align: 'left' | 'center'
+  event: { font: number; y: number; maxW: number; maxWWithNum: number; numRightX: number }
+  name: { font: number; wrap: number; y1: number; y2: number }
+  // Auto-fit do nome (só label6): reduz a fonte medindo com getTextWidth até caber; abaixo do
+  // mínimo, quebra em até maxLines. fontMax/fontMin/hardMin em pt, areaW em mm, ySingle = baseline
+  // do nome quando fica em 1 linha. Ausente no 8×4 → mantém splitTextToSize fixo.
+  nameFit?: { fontMax: number; fontMin: number; hardMin: number; maxLines: number; areaW: number; ySingle: number }
+  stand: { font: number; wrap: number; y1: number; y2: number }
+  qr?: { x: number; y: number; size: number; numX: number; numY: number; numFont: number }
+}
+const LABEL_LAYOUTS: Record<LabelStyle, LabelLayout> = {
+  // 8×4cm — FEICAP 2026 (números idênticos ao código anterior; NÃO alterar)
+  label: {
+    PW: 80, PH: 40, stripe: 6, textX: 8, showQR: true, align: 'left',
+    event: { font: 8, y: 9, maxW: 40, maxWWithNum: 36, numRightX: 47 },
+    name: { font: 16, wrap: 40, y1: 19, y2: 26 },
+    stand: { font: 9, wrap: 40, y1: 28, y2: 34 },
+    qr: { x: 49, y: 5, size: 26, numX: 62, numY: 36, numFont: 7 }
+  },
+  // 6×4cm — SEM QR, nome PROTAGONISTA (centralizado), leitura à distância. Sem foto
+  // (a família etiqueta é P&B térmica sem foto). Wraps/anchors calibráveis na Elgin.
+  label6: {
+    PW: 60, PH: 40, stripe: 6, textX: 8, showQR: false, align: 'center',
+    event: { font: 8, y: 7, maxW: 50, maxWWithNum: 50, numRightX: 0 },
+    name: { font: 24, wrap: 50, y1: 20, y2: 29 },
+    // Auto-fit: 28pt (protagonista) → reduz até 14pt em 1 linha → 2 linhas a partir de 14pt →
+    // piso 8pt p/ palavra única gigante. ySingle centraliza o nome grande na faixa dele.
+    nameFit: { fontMax: 28, fontMin: 14, hardMin: 8, maxLines: 2, areaW: 50, ySingle: 24 },
+    stand: { font: 12, wrap: 50, y1: 31, y2: 37 }
+  }
+}
+
+// Auto-fit do nome no label6 (PDF): mede com jsPDF e devolve as linhas + o tamanho de fonte (pt).
+// Prefere 1 linha grande; abaixo de fontMin quebra em até maxLines; reduz sob o mínimo só quando
+// nem quebrando cabe (palavra única gigante / nome muito longo). NÃO é usado pelo 8×4.
+type PdfLike = {
+  setFont(family: string, style: string): void
+  setFontSize(size: number): void
+  getTextWidth(text: string): number
+  splitTextToSize(text: string, maxWidth: number): string[]
+}
+function fitLabel6Name(
+  doc: PdfLike,
+  name: string,
+  N: { fontMax: number; fontMin: number; hardMin: number; maxLines: number; areaW: number }
+): { lines: string[]; size: number } {
+  doc.setFont('helvetica', 'bold')
+  // 1) uma linha — maior fonte (≥ fontMin) que couber na largura útil
+  for (let s = N.fontMax; s >= N.fontMin; s--) {
+    doc.setFontSize(s)
+    if (doc.getTextWidth(name) <= N.areaW) return { lines: [name], size: s }
+  }
+  // 2) quebra em até maxLines, a partir do mínimo e reduzindo (long demais / palavra gigante)
+  for (let s = N.fontMin; s >= N.hardMin; s--) {
+    doc.setFontSize(s)
+    const lines = doc.splitTextToSize(name, N.areaW)
+    if (lines.length <= N.maxLines && lines.every(l => doc.getTextWidth(l) <= N.areaW)) {
+      return { lines, size: s }
+    }
+  }
+  // 3) piso absoluto — primeiras maxLines linhas
+  doc.setFontSize(N.hardMin)
+  return { lines: doc.splitTextToSize(name, N.areaW).slice(0, N.maxLines), size: N.hardMin }
+}
+
+// Nome auto-fit na PRÉVIA da tela (label6): mede o DOM e espelha o algoritmo do PDF —
+// 1 linha grande primeiro, depois 2 linhas a partir do mínimo. pt→px = ×96/72 p/ bater com o PDF.
+const PT_TO_PX = 96 / 72
+function AutoFitName({ text }: { text: string }) {
+  const fit = LABEL_LAYOUTS.label6.nameFit!
+  const maxPx = fit.fontMax * PT_TO_PX
+  const minPx = fit.fontMin * PT_TO_PX
+  const hardPx = fit.hardMin * PT_TO_PX
+  const ref = useRef<HTMLParagraphElement>(null)
+  const [st, setSt] = useState<{ size: number; wrap: 'nowrap' | 'normal' }>({ size: maxPx, wrap: 'nowrap' })
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fitsW = () => el.scrollWidth <= el.clientWidth + 0.5
+    const lineCount = () => {
+      const cs = getComputedStyle(el)
+      const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.1
+      return Math.max(1, Math.round(el.scrollHeight / lh))
+    }
+    // 1) uma linha, maior que couber
+    el.style.whiteSpace = 'nowrap'
+    for (let s = maxPx; s >= minPx; s -= 1) {
+      el.style.fontSize = `${s}px`
+      if (fitsW()) { setSt({ size: s, wrap: 'nowrap' }); return }
+    }
+    // 2) quebra em até maxLines, do mínimo p/ baixo
+    el.style.whiteSpace = 'normal'
+    for (let s = minPx; s >= hardPx; s -= 1) {
+      el.style.fontSize = `${s}px`
+      if (fitsW() && lineCount() <= fit.maxLines) { setSt({ size: s, wrap: 'normal' }); return }
+    }
+    setSt({ size: hardPx, wrap: 'normal' })
+  }, [text, maxPx, minPx, hardPx, fit.maxLines])
+  return (
+    <p ref={ref} className="label-name" style={{ fontSize: `${st.size}px`, whiteSpace: st.wrap }}>
+      {text}
+    </p>
+  )
+}
+
 // ─── Credential Card (print unit) ────────────────────────────────────────────
 
 function CredentialCard({
@@ -77,7 +189,7 @@ function CredentialCard({
 }: {
   participant: ParticipantCredential
   eventName: string
-  templateStyle: 'badge' | 'landscape' | 'label'
+  templateStyle: 'badge' | 'landscape' | 'label' | 'label6'
 }) {
   const grupo =
     participant.stand?.category ||
@@ -90,9 +202,10 @@ function CredentialCard({
     ? participant.stand.name
     : '—'
 
-  if (templateStyle === 'label') {
+  if (templateStyle === 'label' || templateStyle === 'label6') {
+    const isSix = templateStyle === 'label6' // 6×4: sem QR, nome protagonista centralizado
     return (
-      <div className="credential-card label">
+      <div className={`credential-card label${isSix ? ' label6' : ''}`}>
         {/* Left accent stripe */}
         <div className="label-stripe" />
 
@@ -100,11 +213,13 @@ function CredentialCard({
         <div className="label-info">
           <div className="label-top-row">
             <span className="label-event">{eventName}</span>
-            {participant.credentialNumber && (
+            {!isSix && participant.credentialNumber && (
               <span className="label-number">#{participant.credentialNumber}</span>
             )}
           </div>
-          <p className="label-name">{participant.name}</p>
+          {isSix
+            ? <AutoFitName text={participant.name} />
+            : <p className="label-name">{participant.name}</p>}
           {standDisplay !== '—' && (
             <p className="label-stand">{standDisplay}</p>
           )}
@@ -113,16 +228,18 @@ function CredentialCard({
           )}
         </div>
 
-        {/* QR Code + número */}
-        <div className="label-qr-block">
-          {participant.qrDataUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={participant.qrDataUrl} alt="QR" className="label-qr" />
-          )}
-          {participant.credentialNumber && (
-            <p className="label-qr-number">#{participant.credentialNumber}</p>
-          )}
-        </div>
+        {/* QR Code + número — só no 8×4 (label6 é sem QR) */}
+        {!isSix && (
+          <div className="label-qr-block">
+            {participant.qrDataUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={participant.qrDataUrl} alt="QR" className="label-qr" />
+            )}
+            {participant.credentialNumber && (
+              <p className="label-qr-number">#{participant.credentialNumber}</p>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -272,7 +389,7 @@ export default function CredentialsPage() {
   const [loadingQR, setLoadingQR] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'no-credential'>('approved')
-  const [templateStyle, setTemplateStyle] = useState<'badge' | 'landscape' | 'label'>('label')
+  const [templateStyle, setTemplateStyle] = useState<'badge' | 'landscape' | 'label' | 'label6'>('label')
   const printAreaRef = useRef<HTMLDivElement>(null)
 
   // ── Vehicle state ──────────────────────────────────────────────────────────
@@ -655,7 +772,7 @@ export default function CredentialsPage() {
 
   // ── Print via jsPDF — gera PDF 80×40mm com dimensões físicas fixas ─────────
   const handlePrint = async () => {
-    if (templateStyle !== 'label') {
+    if (templateStyle !== 'label' && templateStyle !== 'label6') {
       window.print()
       return
     }
@@ -665,9 +782,13 @@ export default function CredentialsPage() {
 
       const evName = selectedEvent?.name || ''
 
-      // 80 × 40 mm — formato FEICAP 2026
-      const PW = 80
-      const PH = 40
+      // Layout parametrizado (config única) — 'label' = 8×4 (idêntico ao anterior),
+      // 'label6' = 6×4 sem-QR com nome centralizado. Ver LABEL_LAYOUTS.
+      const cfg = LABEL_LAYOUTS[templateStyle]
+      const centered = cfg.align === 'center'
+      const centerX = cfg.stripe + (cfg.PW - cfg.stripe) / 2
+      const PW = cfg.PW
+      const PH = cfg.PH
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
       for (let i = 0; i < printTargets.length; i++) {
@@ -676,44 +797,74 @@ export default function CredentialsPage() {
         const p = printTargets[i]
         const standName = p.stand?.name || ''
 
-        // ── Faixa preta (6mm × 40mm) ──────────────────────────────────────
+        // ── Faixa lateral (stripe × PH) ───────────────────────────────────
         doc.setFillColor(0, 0, 0)
-        doc.rect(0, 0, 6, 40, 'F')
+        doc.rect(0, 0, cfg.stripe, PH, 'F')
 
         doc.setTextColor(0, 0, 0)
 
-        // ── Linha 1: nome do evento (esq) + #número (dir) ─────────────────
-        doc.setFontSize(8)
+        // ── Linha 1: nome do evento (+ #número à direita, só no 8×4) ──────
+        doc.setFontSize(cfg.event.font)
         doc.setFont('helvetica', 'bold')
-        const evMaxW = p.credentialNumber ? 36 : 40
+        const evMaxW = (!centered && p.credentialNumber) ? cfg.event.maxWWithNum : cfg.event.maxW
         const evLine = doc.splitTextToSize(evName.toUpperCase(), evMaxW)[0]
-        doc.text(evLine, 8, 9)
-        if (p.credentialNumber) {
-          doc.text(`#${p.credentialNumber}`, 47, 9, { align: 'right' })
-        }
-
-        // ── Linha 2+3: nome do participante (até 2 linhas, 16pt) ──────────
-        doc.setFontSize(16)
-        doc.setFont('helvetica', 'bold')
-        const nameLines = doc.splitTextToSize(p.name, 40)
-        doc.text(nameLines[0], 8, 19)
-        const hasLine2 = nameLines.length >= 2
-        if (hasLine2) doc.text(nameLines[1], 8, 26)
-
-        // ── Linha 4: stand ────────────────────────────────────────────────
-        if (standName) {
-          doc.setFontSize(9)
-          doc.setFont('helvetica', 'bold')
-          doc.text(doc.splitTextToSize(standName, 40)[0], 8, hasLine2 ? 34 : 28)
-        }
-
-        // ── QR Code (x=49, y=5, 26×26mm) → borda direita em x=75mm, margem 5mm ─
-        if (p.qrDataUrl) {
-          doc.addImage(p.qrDataUrl, 'PNG', 49, 5, 26, 26)
+        if (centered) {
+          doc.text(evLine, centerX, cfg.event.y, { align: 'center' })
+        } else {
+          doc.text(evLine, cfg.textX, cfg.event.y)
           if (p.credentialNumber) {
-            doc.setFontSize(7)
+            doc.text(`#${p.credentialNumber}`, cfg.event.numRightX, cfg.event.y, { align: 'right' })
+          }
+        }
+
+        // ── Nome do participante — auto-fit no label6, fixo no 8×4 ────────
+        doc.setFont('helvetica', 'bold')
+        let hasLine2 = false
+        if (cfg.nameFit) {
+          // label6: reduz a fonte até caber; 1 linha grande ou até maxLines
+          const fit = fitLabel6Name(doc, p.name, cfg.nameFit)
+          doc.setFontSize(fit.size)
+          hasLine2 = fit.lines.length >= 2
+          if (hasLine2) {
+            doc.text(fit.lines[0], centerX, cfg.name.y1, { align: 'center' })
+            doc.text(fit.lines[1], centerX, cfg.name.y2, { align: 'center' })
+          } else {
+            doc.text(fit.lines[0], centerX, cfg.nameFit.ySingle, { align: 'center' })
+          }
+        } else {
+          // 8×4 — comportamento fixo original (NÃO alterar)
+          doc.setFontSize(cfg.name.font)
+          const nameLines = doc.splitTextToSize(p.name, cfg.name.wrap)
+          hasLine2 = nameLines.length >= 2
+          if (centered) {
+            doc.text(nameLines[0], centerX, cfg.name.y1, { align: 'center' })
+            if (hasLine2) doc.text(nameLines[1], centerX, cfg.name.y2, { align: 'center' })
+          } else {
+            doc.text(nameLines[0], cfg.textX, cfg.name.y1)
+            if (hasLine2) doc.text(nameLines[1], cfg.textX, cfg.name.y2)
+          }
+        }
+
+        // ── Stand ─────────────────────────────────────────────────────────
+        if (standName) {
+          doc.setFontSize(cfg.stand.font)
+          doc.setFont('helvetica', 'bold')
+          const standLine = doc.splitTextToSize(standName, cfg.stand.wrap)[0]
+          const standY = hasLine2 ? cfg.stand.y2 : cfg.stand.y1
+          if (centered) {
+            doc.text(standLine, centerX, standY, { align: 'center' })
+          } else {
+            doc.text(standLine, cfg.textX, standY)
+          }
+        }
+
+        // ── QR Code (só quando showQR — label6 é sem-QR) ──────────────────
+        if (cfg.showQR && cfg.qr && p.qrDataUrl) {
+          doc.addImage(p.qrDataUrl, 'PNG', cfg.qr.x, cfg.qr.y, cfg.qr.size, cfg.qr.size)
+          if (p.credentialNumber) {
+            doc.setFontSize(cfg.qr.numFont)
             doc.setFont('helvetica', 'bold')
-            doc.text(`#${p.credentialNumber}`, 62, 36, { align: 'center' })
+            doc.text(`#${p.credentialNumber}`, cfg.qr.numX, cfg.qr.numY, { align: 'center' })
           }
         }
       }
@@ -727,7 +878,7 @@ export default function CredentialsPage() {
       setTimeout(() => URL.revokeObjectURL(url), 5000)
       setMessage({
         type: 'success',
-        text: '✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: 80×40mm → Escala: Tamanho real → Margens: Nenhuma → Imprimir'
+        text: `✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma → Imprimir`
       })
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
@@ -876,6 +1027,28 @@ export default function CredentialsPage() {
         .label-qr-number { font-size: 9px; font-weight: 900; color: #000; text-align: center; margin: 1mm 0 0; letter-spacing: 0.5px; }
         .vehicle-number { font-size: 22px !important; letter-spacing: 1px; }
 
+        /* Label6 style — 60mm × 40mm — sem QR, nome PROTAGONISTA centralizado */
+        .credential-card.label6 { width: 60mm; }
+        .credential-card.label6 .label-info {
+          align-items: center;
+          text-align: center;
+          padding: 3mm 3mm 3mm 3mm;
+          gap: 1mm;
+        }
+        .credential-card.label6 .label-top-row { justify-content: center; }
+        .credential-card.label6 .label-event { flex: 0 1 auto; font-size: 12px; letter-spacing: 0.3px; }
+        /* Tamanho da fonte e white-space vêm inline do AutoFitName (medição do DOM). */
+        .credential-card.label6 .label-name {
+          font-weight: 900; line-height: 1.1;
+          display: block; overflow: hidden; -webkit-line-clamp: none;
+          width: 100%;
+        }
+        .credential-card.label6 .label-stand {
+          font-size: 15px; font-weight: 700;
+          white-space: normal; text-overflow: clip;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+
         /* Print layout */
         #print-area {
           display: none;
@@ -927,6 +1100,12 @@ export default function CredentialsPage() {
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${templateStyle === 'label' ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
               >
                 Etiqueta 8×4cm
+              </button>
+              <button
+                onClick={() => setTemplateStyle('label6')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${templateStyle === 'label6' ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              >
+                Etiqueta 6×4cm
               </button>
               <button
                 onClick={() => setTemplateStyle('badge')}
@@ -1320,7 +1499,7 @@ export default function CredentialsPage() {
         </div>
 
         {/* Instruções Elgin L42 Pro */}
-        {templateStyle === 'label' && (
+        {(templateStyle === 'label' || templateStyle === 'label6') && (
           <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm no-print">
             <p className="font-bold text-amber-800 mb-2">🖨️ Impressão via PDF — Elgin L42PRO FULL</p>
             <ol className="text-amber-700 space-y-1 list-decimal list-inside">
@@ -1368,7 +1547,7 @@ export default function CredentialsPage() {
             <p className="text-sm text-slate-500 mb-4">
               {participants.length} participante(s) · {selectedIds.size > 0 ? `${selectedIds.size} selecionado(s)` : 'Clique para selecionar'}
             </p>
-            <div className={`grid gap-4 ${templateStyle === 'badge' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : templateStyle === 'label' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
+            <div className={`grid gap-4 ${templateStyle === 'badge' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : (templateStyle === 'label' || templateStyle === 'label6') ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
               {participants.map(p => (
                 <div
                   key={p.id}
@@ -1397,7 +1576,7 @@ export default function CredentialsPage() {
       </div>
 
       {/* ── Hidden print area ──────────────────────────────────────────── */}
-      <div id="print-area" ref={printAreaRef} className={templateStyle === 'label' ? 'label-mode' : ''}>
+      <div id="print-area" ref={printAreaRef} className={(templateStyle === 'label' || templateStyle === 'label6') ? 'label-mode' : ''}>
         {printTargets.map(p => (
           <CredentialCard
             key={p.id}
