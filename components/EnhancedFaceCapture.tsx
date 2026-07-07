@@ -659,7 +659,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   return (
     <>
       <div className="space-y-4 pb-44">
-        <div className="relative bg-gray-900 rounded-xl overflow-hidden h-[42svh] max-h-[420px] min-h-[220px] mx-auto">
+        {/* [D-lite] Caixa RETRATO 3:4 = mesmo aspecto do vídeo do celular (600×800) → o
+            object-cover não corta mais o queixo/testa. Largura capada por 46svh (→ altura
+            ~61svh) pra caber acima do rodapé fixo em telas curtas; w-full em telas estreitas.
+            NÃO afeta gate/distância/enquadramento (tudo buffer, não display). */}
+        <div className="relative bg-gray-900 rounded-xl overflow-hidden aspect-[3/4] w-full max-w-[46svh] mx-auto">
         {!capturedImage ? (
           <>
             <video
@@ -760,9 +764,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         )}
       </div>
 
-      {/* Instruções — só quando o rosto NÃO está ok (quando verde, o foco é o
-          botão; as dicas só atrapalhariam e empurram o botão pra baixo da dobra). */}
-      {!capturedImage && !okState && (
+      {/* [D-lite] Dicas SÓ quando a câmera NÃO está ativa (ex.: fallback/upload). Durante o
+          streaming, o oval + a mensagem de status já guiam; o painel só empurraria o botão
+          "Capturar" pra baixo da dobra na caixa retrato (mais alta). */}
+      {!capturedImage && !isStreaming && (
         <div className="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
           <h3 className="font-semibold text-white text-sm mb-2">📝 Dicas para melhor foto:</h3>
           <ul className="text-sm text-white/80 space-y-1">
