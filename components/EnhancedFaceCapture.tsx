@@ -32,8 +32,11 @@ interface FrameDebug {
 // [B] Monta o HTML do overlay de debug (mesmos dados/cores de antes) para escrita IMPERATIVA
 // via innerHTML — sem passar por state/re-render do React. Strings estáticas (sem input do
 // usuário) → innerHTML seguro. yaw/pitch/roll vêm da pose; o resto do frame (fd).
-function buildDebugHTML(pose: Pose | null, fd: FrameDebug | null): string {
+function buildDebugHTML(pose: Pose | null, fd: FrameDebug | null, vid?: { w: number; h: number; rs: number }): string {
   const s = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
+  // [vid] dimensão/readyState do <video> — sempre visível (mesmo sem detecção), pra distinguir
+  // "câmera sem dimensão" (0×0) de "detector não acha" (600×800 + io: —).
+  const vidLine = vid ? `vid: ${vid.w}×${vid.h} rs:${vid.rs}` : 'vid: —'
   const yaw = pose ? pose.yaw.toFixed(3) : '—'
   const pitch = pose ? pose.pitch.toFixed(3) : '—'
   const roll = pose ? pose.roll.toFixed(1) + '°' : '—'
@@ -48,6 +51,7 @@ function buildDebugHTML(pose: Pose | null, fd: FrameDebug | null): string {
   const bboxExib = fd ? `${Math.round(fd.dbw)}×${Math.round(fd.dbh)} @ ${Math.round(fd.dbcx)},${Math.round(fd.dbcy)}` : '—'
   const box = fd ? `${fd.boxW}×${fd.boxH} cover:${fd.cover.toFixed(2)}` : '—'
   return (
+    `<div class="text-cyan-300">${vidLine}</div>` +
     `<div>yaw: ${yaw}</div>` +
     `<div>pitch: ${pitch}</div>` +
     `<div>roll: ${roll}</div>` +
@@ -77,6 +81,8 @@ const DebugOverlaySink = memo(function DebugOverlaySink({ innerRef }: { innerRef
 })
 
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
+const WATCHDOG_MS = 1500 // intervalo do watchdog (independente do loop de detecção)
+const NOFACE_OFFER_MS = 25000 // sem rosto válido por >25s c/ câmera ativa → oferece upload (soft)
 const MSG_DEBOUNCE_FRAMES = 2 // [C1] frames estáveis antes de trocar o TEXTO da mensagem
 
 // [C2-a] DESACOPLADO (medido ao vivo): o OVAL DESENHADO (guia visual — onde a CABEÇA
@@ -166,6 +172,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const detectingRef = useRef(false) // guarda contra detecção concorrente
   const [showUploadOption, setShowUploadOption] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // [watchdog] soft-offer de upload quando a câmera está no ar mas nenhum rosto é detectado por
+  // muito tempo (videoWidth=0 tardio / faceCount:0 / detector travado). Não para a câmera.
+  const lastFaceAtRef = useRef<number>(0)               // timestamp do último faceCount>0
+  const watchdogIntervalRef = useRef<ReturnType<typeof setInterval>>()
+  const [uploadHint, setUploadHint] = useState<string | null>(null) // msg suave do soft-offer
 
   // [Fase A] Debug de pose (yaw/pitch/roll) atrás do flag ?debugPose=1 — SÓ EXIBE,
   // não afeta o gate nem a habilitação do botão. Sem o flag, o fluxo é idêntico.
@@ -300,9 +311,18 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     if (detectingRef.current) return
     detectingRef.current = true
     try {
+      // [vid] Diagnóstico incondicional (ANTES do guard de frame): dimensão/readyState do <video>.
+      // Se videoWidth=0, o overlay mostra "vid: 0×0" e o loop retorna aqui — sem isso, ficava mudo.
+      const video = videoRef.current
+      const vid = { w: video?.videoWidth ?? 0, h: video?.videoHeight ?? 0, rs: video?.readyState ?? 0 }
+      if (debugPoseRef.current && liveDebugRef.current) {
+        liveDebugRef.current.innerHTML = buildDebugHTML(null, null, vid)
+      }
       const frame = buildFrameCanvas()
       if (!frame) return
       const m = await mpDetectFace(frame)
+      // [watchdog] marca o último rosto válido (o detector já rejeita lixo → faceCount>0 = são)
+      if (m.faceCount > 0) lastFaceAtRef.current = Date.now()
       // [A] Detector esgotou os re-inits e segue devolvendo lixo → fallback de upload (paralelo
       // ao CAM-3). Só entra DEPOIS dos MAX_REINITS falharem; se o re-init recuperar, nunca entra.
       if (isDetectorExhausted() && mountedRef.current) {
@@ -347,7 +367,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
             ovcx: OVAL_CENTER_X * boxW, ovcy: OVAL_CENTER_Y * boxH
           }
         }
-        liveDebugRef.current.innerHTML = buildDebugHTML(pose, fd)
+        liveDebugRef.current.innerHTML = buildDebugHTML(pose, fd, vid)
       }
       // SEM ROSTO = no_face IMEDIATO: zera a janela da mediana e cai pro vermelho
       // na hora, SEM suavização. A mediana/histerese só vale p/ o tamanho
@@ -396,6 +416,24 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     detectionIntervalRef.current = setInterval(runDetection, DETECT_MS)
   }, [runDetection])
 
+  // [watchdog] Interval SEPARADO (não depende do runDetection nem do detector resolver): se a
+  // câmera está ativa e nenhum rosto válido é detectado há > NOFACE_OFFER_MS, OFERECE o upload
+  // (revela o botão + msg suave). NÃO para a câmera (alternativa, não desistência). Cobre
+  // videoWidth=0 tardio, faceCount:0 persistente e detector travado. Some em aparelho bom
+  // (detecta em segundos → lastFaceAt sempre recente → nunca dispara).
+  const startWatchdog = useCallback(() => {
+    if (watchdogIntervalRef.current) clearInterval(watchdogIntervalRef.current)
+    watchdogIntervalRef.current = setInterval(() => {
+      if (!streamRef.current) return // câmera parada (CAM-3/erro já cuidou) → nada a fazer
+      if (Date.now() - lastFaceAtRef.current > NOFACE_OFFER_MS) {
+        setShowUploadOption(true)
+        setUploadHint('Está com dificuldade com a câmera? Toque no botão abaixo para enviar uma foto.')
+        // uma vez revelado, para de checar (o botão fica; a câmera segue tentando)
+        if (watchdogIntervalRef.current) { clearInterval(watchdogIntervalRef.current); watchdogIntervalRef.current = undefined }
+      }
+    }, WATCHDOG_MS)
+  }, [])
+
   // Inicia a câmera. [CAM-2] idempotente; [CAM-3] espera prontidão + recuperação de vídeo
   // preto (retry 1× → erro + fallback upload); [#5] guardas mountedRef/token após cada await.
   const startCamera = async (attempt = 0) => {
@@ -408,6 +446,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       if (streamRef.current) stopCamera()
       setError(null)
       setCameraFailed(false)
+      setUploadHint(null) // [watchdog] limpa o soft-offer no (re)início
       historyRef.current = []
       resetDetectorRecovery() // [A] chance limpa de detecção (zera lixo/re-init/esgotamento)
       gateStateRef.current = 'noFace'
@@ -456,7 +495,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
       if (ready) {
         setIsStreaming(true)
+        lastFaceAtRef.current = Date.now() // [watchdog] baseline: começa a contar daqui
         startDetectionLoop()
+        startWatchdog()
         return
       }
 
@@ -479,6 +520,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
   const stopCamera = useCallback(() => {
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
+    if (watchdogIntervalRef.current) { clearInterval(watchdogIntervalRef.current); watchdogIntervalRef.current = undefined }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
@@ -867,6 +909,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
 
             {(showUploadOption || !isStreaming) && (
               <>
+                {/* [watchdog] Mensagem suave do soft-offer (câmera segue tentando) */}
+                {uploadHint && (
+                  <div className="bg-amber-400/10 border border-amber-300/30 p-3 rounded-xl text-center">
+                    <p className="text-sm text-white/90">💡 {uploadHint}</p>
+                  </div>
+                )}
                 <div className="relative">
                   <input
                     ref={fileInputRef}
