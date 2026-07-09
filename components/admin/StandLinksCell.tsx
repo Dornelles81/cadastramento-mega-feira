@@ -76,6 +76,10 @@ const WA_EMOJI = {
   memo: String.fromCodePoint(0x1f4dd),        // formulario
   selfie: String.fromCodePoint(0x1f933),      // selfie
   mobile: String.fromCodePoint(0x1f4f1),      // celular
+  clipboard: String.fromCodePoint(0x1f4cb),   // prancheta (link de cadastro)
+  camera: String.fromCodePoint(0x1f4f8),      // camera com flash (foto)
+  link: String.fromCodePoint(0x1f517),        // elo/corrente (o link)
+  hands: String.fromCodePoint(0x1f64c),       // maos erguidas (despedida)
 };
 
 function waTextGestao(evento: string, stand: string, link: string): string {
@@ -91,12 +95,19 @@ Qualquer dúvida, é só falar com a organização. ${e.smile}`;
 
 function waTextCadastro(evento: string, stand: string, link: string): string {
   const e = WA_EMOJI;
+  // stand entra entre asteriscos (*...*) → negrito no WhatsApp. encodeURIComponent
+  // NÃO escapa '*' (fica literal), então o negrito é preservado no wa.me.
   return `Olá! ${e.wave} Aqui é a organização do ${evento}.
-${e.phone} Este é o link de cadastro do stand ${stand} — encaminhe às pessoas com direito à credencial para fazerem o cadastro. ${e.tent}
-${e.memo} Cada pessoa preenche os dados e tira uma foto ${e.selfie} para a sua credencial.
-${e.mobile} Para uma melhor experiência, abra o link no navegador do celular (Chrome ou Safari).
-${e.point} ${link}
-Qualquer dúvida, é só falar com a organização. ${e.smile}`;
+
+Este é o link de cadastro do stand *${stand}*. ${e.clipboard}
+
+Encaminhe a cada pessoa da sua equipe que vai atuar no stand e precisa de credencial de acesso. Cada uma faz o próprio cadastro: preenche os dados e tira uma foto ${e.camera}, assim a credencial será gerada automaticamente.
+
+${e.mobile} Melhor abrir no navegador do celular (Chrome ou Safari).
+
+${e.link} ${link}
+
+Qualquer dúvida, fale com a organização. ${e.hands}`;
 }
 
 // DDDs válidos no Brasil — pega typos (ex.: "58" não existe) e manda pro fallback.
