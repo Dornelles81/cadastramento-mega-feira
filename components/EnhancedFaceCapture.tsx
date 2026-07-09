@@ -533,34 +533,41 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.target
     const file = input.files?.[0]
-    if (!file) return
+    console.log('[UP] 0 onChange', { has: !!file, name: file?.name, type: file?.type, size: file?.size })
+    if (!file) { console.log('[UP] 0X sem arquivo (return silencioso)'); return }
     if (!file.type.startsWith('image/')) {
+      console.log('[UP] 1X tipo NÃO-imagem BLOQUEIA (msg sem scroll → pode ficar invisível)', file.type)
       setError('❌ Por favor, selecione um arquivo de imagem.'); input.value = ''; return
     }
     if (file.size > 10 * 1024 * 1024) {
+      console.log('[UP] 2X tamanho >10MB BLOQUEIA (msg sem scroll → pode ficar invisível)', file.size)
       setError('❌ Imagem muito grande. Máximo 10MB.'); input.value = ''; return
     }
     const reader = new FileReader()
     // [UP-min] Sem este handler, uma falha de leitura morria em silêncio (nada acontecia).
     reader.onerror = () => {
+      console.log('[UP] 3X reader.onerror')
       setError('❌ Não consegui ler essa foto. Tire a foto novamente pela câmera.')
       if (typeof window !== 'undefined') window.scrollTo(0, 0)
       input.value = ''
     }
     reader.onload = (e) => {
       const imageData = e.target?.result as string
+      console.log('[UP] 3 reader.onload', { len: imageData?.length, head: imageData?.slice(0, 30) })
       const img = new Image()
       // [UP-min] Sem este handler, formato não-decodificável (ex.: HEIC de iPhone/Android)
       // fazia img.onload NUNCA disparar → foto sumia sem mensagem (o pior desfecho de UX).
       img.onerror = () => {
+        console.log('[UP] 4X img.onerror — DECODE FALHOU', { head: imageData?.slice(0, 30) })
         setError('❌ Não consegui abrir essa foto (formato não suportado). Tire a foto novamente pela câmera.')
         if (typeof window !== 'undefined') window.scrollTo(0, 0)
         input.value = ''
       }
       img.onload = async () => {
+        console.log('[UP] 4 img.onload', { w: img.width, h: img.height, nat: img.naturalWidth })
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
-        if (!ctx) return
+        if (!ctx) { console.log('[UP] 4C sem ctx (return silencioso)'); return }
         // Redimensiona para ≤800px: ESTA é a imagem submetida E a medida (contrato
         // da régua). NUNCA medir a original do celular (pode ser 3000px → escala
         // errada do gate).
@@ -581,14 +588,17 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         const reads: number[] = []
         const counts: number[] = [] // [UP-min] faceCount por leitura (critério "um rosto")
         let poseKps: { x: number; y: number }[] | null = null
+        console.log('[UP] 5 canvas pronto', { width, height })
         for (let i = 0; i < 3; i++) {
           const m = await mpDetectFace(canvas)
+          console.log('[UP] 6 leitura', i, { faceCount: m.faceCount, io: m.interocularPx })
           counts.push(m.faceCount)
           reads.push(m.faceCount > 0 ? m.interocularPx : 0)
           if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
         }
         const v = decideFromReads(reads)
         const ip = v.interocularPx
+        console.log('[UP] 7 gate distância (linha 612)', { ok: v.ok, reason: v.reason, ip, reads, counts })
 
         // [Fase B] Debug de pose no UPLOAD (mesmo flag ?debugPose=1): calcula e EXIBE
         // yaw/pitch/roll da foto enviada e PARA — NÃO chama onCapture, não grava, não
@@ -610,6 +620,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         }
 
         if (!v.ok) {
+          console.log('[UP] 7X BLOQUEIA distância', v.reason)
           // BLOQUEIO TOTAL: NÃO chama onCapture; mostra o motivo; limpa o input.
           setError(v.reason === 'noFace'
             ? '❌ Não detectei seu rosto na foto. Tire outra com o rosto bem visível e centralizado.'
@@ -636,7 +647,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         // spike transitório de 2ª detecção não bloqueia; o detector já mede o MAIOR rosto.
         const facey = counts.filter((c) => c > 0)
         const multiFace = facey.length > 0 && facey.filter((c) => c > 1).length * 2 > facey.length
+        console.log('[UP] 8 validação mínima', { eyesPresent, multiFace, facey })
         if (!eyesPresent || multiFace) {
+          console.log('[UP] 8X BLOQUEIA mínima', { eyesPresent, multiFace })
           // BLOQUEIO COM MENSAGEM CLARA E VISÍVEL (nada de falha silenciosa). scrollTo(0,0)
           // garante que a caixa de erro apareça (ela renderiza no fluxo rolável, podia cair
           // atrás do rodapé fixo).
@@ -656,6 +669,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           uploadedFile: true,
           timestamp: new Date().toISOString()
         }
+        console.log('[UP] 9 -> onCapture', { ip, resolution: `${width}x${height}`, imgLen: processedImage.length })
         setCapturedImage(processedImage)
         setTimeout(() => { onCapture(processedImage, faceData) }, 500)
       }
