@@ -141,6 +141,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { documents, ...otherCustomData } = customData || {}
 
+    // [assim-mesmo] Captura sem validação (câmera do sistema com MediaPipe morto):
+    // faceInterocularPx vem null (sentinela honesto) e faceData.faceDetected === false.
+    // Marca no customData p/ conferência operacional (distingue de legado, que é null SEM
+    // esta chave). Ver painel/export "Sem validação".
+    if (faceData && faceData.faceDetected === false) {
+      otherCustomData.__faceUnvalidated = true
+    }
+
     const retentionDays = parseInt(process.env.DATA_RETENTION_DAYS || '90', 10)
     const retentionDate = new Date(event.endDate)
     retentionDate.setDate(retentionDate.getDate() + retentionDays)

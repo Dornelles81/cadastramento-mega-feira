@@ -282,6 +282,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Separate documents from other custom data
     const { documents, ...otherCustomData } = customData || {}
 
+    // [assim-mesmo] Captura sem validação (câmera do sistema com MediaPipe morto):
+    // faceInterocularPx null + faceData.faceDetected === false → marca p/ conferência
+    // (distingue de legado, que é null SEM esta chave). Ver painel/export "Sem validação".
+    if (faceData && faceData.faceDetected === false) {
+      otherCustomData.__faceUnvalidated = true
+    }
+
     // LGPD: retenção de dados biométricos — expurgo 90 dias após o fim do evento
     const retentionDays = parseInt(process.env.DATA_RETENTION_DAYS || '90', 10)
     const retentionDate = new Date(event.endDate)

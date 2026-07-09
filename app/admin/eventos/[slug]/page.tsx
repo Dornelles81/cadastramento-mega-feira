@@ -17,6 +17,7 @@ interface Participant {
   faceInterocularPx?: number | null
   faceStatus?: 'unmeasured' | 'no_face' | 'too_small' | 'valid'
   hasValidFace: boolean
+  faceUnvalidated?: boolean // [assim-mesmo] capturado sem validação (detector morto)
   faceImageUrl?: string
   faceImage?: string
   customData?: any
@@ -120,6 +121,7 @@ export default function EventAdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedStand, setSelectedStand] = useState<string>('all')
+  const [faceUnvalidatedOnly, setFaceUnvalidatedOnly] = useState(false) // [assim-mesmo] listar só sem-validação
   const [stands, setStands] = useState<Stand[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
@@ -410,7 +412,10 @@ export default function EventAdminPage() {
     const participantStand = (participant as any).standName || 'Sem stand'
     const matchesStand = selectedStand === 'all' || participantStand === selectedStand
 
-    return matchesSearch && matchesStand
+    // [assim-mesmo] filtro de conferência: só os capturados sem validação
+    const matchesUnvalidated = !faceUnvalidatedOnly || participant.faceUnvalidated === true
+
+    return matchesSearch && matchesStand && matchesUnvalidated
   })
 
   const formatEventName = (eventCode: string) => {
@@ -463,6 +468,7 @@ export default function EventAdminPage() {
       faceInterocularPx: participant.faceInterocularPx,
       faceStatus: participant.faceStatus,
       hasValidFace: participant.hasValidFace,
+      faceUnvalidated: participant.faceUnvalidated,
       faceImageUrl: participant.faceImageUrl,
       faceImage: participant.faceImage,
       customData: participant.customData,
@@ -1114,10 +1120,27 @@ export default function EventAdminPage() {
                 ))}
               </select>
             </div>
+            {/* [assim-mesmo] Filtro de conferência: só cadastros capturados sem validação */}
+            <div className="flex items-end">
+              <label className={`flex items-center gap-2 px-4 py-3 rounded-lg cursor-pointer text-sm whitespace-nowrap ${
+                faceUnvalidatedOnly
+                  ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                  : darkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'
+              }`} title="Mostrar só os cadastros com foto capturada sem validação automática">
+                <input
+                  type="checkbox"
+                  checked={faceUnvalidatedOnly}
+                  onChange={(e) => setFaceUnvalidatedOnly(e.target.checked)}
+                  className="accent-orange-500"
+                />
+                ⚠ Só sem validação
+              </label>
+            </div>
             <button
               onClick={() => {
                 setSearchTerm('')
                 setSelectedStand('all')
+                setFaceUnvalidatedOnly(false)
               }}
               className={`px-4 py-3 rounded-lg transition-colors text-sm whitespace-nowrap ${
                 darkMode
@@ -1332,6 +1355,10 @@ export default function EventAdminPage() {
                         // unmeasured/legado → NEUTRO, nunca inválido
                         return <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">Não medida</span>
                       })()}
+                      {/* [assim-mesmo] Capturado sem validação (detector morto) — tag de conferência */}
+                      {participant.faceUnvalidated && (
+                        <span className="ml-1 px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700" title="Foto capturada sem validação automática do rosto">⚠ Sem validação</span>
+                      )}
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
@@ -1507,13 +1534,14 @@ export default function EventAdminPage() {
                 </div>
 
                 {/* Custom Fields Summary */}
-                {editingParticipant.customData && Object.keys(editingParticipant.customData).length > 0 && (
+                {editingParticipant.customData && Object.keys(editingParticipant.customData).some(k => !k.startsWith('__')) && (
                   <div className="col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       📋 Campos Personalizados
                     </label>
                     <div className="bg-gray-50 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
-                      {Object.entries(editingParticipant.customData).map(([key, value]) => {
+                      {/* [assim-mesmo] Oculta chaves reservadas (__faceUnvalidated etc.) da lista de campos */}
+                      {Object.entries(editingParticipant.customData).filter(([key]) => !key.startsWith('__')).map(([key, value]) => {
                         // Check if value is a file path
                         if (typeof value === 'string' && value.startsWith('/uploads/')) {
                           const filename = value.split('/').pop()

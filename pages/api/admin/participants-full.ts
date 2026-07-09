@@ -123,6 +123,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       faceInterocularPx: participant.faceInterocularPx,
       faceStatus: deriveFaceStatus(participant.faceInterocularPx),
       hasValidFace: isValidFace(participant.faceInterocularPx),
+      // [assim-mesmo] Captura sem validação (detector morto) — distingue de legado (null
+      // sem a chave). Conferência operacional: badge no painel + filtro + coluna no export.
+      faceUnvalidated: !!((participant.customData as any)?.__faceUnvalidated),
       faceImageUrl: getFaceImageDataUrl(participant) || '', // decripta GCM ou usa legado
       customData: participant.customData || {},
       documents: decryptDocuments(participant.documents) || {}, // decifra server-side p/ o modal

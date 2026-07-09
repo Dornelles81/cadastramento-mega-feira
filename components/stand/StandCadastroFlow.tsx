@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import DynamicForm from '../DynamicForm'
 import UniversalFaceCapture from '../UniversalFaceCapture'
@@ -60,18 +60,6 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
     consent: false
   })
 
-  // [DEBUG-eruda] Console na própria tela do celular, atrás de ?eruda=1 (temporário, p/
-  // colher os logs [UP]/[SUB] no aparelho real sem USB). CSP libera cdn.jsdelivr.net.
-  // Remover junto com os console.log de instrumentação.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (new URLSearchParams(window.location.search).get('eruda') !== '1') return
-    const s = document.createElement('script')
-    s.src = 'https://cdn.jsdelivr.net/npm/eruda'
-    s.onload = () => { (window as any).eruda?.init() }
-    document.body.appendChild(s)
-  }, [])
-
   const handlePersonalSubmit = (formData: any) => {
     const { name, cpf, email, phone, evento, eventCode, mesa, estande, standCode, ...custom } = formData
     const updated: RegistrationData = {
@@ -93,7 +81,6 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
   const submit = async (imageData: string, faceData?: any, override?: RegistrationData) => {
     setIsSubmitting(true)
     const reg = override || data
-    console.log('[SUB] 0 submit', { hasFace: !!imageData, faceLen: imageData?.length, name: reg.name, hasCpf: !!reg.cpf })
 
     try {
       const response = await fetch('/api/stand-registration', {
@@ -113,7 +100,6 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
         })
       })
 
-      console.log('[SUB] 1 resposta', { status: response.status, ok: response.ok })
       if (response.ok) {
         setRegisteredName(reg.name)
         setStep('success')
@@ -125,7 +111,6 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
         const err = await response.json()
         message = err.message || err.error || message
       } catch {}
-      console.log('[SUB] 2 FALHA', { status: response.status, message })
       alert(`Erro no cadastro: ${message}`)
 
       if (message.includes('lotado')) {
@@ -134,8 +119,7 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
         return
       }
       setStep('personal')
-    } catch (e) {
-      console.log('[SUB] 3 erro de rede/exceção', e)
+    } catch {
       alert('Erro de conexão. Verifique sua internet e tente novamente.')
       setStep('personal')
     } finally {

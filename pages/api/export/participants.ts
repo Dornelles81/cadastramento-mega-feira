@@ -160,6 +160,8 @@ function exportAsExcel(participants: any[], res: NextApiResponse) {
       'Stand': standCode,
       'Evento': formatEventName(p.eventCode),
       'Status da Face': faceStatusLabel(p.faceInterocularPx),
+      // [assim-mesmo] conferência: "Não" = foto capturada sem validação automática (detector morto)
+      'Captura validada': customData?.__faceUnvalidated ? 'Não' : 'Sim',
       'Data de Cadastro': new Date(p.createdAt).toLocaleString('pt-BR'),
       'Consentimento': p.consentAccepted ? 'Sim' : 'Não',
       'Dispositivo': p.deviceInfo || '-',
