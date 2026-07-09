@@ -541,9 +541,22 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       setError('❌ Imagem muito grande. Máximo 10MB.'); input.value = ''; return
     }
     const reader = new FileReader()
+    // [UP-min] Sem este handler, uma falha de leitura morria em silêncio (nada acontecia).
+    reader.onerror = () => {
+      setError('❌ Não consegui ler essa foto. Tire a foto novamente pela câmera.')
+      if (typeof window !== 'undefined') window.scrollTo(0, 0)
+      input.value = ''
+    }
     reader.onload = (e) => {
       const imageData = e.target?.result as string
       const img = new Image()
+      // [UP-min] Sem este handler, formato não-decodificável (ex.: HEIC de iPhone/Android)
+      // fazia img.onload NUNCA disparar → foto sumia sem mensagem (o pior desfecho de UX).
+      img.onerror = () => {
+        setError('❌ Não consegui abrir essa foto (formato não suportado). Tire a foto novamente pela câmera.')
+        if (typeof window !== 'undefined') window.scrollTo(0, 0)
+        input.value = ''
+      }
       img.onload = async () => {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
@@ -566,13 +579,13 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         // falso-positivo do detector não pode liberar foto sem rosto) E
         // interocular ≥ 60. Imagem única é mais sujeita a ruído que a câmera.
         const reads: number[] = []
+        const counts: number[] = [] // [UP-min] faceCount por leitura (critério "um rosto")
         let poseKps: { x: number; y: number }[] | null = null
-        let uploadBbox: { x: number; y: number; w: number; h: number } | null = null // [C3]
         for (let i = 0; i < 3; i++) {
           const m = await mpDetectFace(canvas)
+          counts.push(m.faceCount)
           reads.push(m.faceCount > 0 ? m.interocularPx : 0)
           if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
-          if (m.faceCount > 0 && m.bbox) uploadBbox = m.bbox
         }
         const v = decideFromReads(reads)
         const ip = v.interocularPx
@@ -601,32 +614,38 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           setError(v.reason === 'noFace'
             ? '❌ Não detectei seu rosto na foto. Tire outra com o rosto bem visível e centralizado.'
             : '❌ Rosto muito pequeno/distante. Aproxime o rosto — chegue mais perto na próxima foto.')
+          if (typeof window !== 'undefined') window.scrollTo(0, 0) // garante mensagem visível
           input.value = ''
           return
         }
 
-        // [C3] POSE + ENQUADRAMENTO no UPLOAD (mesma regra da câmera, via decideCapture:
-        // yaw+roll+bbox, pitch fora). Veredito ÚNICO por foto — não há estado anterior,
-        // então prev='ok' (limiar tolerante/relaxado da histerese: bloqueia só além de
-        // base+hyst — os mesmos cortes efetivos 0.30 yaw / 13° roll / dx 0.12 da câmera).
-        // MIRROR: mirrored:false — a foto do upload é medida E exibida SEM espelho (o
-        // sinal do yaw inverte vs PC, mas os limiares são |valor| e a frase é neutra).
-        // SÓ com ?poseGate=1 → sem a flag, o upload segue byte-a-byte como hoje.
-        if (poseGateRef.current) {
-          const gateReason = decideCapture({
-            distanceReason: 'ok',
-            pose: computePose(poseKps),
-            bbox: uploadBbox ?? undefined,
-            frameW: width,
-            frameH: height,
-            mirrored: false
-          }, 'ok')
-          if (gateReason !== 'ok') {
-            // REJEITA o envio: não grava nada; a pessoa tira outra foto.
-            setError(`❌ ${captureMsg(gateReason)}. Tire outra foto.`)
-            input.value = ''
-            return
-          }
+        // [UP-min] VALIDAÇÃO MÍNIMA do UPLOAD (fallback da câmera nativa) — RELAXADA de
+        // propósito: a foto da câmera do celular NÃO tem oval-guia nem correção ao vivo,
+        // então NÃO exigimos pose (yaw/roll/pitch) nem enquadramento milimétrico — isso
+        // travava foto boa e mandava a pessoa de volta pro balcão. Aceitamos se, e só se,
+        // há um rosto NÍTIDO e MEDÍVEL, que é o que o Hikvision precisa. Roda SEMPRE no
+        // upload (independe de ?poseGate) → fallback grava de forma uniforme.
+        //
+        // O que a linha 599 (v.ok) já garantiu: rosto na maioria das leituras + interocular
+        // ≥ 60 (piso calibrado). E o detector já rejeita coord-lixo na origem
+        // (lib/face/detector.ts isSaneDetection + io>frameWidth → faceCount 0). Aqui só
+        // reforçamos: OLHOS medíveis e UM rosto (leniente). SEM teto de interocular — rosto
+        // grande é ótimo p/ reconhecimento; o "absurdo" já virou faceCount 0 no detector.
+        const eyesPresent = !!poseKps && poseKps.length >= 2
+        // Leniente (D1): só barra se a MAIORIA das leituras COM rosto viu >1 rosto — um
+        // spike transitório de 2ª detecção não bloqueia; o detector já mede o MAIOR rosto.
+        const facey = counts.filter((c) => c > 0)
+        const multiFace = facey.length > 0 && facey.filter((c) => c > 1).length * 2 > facey.length
+        if (!eyesPresent || multiFace) {
+          // BLOQUEIO COM MENSAGEM CLARA E VISÍVEL (nada de falha silenciosa). scrollTo(0,0)
+          // garante que a caixa de erro apareça (ela renderiza no fluxo rolável, podia cair
+          // atrás do rodapé fixo).
+          setError(multiFace
+            ? '❌ Detectamos mais de um rosto na foto. Envie uma foto só do seu rosto, de frente e bem iluminada.'
+            : '❌ Não detectamos um rosto nítido na foto. Envie outra foto do rosto, de frente e bem iluminada.')
+          if (typeof window !== 'undefined') window.scrollTo(0, 0)
+          input.value = ''
+          return
         }
 
         const processedImage = canvas.toDataURL('image/jpeg', 0.6)
