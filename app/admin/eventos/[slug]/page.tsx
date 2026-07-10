@@ -1029,6 +1029,18 @@ export default function EventAdminPage() {
                 <div className={`text-2xl font-bold ${darkMode ? 'text-green-400' : 'text-mega-600'}`}>{participants.length}</div>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => router.push('/admin/dashboard')}
+                  className={`inline-flex items-center px-3 py-2 text-sm rounded-lg border transition-colors shadow-sm ${
+                    darkMode
+                      ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                  }`}
+                  title="Voltar ao Dashboard"
+                  aria-label="voltar-dashboard-participantes"
+                >
+                  ← <span className="hidden sm:inline ml-1">Voltar</span>
+                </button>
                 <a
                   href={`/api/export/participants?format=excel&eventId=${event?.id || ''}&event=${event?.code || ''}`}
                   className="inline-flex items-center px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
