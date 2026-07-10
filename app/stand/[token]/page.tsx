@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { prisma } from '../../../lib/prisma'
 import { checkRateLimit } from '../../../lib/rate-limit'
@@ -13,7 +13,6 @@ import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciado
 import {
   lastDayReset,
   nextDayReset,
-  occupiedSlotsWhere,
   formatRelease
 } from '../../../lib/stand-access/occupancy'
 
@@ -62,98 +61,19 @@ export default async function StandPanelPage({
   const now = new Date()
 
   // ===========================================================================
-  // Ramo 'register' (Fatia 3B): link de cadastro compartilhável com a equipe.
-  // Mostra SOMENTE agregados de ocupação + botão "Cadastrar". Nunca lista,
-  // fotos ou CPF de terceiros.
+  // Ramo 'register' (link de cadastro do participante): a tela intermediária de
+  // ocupação foi REMOVIDA — o participante vai direto ao formulário. A ocupação
+  // é informação operacional que não lhe interessa.
   //
-  // GARANTIA LGPD ESTRUTURAL: a ÚNICA leitura aqui é um COUNT agregado de vagas
-  // ocupadas. Nenhuma query deste ramo seleciona faceData, cpf, name ou qualquer
-  // campo individual; getFaceImageDataUrl NÃO é chamado neste caminho.
+  // Validações preservadas downstream (nada aqui as substituía):
+  //   • token revalidado em /stand/[token]/cadastro e no submit;
+  //   • "stand cheio" mostrado cedo pelo StandCadastroFlow, antes do formulário;
+  //   • backstop race-safe (409) na transação do submit.
+  // O log de auditoria PANEL_ACCESS já foi registrado acima (registerPanelAccess).
+  // redirect() lança NEXT_REDIRECT e NÃO está dentro de nenhum try/catch aqui.
   // ===========================================================================
   if (access.scope === 'register') {
-    const limit = access.stand.maxRegistrations
-    const occupied = await prisma.participant.count({
-      where: occupiedSlotsWhere(access.stand.id, now)
-    })
-    const available = Math.max(limit - occupied, 0)
-    const pct = limit > 0 ? Math.min((occupied / limit) * 100, 100) : 100
-    const isFull = occupied >= limit
-
-    return (
-      <main className="min-h-screen bg-gray-50">
-        <header style={{ backgroundColor: NAVY }} className="px-4 py-6">
-          <div className="max-w-3xl mx-auto flex items-start justify-between gap-3">
-            <div>
-              <p style={{ color: TEAL }} className="text-sm font-semibold">
-                {access.event.name}
-              </p>
-              <h1 className="text-2xl font-bold text-white mt-1">{access.stand.name}</h1>
-              <p className="text-sm text-gray-300 mt-1">
-                <code className="bg-white/10 px-2 py-0.5 rounded">{access.stand.code}</code>
-                {access.stand.location && <span className="ml-2">{access.stand.location}</span>}
-              </p>
-            </div>
-            <Link
-              href={`/stand/${token}/ajuda`}
-              className="flex-shrink-0 text-sm font-semibold px-3 py-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors whitespace-nowrap"
-            >
-              ❓ Como funciona
-            </Link>
-          </div>
-        </header>
-
-        <div className="max-w-3xl mx-auto p-4 space-y-4">
-          <section className="bg-white rounded-2xl shadow p-6">
-            <div className="flex items-end justify-between mb-3">
-              <h2 className="text-lg font-bold text-gray-900">Ocupação</h2>
-              <p className="text-sm text-gray-500">
-                <span
-                  className={`text-2xl font-bold ${isFull ? 'text-red-600' : 'text-gray-900'}`}
-                >
-                  {occupied}
-                </span>{' '}
-                / {limit} vagas
-              </p>
-            </div>
-            <div className="bg-gray-200 rounded-full h-3">
-              <div
-                className="h-3 rounded-full transition-all"
-                style={{ width: `${pct}%`, backgroundColor: isFull ? '#DC2626' : TEAL }}
-              />
-            </div>
-            <p className="text-sm text-gray-600 mt-3">
-              {available} vaga{available !== 1 ? 's' : ''} disponíve{available !== 1 ? 'is' : 'l'}
-            </p>
-            {isFull && (
-              <p className="text-sm text-red-600 font-medium mt-1">
-                Stand sem vagas disponíveis no momento.
-              </p>
-            )}
-
-            <div className="mt-4">
-              {isFull ? (
-                <span className="inline-block w-full sm:w-auto text-center px-6 py-3 rounded-xl bg-gray-200 text-gray-500 font-semibold cursor-not-allowed">
-                  Cadastrar credenciado
-                </span>
-              ) : (
-                <Link
-                  href={`/stand/${token}/cadastro`}
-                  style={{ backgroundColor: TEAL, color: NAVY }}
-                  className="inline-block w-full sm:w-auto text-center px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity"
-                >
-                  Cadastrar credenciado
-                </Link>
-              )}
-            </div>
-          </section>
-
-          <p className="text-xs text-gray-400 text-center pb-6">
-            Use este link para cadastrar credenciados no stand. Em caso de dúvidas,
-            contate a organização do evento.
-          </p>
-        </div>
-      </main>
-    )
+    redirect(`/stand/${token}/cadastro`)
   }
 
   // ===========================================================================
