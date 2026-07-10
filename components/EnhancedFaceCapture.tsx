@@ -82,7 +82,7 @@ const DebugOverlaySink = memo(function DebugOverlaySink({ innerRef }: { innerRef
 
 const DETECT_MS = 250 // intervalo do loop de detecção ao vivo
 const WATCHDOG_MS = 1500 // intervalo do watchdog (independente do loop de detecção)
-const NOFACE_OFFER_MS = 25000 // sem rosto válido por >25s c/ câmera ativa → oferece upload (soft)
+const NOFACE_OFFER_MS = 12000 // sem rosto válido por >12s c/ câmera ativa → oferece fallback (soft)
 const MSG_DEBOUNCE_FRAMES = 2 // [C1] frames estáveis antes de trocar o TEXTO da mensagem
 
 // [C2-a] DESACOPLADO (medido ao vivo): o OVAL DESENHADO (guia visual — onde a CABEÇA
@@ -765,7 +765,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const captureAnyway = () => {
     const frame = buildFrameCanvas()
     if (!frame) {
-      setError('❌ Não foi possível capturar da câmera. Use o botão de enviar foto abaixo.')
+      // Vídeo virou preto (videoWidth 0): não há frame p/ capturar. Para a câmera →
+      // isStreaming false → o layout cai no fallback de câmera-preta (upload da nativa).
+      stopCamera()
+      setError('❌ A câmera parou de funcionar. Toque em "Enviar uma foto do celular" abaixo.')
       setShowUploadOption(true)
       return
     }
@@ -801,9 +804,16 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   // liveReason == gateState (distância) → idêntico ao comportamento de hoje.
   const okState = liveReason === 'ok'
 
+  // [assim-mesmo/layout] Estado "MediaPipe morto, vídeo VIVO": o watchdog ofereceu o
+  // fallback mas a câmera segue no ar. SÓ neste estado os controles vão pro FLUXO abaixo
+  // do vídeo e a barra fixa some (nada sobrepõe o vídeo). Normal (oval verde) e câmera
+  // preta (!isStreaming) têm fallbackLive=false → barra fixa IDÊNTICA.
+  const fallbackLive = isStreaming && showUploadOption && !capturedImage
+
   return (
     <>
-      <div className="space-y-4 pb-44">
+      {/* [assim-mesmo/layout] Sem barra fixa no fallbackLive → dispensa a folga pb-44 */}
+      <div className={`space-y-4 ${fallbackLive ? 'pb-8' : 'pb-44'}`}>
         {/* [D-lite] Caixa RETRATO 3:4 = mesmo aspecto do vídeo do celular (600×800) → o
             object-cover não corta mais o queixo/testa. Largura capada por 46svh (→ altura
             ~61svh) pra caber acima do rodapé fixo em telas curtas; w-full em telas estreitas.
@@ -880,6 +890,51 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         )}
       </div>
 
+      {/* [assim-mesmo/layout] MediaPipe morto + vídeo VIVO: controles EM FLUXO abaixo do
+          vídeo (rolam se não couberem, NUNCA sobrepõem). Vídeo fica limpo no topo com
+          oval+status. Barra fixa suprimida neste estado (ver {!fallbackLive} lá embaixo). */}
+      {fallbackLive && (
+        <div className="space-y-3">
+          <button
+            onClick={captureAnyway}
+            className="w-full py-4 bg-amber-500 text-white rounded-xl font-semibold text-base hover:bg-amber-600 transition-all duration-200 shadow-md active:scale-95"
+          >
+            📷 Tirar foto mesmo assim
+          </button>
+          <p className="text-sm text-white/70 text-center px-2">
+            A câmera não conseguiu reconhecer seu rosto, mas você pode tirar a foto assim mesmo.
+          </p>
+          {/* Escape secundário (câmera-preta): nativa como LINK discreto, não botão */}
+          <div className="text-center pt-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="text-sm text-white/60 underline hover:text-white/90 transition-colors"
+            >
+              Ainda com dificuldade? Enviar uma foto do celular
+            </button>
+          </div>
+          {onBack && (
+            <div className="text-center pt-2">
+              <button
+                onClick={onBack}
+                disabled={isCapturing}
+                className="text-sm text-white/50 hover:text-white/80 transition-colors"
+              >
+                ← Voltar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* [D-lite] Dicas SÓ quando a câmera NÃO está ativa (ex.: fallback/upload). Durante o
           streaming, o oval + a mensagem de status já guiam; o painel só empurraria o botão
           "Capturar" pra baixo da dobra na caixa retrato (mais alta). */}
@@ -915,7 +970,10 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           captura fica SEMPRE visível, independente da barra de endereço/gestos.
           pb com env(safe-area-inset-bottom) limpa a barra de gestos do Android.
           Não há ancestral com transform nesta tela, então fixed = relativo à
-          viewport (o conteúdo acima tem pb-44 p/ não ficar escondido atrás). */}
+          viewport (o conteúdo acima tem pb-44 p/ não ficar escondido atrás).
+          [assim-mesmo] Suprimida SÓ no fallbackLive (controles no fluxo acima, sem sobrepor
+          o vídeo). Normal/oval-verde e câmera-preta (!isStreaming) mantêm a barra IDÊNTICA. */}
+      {!fallbackLive && (
       <div className="fixed inset-x-0 bottom-0 z-40 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-azul-marinho via-azul-marinho/95 to-transparent">
         <div className="max-w-md mx-auto space-y-3">
         {!capturedImage ? (
@@ -953,23 +1011,9 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
               </button>
             )}
 
-            {/* [assim-mesmo] Vídeo vivo mas o detector não fecha o gate (watchdog 25s): captura
-                o frame do <video> direto, sem validação. Só aqui (isStreaming) — na câmera preta
-                não há frame e o fallback é o upload da nativa abaixo. Rótulo honesto e acolhedor
-                (não assustar o leigo), âmbar pra distinguir do verde de captura normal. */}
-            {showUploadOption && isStreaming && (
-              <div>
-                <button
-                  onClick={captureAnyway}
-                  className="w-full py-4 bg-amber-500 text-white rounded-xl font-semibold text-base hover:bg-amber-600 transition-all duration-200 shadow-md active:scale-95"
-                >
-                  📷 Tirar foto mesmo assim
-                </button>
-                <p className="text-xs text-white/70 text-center mt-1.5 px-2">
-                  A câmera não está reconhecendo o rosto sozinha, mas você pode enviar sua foto.
-                </p>
-              </div>
-            )}
+            {/* [assim-mesmo] O botão âmbar "Tirar foto mesmo assim" (vídeo vivo + watchdog)
+                foi movido PRA CIMA, no fluxo abaixo do vídeo (bloco fallbackLive) — aqui na
+                barra fixa ele sobrepunha o vídeo. */}
 
             {(showUploadOption || !isStreaming) && (
               <>
@@ -1027,6 +1071,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         )}
         </div>
       </div>
+      )}
     </>
   )
 }
