@@ -138,6 +138,16 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
       return res.status(404).json({ error: 'Participant not found' })
     }
 
+    // LGPD: NUNCA guardar cópia do dado sensível no audit log. O previousData
+    // registra só metadados (nome/CPF/contato/evento) — o biométrico cifrado
+    // (faceData/faceImageUrl/documents) é REMOVIDO do snapshot, alinhado ao
+    // padrão do stand-removal (que só guarda nome + CPF mascarado). Sem isso,
+    // uma cópia cifrada da biometria sobreviveria ao delete em audit_logs.
+    const auditSnapshot: any = { ...participant }
+    delete auditSnapshot.faceData
+    delete auditSnapshot.faceImageUrl
+    delete auditSnapshot.documents
+
     // Try to create audit log, but don't fail if it doesn't work
     try {
       // Check if auditLog table exists
@@ -162,7 +172,7 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
             ${id},
             'admin',
             ${adminIp},
-            ${JSON.stringify(participant)}::jsonb,
+            ${JSON.stringify(auditSnapshot)}::jsonb,
             NULL,
             ${`Participante ${participant.name} (CPF: ${participant.cpf}) foi excluído`},
             ${JSON.stringify({

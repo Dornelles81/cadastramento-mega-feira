@@ -357,11 +357,6 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, eventId: 
     where: {
       id: id as string,
       eventId: eventId
-    },
-    include: {
-      _count: {
-        select: { participants: true }
-      }
     }
   });
 
@@ -370,11 +365,20 @@ async function handleDelete(req: NextApiRequest, res: NextApiResponse, eventId: 
     return;
   }
 
-  if (existingStand._count.participants > 0) {
+  // Trava: só participantes ATIVOS bloqueiam (== "gente dentro"). Os 'removed'
+  // (soft-remove pelo responsável) já saíram e tiveram a biometria limpa — não
+  // bloqueiam e ficam com standId=null (FK onDelete: SetNull) ao deletar o stand.
+  // Casa com a lista do modal (que exibe só status:'active') → excluir todos os
+  // visíveis zera a contagem e libera o stand.
+  const activeCount = await prisma.participant.count({
+    where: { standId: id as string, status: 'active', isDeleted: false }
+  });
+
+  if (activeCount > 0) {
     res.status(400).json({
       error: 'Cannot delete stand with registered participants',
-      participantCount: existingStand._count.participants,
-      suggestion: 'Remove or reassign participants first, or set isActive to false'
+      message: 'Não é possível excluir um stand que ainda tem participantes cadastrados. Exclua os participantes pela lista (no botão Editar do stand) e tente novamente.',
+      participantCount: activeCount
     });
     return;
   }

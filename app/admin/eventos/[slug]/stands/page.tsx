@@ -425,11 +425,36 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
         loadStands();
       } else {
         const error = await response.json();
-        alert(error.error || 'Erro ao deletar stand');
+        alert(error.message || error.error || 'Erro ao deletar stand');
       }
     } catch (error) {
       console.error('Error deleting stand:', error);
       alert('Erro ao deletar stand');
+    }
+  };
+
+  // Exclusão individual de participante (hard delete — apaga cadastro + biometria).
+  // Usada na tabela do modal de editar stand: esvaziar a lista de ativos libera o
+  // stand pra exclusão (a trava do DELETE do stand conta só ativos).
+  const handleDeleteParticipant = async (participant: Participant) => {
+    if (!confirm(`Excluir ${participant.name}? Esta ação apaga permanentemente o cadastro, a foto e os documentos desta pessoa e não pode ser desfeita.`)) return;
+    try {
+      const response = await fetch(`/api/admin/participants/${participant.id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        // Remove da lista do modal aberto e recarrega os stands (contagem/estado)
+        setEditingStand(prev => prev && prev.participants
+          ? { ...prev, participants: prev.participants.filter(p => p.id !== participant.id) }
+          : prev);
+        loadStands();
+      } else {
+        const error = await response.json();
+        alert(error.message || error.error || 'Erro ao excluir participante');
+      }
+    } catch (error) {
+      console.error('Error deleting participant:', error);
+      alert('Erro ao excluir participante');
     }
   };
 
@@ -1070,6 +1095,7 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">CPF</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Email</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+                              <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Ações</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -1083,12 +1109,25 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                                   <td className="px-4 py-3">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${appr.cls}`}>{appr.label}</span>
                                   </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteParticipant(participant)}
+                                      className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                      title="Excluir este participante (apaga cadastro, foto e documentos)"
+                                    >
+                                      Excluir
+                                    </button>
+                                  </td>
                                 </tr>
                               );
                             })}
                           </tbody>
                         </table>
                       </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Para excluir o stand, remova todos os participantes acima. A exclusão apaga permanentemente o cadastro, a foto e os documentos de cada pessoa (LGPD).
+                      </p>
                     </div>
                   )}
 
