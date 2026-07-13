@@ -168,12 +168,6 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
               </>
             )}
           </p>
-          <Link
-            href={`/stand/${token}`}
-            className="inline-block px-6 py-3 bg-verde-agua text-white rounded-lg font-semibold hover:bg-verde-agua-dark transition-colors"
-          >
-            Ver painel do stand
-          </Link>
           {/* A dúvida sobre a regra da virada surge principalmente aqui */}
           <Link
             href={`/stand/${token}/ajuda`}
@@ -347,15 +341,9 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
             concluído.
           </p>
         </div>
-        <Link
-          href={`/stand/${token}`}
-          className="block w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-lg glow-verde-agua active:scale-95 mb-3"
-        >
-          Ver painel do stand
-        </Link>
         <button
           onClick={() => window.location.reload()}
-          className="w-full py-3 bg-white/10 text-white/80 rounded-xl font-medium hover:bg-white/20 transition-colors"
+          className="w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-lg glow-verde-agua active:scale-95"
         >
           Cadastrar outra pessoa
         </button>
