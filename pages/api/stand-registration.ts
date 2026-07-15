@@ -172,67 +172,98 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ip = getClientIp(req)
     const userAgent = (req.headers['user-agent'] as string) || 'unknown'
 
-    // Transação com lock na linha do stand: valida vaga e grava atomicamente.
-    // A contagem usa a definição canônica de ocupação (Fase 7): ativos +
-    // slots travados por exclusão com check-in no dia — SEMPRE recontada
-    // aqui dentro (o currentCount é só cache de exibição)
-    const participant = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM stands WHERE id = ${standId} FOR UPDATE`
+    // Dados do participante — montados uma vez; usados na reserva rápida ou no
+    // caminho autoritativo (cache "cheio").
+    const participantData = {
+      name: name.trim(),
+      cpf: cleanCPF,
+      email: email || null,
+      phone: phone ? phone.replace(/\D/g, '') : '',
+      eventId: event.id,
+      eventCode: event.code,
+      standId,
+      faceImageUrl: null,
+      faceData: encryptedFaceData,
+      faceInterocularPx,
+      faceVersion,
+      consentAccepted: consent,
+      consentIp: ip,
+      consentDate: new Date(),
+      consentText: consentStamp.consentText, // snapshot do termo aceito (null = fluxo antigo)
+      consentTermVersion: consentStamp.consentTermVersion, // versão aceita (null = fluxo antigo)
+      retentionDate,
+      deviceInfo: userAgent,
+      documents: encryptDocuments(documents || {}), // cifrado em repouso (AES-256-GCM)
+      customData: otherCustomData || {}
+    }
 
-      const now = new Date()
-      const occupied = await tx.participant.count({
-        where: occupiedSlotsWhere(standId, now)
-      })
-      if (occupied >= access.stand.maxRegistrations) {
-        // Distinguir lotado real de vaga travada: o responsável precisa
-        // entender quando a vaga libera (SPEC Fase 7, seção 4)
-        const nextLocked = await tx.participant.findFirst({
-          where: {
-            standId,
-            status: 'removed',
-            isDeleted: false,
-            slotLockedUntil: { gt: now }
-          },
-          orderBy: { slotLockedUntil: 'asc' },
-          select: { slotLockedUntil: true }
-        })
-        throw new StandFullError(nextLocked?.slotLockedUntil ?? null)
+    // ── Reserva de vaga (caminho quente) ───────────────────────────────
+    // UPDATE condicional atômico: o lock de linha dura APENAS o UPDATE, não uma
+    // transação interativa. Cadastros simultâneos serializam por microssegundos no
+    // servidor em vez de segurar conexão do pool esperando `FOR UPDATE` — era isso
+    // que esgotava o pool e derrubava 34/50 com P2028 (ver scripts/loadtest).
+    // O Postgres reavalia `currentCount < maxRegistrations` contra o valor
+    // recém-commitado, então a reserva NUNCA fura o limite (limite rígido).
+    const reserved = await prisma.$executeRaw`
+      UPDATE stands
+      SET "currentCount" = "currentCount" + 1
+      WHERE id = ${standId} AND "currentCount" < "maxRegistrations"
+    `
+
+    let participant
+    if (reserved === 1) {
+      // Vaga reservada. Cria o participante FORA de qualquer lock; se a criação
+      // falhar, devolve a vaga (compensação) para a vaga não vazar.
+      try {
+        participant = await prisma.participant.create({ data: participantData })
+      } catch (createErr) {
+        await prisma.$executeRaw`
+          UPDATE stands SET "currentCount" = "currentCount" - 1
+          WHERE id = ${standId} AND "currentCount" > 0
+        `
+        throw createErr
       }
+    } else {
+      // Cache diz "cheio". Pode ser cheio de verdade OU cache defasado por locks
+      // da Fase 7 que expiraram sem evento de escrita (ver occupancy.ts: o slot
+      // "libera sozinho" na virada do dia). Só aqui — no limite da capacidade,
+      // baixo volume — vale a transação autoritativa que reconta canonicamente,
+      // cria SOB o lock (sem furar) e reconcilia o cache defasado.
+      participant = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM stands WHERE id = ${standId} FOR UPDATE`
 
-      const created = await tx.participant.create({
-        data: {
-          name: name.trim(),
-          cpf: cleanCPF,
-          email: email || null,
-          phone: phone ? phone.replace(/\D/g, '') : '',
-          eventId: event.id,
-          eventCode: event.code,
-          standId,
-          faceImageUrl: null,
-          faceData: encryptedFaceData,
-          faceInterocularPx,
-          faceVersion,
-          consentAccepted: consent,
-          consentIp: ip,
-          consentDate: new Date(),
-          consentText: consentStamp.consentText, // snapshot do termo aceito (null = fluxo antigo)
-          consentTermVersion: consentStamp.consentTermVersion, // versão aceita (null = fluxo antigo)
-          retentionDate,
-          deviceInfo: userAgent,
-          documents: encryptDocuments(documents || {}), // cifrado em repouso (AES-256-GCM)
-          customData: otherCustomData || {}
+        const now = new Date()
+        const occupied = await tx.participant.count({
+          where: occupiedSlotsWhere(standId, now)
+        })
+        if (occupied >= access.stand.maxRegistrations) {
+          // Distinguir lotado real de vaga travada: o responsável precisa
+          // entender quando a vaga libera (SPEC Fase 7, seção 4)
+          const nextLocked = await tx.participant.findFirst({
+            where: {
+              standId,
+              status: 'removed',
+              isDeleted: false,
+              slotLockedUntil: { gt: now }
+            },
+            orderBy: { slotLockedUntil: 'asc' },
+            select: { slotLockedUntil: true }
+          })
+          throw new StandFullError(nextLocked?.slotLockedUntil ?? null)
         }
-      })
 
-      // currentCount é cache de exibição: grava a contagem canônica
-      // (ativos + travados) no momento da escrita
-      await tx.stand.update({
-        where: { id: standId },
-        data: { currentCount: occupied + 1 }
-      })
+        const created = await tx.participant.create({ data: participantData })
 
-      return created
-    })
+        // Reconcilia o cache defasado para a contagem canônica + esta criação,
+        // curando a defasagem de locks expirados para as próximas reservas rápidas.
+        await tx.stand.update({
+          where: { id: standId },
+          data: { currentCount: occupied + 1 }
+        })
+
+        return created
+      })
+    }
 
     // Evento SEM-APROVAÇÃO: já fica elegível no registro → identidade + fan-out
     // (pós-commit da transação). Idempotente e não-fatal.
@@ -274,7 +305,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         message: 'Este CPF já está cadastrado neste evento'
       })
     }
-    console.error('Stand registration error:', error)
+    // Contenção de conexão/transação: transitório. Devolve 503 (não 500) para o
+    // client poder retentar, e loga o código Prisma para diagnóstico.
+    if (error.code === 'P2024' || error.code === 'P2028') {
+      console.error(`Stand registration contention (${error.code}):`, error.message)
+      return res.status(503).json({
+        error: 'Service busy',
+        message: 'Muitas pessoas cadastrando ao mesmo tempo. Aguarde um instante e tente novamente.'
+      })
+    }
+    console.error('Stand registration error:', error?.code ?? '(sem código)', error)
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Erro interno do servidor. Tente novamente.'
