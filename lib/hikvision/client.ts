@@ -37,6 +37,25 @@ export interface HikvisionClientConfig {
   useHttps?: boolean; // default false
   username: string;
   password: string;
+  /**
+   * Observador OPCIONAL de cada requisição ISAPI (status HTTP + corpo cru do
+   * device + esquema de auth usado). Existe para os runners de bancada
+   * conseguirem logar degrau a degrau — inclusive no SUCESSO, onde o retorno
+   * normal só entrega o corpo. Nenhum chamador de produção passa isto.
+   */
+  observer?: (obs: HikvisionObservation) => void;
+}
+
+/** Evento de uma requisição ISAPI. Nunca carrega credencial. */
+export interface HikvisionObservation {
+  context: string;
+  method: string;
+  path: string;
+  scheme: 'digest' | 'basic';
+  status?: number;   // HTTP status; undefined em erro de rede (sem resposta)
+  code?: string;     // ECONNREFUSED, ETIMEDOUT, ...
+  ok: boolean;
+  body?: unknown;    // corpo do device (sanitizado por construção: sem auth)
 }
 
 /**
@@ -78,6 +97,7 @@ export class HikvisionClient {
   private baseURL: string;
   private username: string;
   private password: string;
+  private observer?: (obs: HikvisionObservation) => void;
 
   constructor(config: HikvisionClientConfig) {
     if (!config || !config.ipAddress) {
@@ -89,6 +109,7 @@ export class HikvisionClient {
     this.baseURL = `${scheme}://${config.ipAddress}:${port}`;
     this.username = config.username;
     this.password = config.password;
+    this.observer = config.observer;
 
     try {
       this.digestAuth = new DigestAuth(this.username, this.password);
@@ -138,10 +159,12 @@ export class HikvisionClient {
           maxBodyLength: Infinity,
           maxContentLength: Infinity
         });
+        this.observe({ context: opts.context, method, path, scheme: 'digest', status: res.status, ok: true, body: res.data });
         return res.data;
       } catch (error) {
         // Digest é a auth real do device: o erro aqui é autoritativo (inclui
         // erros do device pós-autenticação, ex. 400). Sanitiza e propaga.
+        this.observeError(opts.context, method, path, 'digest', error);
         throw sanitizeError(opts.context, error);
       }
     }
@@ -156,10 +179,29 @@ export class HikvisionClient {
         maxBodyLength: Infinity,
         maxContentLength: Infinity
       });
+      this.observe({ context: opts.context, method, path, scheme: 'basic', status: res.status, ok: true, body: res.data });
       return res.data;
     } catch (error) {
+      this.observeError(opts.context, method, path, 'basic', error);
       throw sanitizeError(opts.context, error);
     }
+  }
+
+  // O observador é um extra de diagnóstico: se ele explodir, não pode derrubar
+  // a operação ISAPI que estava em curso.
+  private observe(obs: HikvisionObservation): void {
+    if (!this.observer) return;
+    try { this.observer(obs); } catch { /* diagnóstico nunca quebra o sync */ }
+  }
+
+  private observeError(context: string, method: string, path: string, scheme: 'digest' | 'basic', error: any): void {
+    this.observe({
+      context, method, path, scheme,
+      status: error?.response?.status,
+      code: error?.code,
+      ok: false,
+      body: error?.response?.data
+    });
   }
 
   // Get device information
@@ -240,6 +282,23 @@ export class HikvisionClient {
       contentType: `multipart/form-data; boundary=${boundary}`,
       context: 'uploadFace'
     });
+  }
+
+  // Verifica se a face de um usuário está NA BIBLIOTECA facial (FDLib), pelo
+  // FPID — que no nosso modelo é o próprio employeeNo. Read-only.
+  //
+  // Complementa o `searchUsers` (UserInfo/Search): aquele diz que o USUÁRIO
+  // existe e quantas faces ele tem (`numOfFace`); este confirma o registro do
+  // lado da FDLib. Usado na etapa de verificação do runner de sync.
+  async searchFace(employeeNo: string, fdid: string = '1', maxResults = 30) {
+    const searchData = {
+      searchResultPosition: 0,
+      maxResults,
+      faceLibType: 'blackFD',
+      FDID: fdid,
+      FPID: employeeNo
+    };
+    return this.request('POST', '/ISAPI/Intelligent/FDLib/FDSearch?format=json', { data: searchData, context: 'searchFace' });
   }
 
   // Registra um cartão (credencial numérica) para um usuário já existente.

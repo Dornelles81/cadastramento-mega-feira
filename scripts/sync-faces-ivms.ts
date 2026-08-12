@@ -12,10 +12,13 @@
  *   - Ignora erros de "pessoa já existe" no iVMS
  *   - Marca ivimsSync = true + ivimsSyncedAt apenas após sucesso confirmado
  *
- * Uso:
- *   npx tsx scripts/sync-faces-ivms.ts
- *   npx tsx scripts/sync-faces-ivms.ts --force   ← re-sincroniza todos
- *   npx tsx scripts/sync-faces-ivms.ts --dry-run ← simula sem enviar
+ * Uso (TRAVA: sem --all não faz nada — sync em massa só com flag explícita):
+ *   npx tsx scripts/sync-faces-ivms.ts --all
+ *   npx tsx scripts/sync-faces-ivms.ts --all --force   ← re-sincroniza todos
+ *   npx tsx scripts/sync-faces-ivms.ts --all --dry-run ← simula sem enviar
+ *
+ * Para teste controlado de UM participante contra o TERMINAL (e não contra o
+ * iVMS), use scripts/sync-faces-device.ts --participant=<id>.
  *
  * Pré-requisitos:
  *   1. iVMS-4200 AC instalado e rodando no PC local
@@ -35,11 +38,15 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 // Imports após o dotenv: lib/crypto valida MASTER_KEY em tempo de uso
 import { getFaceImageDataUrl } from '../lib/face-image'
 import { removeUserFromDevice } from '../lib/ivms'
+import { assertFaceCryptoReady } from '../lib/crypto-preflight'
 
 // ── Flags de linha de comando ─────────────────
 const args = process.argv.slice(2)
 const FORCE_RESYNC = args.includes('--force')
 const DRY_RUN     = args.includes('--dry-run')
+// TRAVA: este script sincroniza a BASE INTEIRA. Rodar sem flag disparava sync
+// em massa por engano — agora exige --all explícito.
+const RUN_ALL     = args.includes('--all')
 
 // ── Configurações ─────────────────────────────
 const CONFIG = {
@@ -315,8 +322,34 @@ function printSummary(result: SyncResult, total: number): void {
 // 5. MAIN
 // ─────────────────────────────────────────────────────────
 
+function printHelp(): void {
+  console.log(`
+╔════════════════════════════════════════════════╗
+║  Sync Faces → iVMS-4200 AC                     ║
+╚════════════════════════════════════════════════╝
+
+Este script sincroniza a BASE INTEIRA com o iVMS. Sem flag ele NÃO faz nada.
+
+  --all       obrigatório — confirma que o sync em massa é intencional
+  --force     re-sincroniza também quem já está marcado como sincronizado
+  --dry-run   simula, sem enviar nada
+
+Para testar UM participante contra o TERMINAL (ISAPI direto, com validação de
+foto e log degrau a degrau):
+  tsx scripts/sync-faces-device.ts --participant=<id|employeeNo> --dry-run
+`)
+}
+
 async function main(): Promise<void> {
+  if (!RUN_ALL) {
+    printHelp()
+    return
+  }
+
   printHeader()
+
+  // Preflight da cripto: chave errada faria todos parecerem "sem foto".
+  await assertFaceCryptoReady()
 
   const prisma = new PrismaClient()
   const result: SyncResult = { success: 0, failed: 0, skipped: 0, errors: [] }
