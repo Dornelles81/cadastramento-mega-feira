@@ -49,7 +49,6 @@ export default function EventFieldsPage() {
   const [showNewField, setShowNewField] = useState(false)
   const [loading, setLoading] = useState(true)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-  const [authToken, setAuthToken] = useState<string>('')
 
   // Check authentication
   useEffect(() => {
@@ -58,49 +57,10 @@ export default function EventFieldsPage() {
     }
   }, [status, router])
 
-  // Auto-login and load event data
+  // Load event data (autenticação via sessão NextAuth — cookie enviado automaticamente)
   useEffect(() => {
     const init = async () => {
       if (!slug || status !== 'authenticated') return
-
-      // Auto-login to fields auth system
-      let token = sessionStorage.getItem('adminFieldsAuth')
-      if (!token) {
-        try {
-          console.log('🔐 Attempting auto-login...')
-          const response = await fetch('/api/admin/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: 'admin123', action: 'login' })
-          })
-
-          console.log('📡 Response status:', response.status, response.statusText)
-
-          const data = await response.json()
-          console.log('📦 Response data:', data)
-
-          if (response.ok && data.success) {
-            token = data.token
-            sessionStorage.setItem('adminFieldsAuth', token)
-            console.log('✅ Auto-login successful, token:', token?.substring(0, 10) + '...')
-          } else {
-            console.error('❌ Auto-login failed. Status:', response.status, 'Data:', data)
-            showNotification('error', 'Erro ao autenticar: ' + (data.error || 'Senha incorreta'))
-            return
-          }
-        } catch (error) {
-          console.error('💥 Failed to auto-login:', error)
-          showNotification('error', 'Erro ao autenticar. Recarregue a página.')
-          return
-        }
-      } else {
-        console.log('🔑 Using existing token from sessionStorage')
-      }
-
-      // Store token in state
-      setAuthToken(token)
-
-      // Load event
       await loadEvent()
     }
 
@@ -129,10 +89,7 @@ export default function EventFieldsPage() {
 
   const loadFields = async (eventId: string) => {
     try {
-      const token = authToken || sessionStorage.getItem('adminFieldsAuth')
-      const response = await fetch(`/api/admin/fields?eventId=${eventId}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
+      const response = await fetch(`/api/admin/fields?eventId=${eventId}`)
 
       if (response.ok) {
         const data = await response.json()
@@ -153,23 +110,12 @@ export default function EventFieldsPage() {
         return
       }
 
-      const token = authToken || sessionStorage.getItem('adminFieldsAuth')
-
-      if (!token) {
-        showNotification('error', 'Não autenticado. Recarregue a página.')
-        console.error('❌ No auth token available')
-        return
-      }
-
-      console.log('💾 Saving field with token:', token.substring(0, 10) + '...')
-
       const method = field.id ? 'PUT' : 'POST'
 
       const response = await fetch('/api/admin/fields', {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           ...field,
@@ -196,12 +142,8 @@ export default function EventFieldsPage() {
     if (!event || !confirm('Tem certeza que deseja excluir este campo?')) return
 
     try {
-      const token = sessionStorage.getItem('adminFieldsAuth')
       const response = await fetch(`/api/admin/fields?id=${fieldId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        method: 'DELETE'
       })
 
       if (response.ok) {

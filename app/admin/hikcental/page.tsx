@@ -26,15 +26,10 @@ export default function HikCentralPage() {
   const [showInstructions, setShowInstructions] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  // Check for saved password
+  // Página protegida pelo middleware NextAuth (/admin/*) — sem gate de senha local
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedPassword = sessionStorage.getItem('adminPassword')
-      if (savedPassword === 'admin123') {
-        setIsPasswordValid(true)
-        loadParticipants()
-      }
-    }
+    setIsPasswordValid(true)
+    loadParticipants()
   }, [])
 
   const loadParticipants = async () => {

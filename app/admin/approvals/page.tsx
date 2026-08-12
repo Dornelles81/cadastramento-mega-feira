@@ -63,11 +63,7 @@ export default function ApprovalsPage() {
   const loadLogs = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/admin/approval-logs', {
-        headers: {
-          'Authorization': 'Bearer admin-token-mega-feira-2025'
-        }
-      })
+      const response = await fetch('/api/admin/approval-logs')
       if (response.ok) {
         const data = await response.json()
         setLogs(data.logs || [])

@@ -100,11 +100,7 @@ export default function EventApprovalsPage() {
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/admin/approval-logs?eventId=${event.id}`, {
-        headers: {
-          'Authorization': 'Bearer admin-token-mega-feira-2025'
-        }
-      })
+      const response = await fetch(`/api/admin/approval-logs?eventId=${event.id}`)
       if (response.ok) {
         const data = await response.json()
         setLogs(data.logs || [])

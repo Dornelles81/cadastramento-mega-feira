@@ -17,9 +17,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email e senha são obrigatórios')
         }
 
-        // Find admin by email
-        const admin = await prisma.eventAdmin.findUnique({
-          where: { email: credentials.email },
+        // Find admin by email (normalizado: navegadores móveis capitalizam
+        // a primeira letra e autofill pode incluir espaços)
+        const normalizedEmail = credentials.email.trim().toLowerCase()
+        const admin = await prisma.eventAdmin.findFirst({
+          where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
           include: {
             events: {
               where: { isActive: true },
@@ -174,7 +176,9 @@ export const authOptions: NextAuthOptions = {
     }
   },
 
-  secret: process.env.NEXTAUTH_SECRET || 'mega-feira-secret-change-in-production',
+  // Sem fallback: em produção o NextAuth falha explicitamente se NEXTAUTH_SECRET
+  // não estiver configurado (nunca usar segredo padrão)
+  secret: process.env.NEXTAUTH_SECRET,
 
   debug: process.env.NODE_ENV === 'development'
 }

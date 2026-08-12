@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { rateLimitOrReject } from '../../../lib/rate-limit'
 
 // Azure Face API configuration
 const AZURE_FACE_ENDPOINT = process.env.AZURE_FACE_ENDPOINT || 'https://YOUR-RESOURCE-NAME.cognitiveservices.azure.com'
@@ -11,6 +12,11 @@ const RECOGNITION_MODEL = 'recognition_04'
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Endpoint público usado na captura facial: limitar abuso (e custo da API Azure)
+  if (!rateLimitOrReject(req, res, 'detect-face', 60, 10 * 60 * 1000)) {
+    return
   }
 
   try {

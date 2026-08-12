@@ -76,10 +76,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: participant.id,
         shortId: participant.id.substring(0, 8).toUpperCase(),
         name: participant.name,
-        cpf: participant.cpf,
-        email: participant.email,
-        phone: participant.phone,
-        faceImageUrl: participant.faceImageUrl,
+        // Endpoint público: CPF mascarado, sem email/telefone/foto (LGPD).
+        // A foto fica disponível para staff autenticado via /api/participant-image.
+        cpf: maskCPF(participant.cpf),
         approvalStatus: participant.approvalStatus || 'pending',
         registeredAt: participant.createdAt
       },
@@ -115,9 +114,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       error: 'Erro interno',
       message: 'Ocorreu um erro ao verificar o participante.'
     })
-  } finally {
-    await prisma.$disconnect()
   }
+}
+
+function maskCPF(cpf: string): string {
+  const digits = cpf.replace(/\D/g, '')
+  if (digits.length !== 11) return '***'
+  return `***.${digits.slice(3, 6)}.${digits.slice(6, 9)}-**`
 }
 
 function getStatusMessage(
