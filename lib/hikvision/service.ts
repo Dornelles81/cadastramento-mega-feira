@@ -26,6 +26,12 @@ export class HikvisionService {
         throw new Error('Participant not found');
       }
 
+      // CRÍTICO: vale também quando o id é pedido explicitamente — sincronizar
+      // um removido recadastraria no terminal quem perdeu o acesso.
+      if (participant.status !== 'active' || participant.isDeleted) {
+        throw new Error('Participante removido: sincronização bloqueada (reabriria o acesso físico)');
+      }
+
       // Generate employee number (using last 8 digits of ID or CPF)
       const employeeNo = participant.cpf.replace(/\D/g, '').slice(-8) || 
                         participantId.slice(-8);
@@ -108,9 +114,13 @@ export class HikvisionService {
   // Sync all pending participants
   async syncPendingParticipants() {
     try {
-      // Get all participants not synced
+      // Get all participants not synced.
+      // CRÍTICO: removido/excluído NUNCA entra na fila — reenviá-lo ao terminal
+      // reabriria o acesso físico de quem foi retirado do evento.
       const pending = await prisma.participant.findMany({
         where: {
+          status: 'active',
+          isDeleted: false,
           OR: [
             { syncStatus: null },
             { syncStatus: 'pending' },

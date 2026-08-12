@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import { prisma } from '../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
+import { assertFaceCryptoReady, CryptoPreflightError } from '../../../lib/crypto-preflight'
 
 
 interface HikvisionUser {
@@ -37,18 +38,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const { participantIds, syncAll } = req.body;
   
-  // Configuração do dispositivo Hikvision
-  const HIKVISION_URL = `http://${process.env.HIKVISION_DEVICE_IP || '192.168.1.20'}`;
+  // Configuração do dispositivo Hikvision — IP vem do env, sem fallback
+  // hardcoded (um IP fixo no código aponta para o terminal errado quando a rede
+  // muda, e já apontou).
+  if (!process.env.HIKVISION_DEVICE_IP) {
+    return res.status(500).json({ error: 'HIKVISION_DEVICE_IP não configurado no ambiente' });
+  }
+  const HIKVISION_URL = `http://${process.env.HIKVISION_DEVICE_IP}`;
   const HIKVISION_USERNAME = process.env.HIKVISION_USER || 'admin';
   const HIKVISION_PASSWORD = process.env.HIKVISION_PASSWORD || '';
 
   try {
+    // Preflight da cripto: com MASTER_KEY errada toda biometria fica ilegível e
+    // a rota sincronizaria "0 participantes" reportando sucesso.
+    await assertFaceCryptoReady();
+
     let participants;
-    
+
+    // CRÍTICO: nunca sincronizar participante removido/excluído — recadastrá-lo
+    // no terminal reabriria o acesso físico de quem foi retirado do evento
+    // (ADENDO acesso-por-stand, seção 5). Vale para os dois modos, inclusive
+    // quando o id é passado explicitamente.
     if (syncAll) {
       participants = await prisma.participant.findMany({
         where: {
           approvalStatus: 'approved',
+          status: 'active',
+          isDeleted: false,
           hikCentralSyncStatus: { not: 'synced' }
         },
         take: 30 // Limite do dispositivo
@@ -57,7 +73,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       participants = await prisma.participant.findMany({
         where: {
           id: { in: participantIds },
-          approvalStatus: 'approved'
+          approvalStatus: 'approved',
+          status: 'active',
+          isDeleted: false
         }
       });
     } else {
@@ -232,7 +250,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(200).json({
       success: true,
       message: `Sincronização com dispositivo Hikvision concluída`,
-      device: process.env.HIKVISION_DEVICE_IP || '192.168.1.20',
+      device: process.env.HIKVISION_DEVICE_IP,
       totalProcessed: participants.length,
       successful: results.length,
       failed: errors.length,
@@ -242,6 +260,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   } catch (error: any) {
     console.error('Sync error:', error);
+    // Falha de configuração da chave é 500 explícito, com a causa no corpo —
+    // nunca "0 sincronizados, sucesso".
+    if (error instanceof CryptoPreflightError) {
+      return res.status(500).json({
+        error: 'Criptografia de biometria indisponível — sync abortado',
+        details: error.message
+      });
+    }
     return res.status(500).json({ 
       error: 'Failed to sync with Hikvision device',
       details: error.message
