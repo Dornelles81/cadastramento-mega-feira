@@ -55,7 +55,9 @@ async function main() {
     })
     const { id: tokId, token } = await generateAgentToken({ eventId: ev.id, name: 'PC F3' })
     created.tokens.push(tokId)
-    const cfg: AgentConfig = { baseUrl: BASE, token, pollMs: 5000, workLimit: 50 }
+    // reconcileMs só é lido pelo laço do agente (agent.ts), não por runOnce;
+    // vai o mesmo default de agent/config.ts para satisfazer o tipo.
+    const cfg: AgentConfig = { baseUrl: BASE, token, pollMs: 5000, workLimit: 50, reconcileMs: 60000 }
 
     console.log('\n=== 1) DRY-RUN: planeja addUser+uploadFace+registerCard, sem escrever ===')
     const r = await runOnce(cfg, { dryRun: true })
