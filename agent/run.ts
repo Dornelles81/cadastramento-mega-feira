@@ -1,7 +1,13 @@
 /**
  * Entrypoint do agente (.exe). Uso:
- *   mega-agente.exe              → loop contínuo (sync automático)
- *   mega-agente.exe --dry-run    → mostra o que faria, SEM escrever no device
+ *   mega-agente.exe                 → loop contínuo (sync automático)
+ *   mega-agente.exe --dry-run       → mostra o que faria, SEM escrever no device
+ *   mega-agente.exe --no-reconcile  → loop sem a reconciliação periódica
+ *
+ * O `--no-reconcile` é para operação ASSISTIDA: o agente aplica só o que já
+ * está enfileirado e não varre o roster do device para enfileirar correções.
+ * Ele AINDA ESCREVE no device se houver fila — quem não pode escrever nada
+ * usa `--dry-run`.
  *
  * Config em agent.config.json ao lado do .exe (só o token é obrigatório).
  */
@@ -17,7 +23,7 @@ async function main() {
     else r.planned.forEach(p => console.log('  - ' + p))
     return
   }
-  await mainLoop()
+  await mainLoop({ reconcile: !process.argv.includes('--no-reconcile') })
 }
 
 main().catch((e: any) => {

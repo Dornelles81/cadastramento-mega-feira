@@ -31,11 +31,43 @@ recompilar por evento. (Dá pra usar env `AGENT_TOKEN`/`AGENT_BASE_URL` no lugar
 
 ## Uso
 ```
-mega-agente.exe              # loop contínuo (sync automático)
-mega-agente.exe --dry-run    # mostra o que faria, SEM escrever no device
+mega-agente.exe                 # loop contínuo (sync automático)
+mega-agente.exe --dry-run       # mostra o que faria, SEM escrever no device
+mega-agente.exe --no-reconcile  # loop sem a reconciliação periódica
 ```
 O `--dry-run` é a checagem segura do dia: confere conectividade e o que está
 pendente sem tocar nos terminais.
+
+### ⚠️ Observar o agente SEM risco de escrita
+
+**Nunca use `mainLoop` (o modo padrão) para "só ver se o agente está vivo".**
+Ele aplica no device tudo que estiver na fila, e a reconciliação enfileira
+sozinha ao varrer o roster. Para observação use um destes:
+
+| Objetivo | Como | Escreve no device? |
+|---|---|---|
+| Ver conectividade e o que está pendente | `--dry-run` | **não** |
+| Um único ciclo real (heartbeat + fila) | `runOnce(cfg)` direto | só se a fila tiver itens |
+| Loop sem varredura de roster | `--no-reconcile` | só se a fila tiver itens |
+
+`--no-reconcile` **não** é modo somente-leitura: ele apenas impede que a
+reconciliação crie trabalho novo. Se já houver fila, o agente aplica. Quem não
+pode escrever nada usa `--dry-run`.
+
+Para um ciclo único de verdade (com heartbeat, que o `--dry-run` pula), chame
+`runOnce(cfg)` de um script — não o `mainLoop`:
+
+```ts
+import { loadConfig } from './agent/config'
+import { runOnce } from './agent/agent'
+await runOnce(loadConfig())   // 1 ciclo: terminals + heartbeat + work + ack
+```
+
+> **Cadência do primeiro reconcile.** `lastReconcile` inicia em `Date.now()`, de
+> modo que a primeira reconciliação só ocorre após um `reconcileMs` completo.
+> Antes iniciava em `0`, e como a conta é `Date.now() - lastReconcile`, o
+> primeiro ciclo sempre disparava a varredura — ligar o agente num evento com
+> roster cheio sincronizava tudo na hora, sem aviso.
 
 ## Empacotamento como .exe (recomendado: @yao-pkg/pkg)
 

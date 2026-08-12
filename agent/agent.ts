@@ -90,10 +90,30 @@ export async function runOnce(cfg: AgentConfig, opts: { dryRun?: boolean } = {})
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
-export async function mainLoop(): Promise<void> {
+export interface MainLoopOptions {
+  /**
+   * Desliga a reconciliação periódica. Para operação ASSISTIDA (primeira
+   * execução, bancada, diagnóstico): o agente só aplica o que já está
+   * enfileirado, sem varrer o roster do device e enfileirar correções.
+   */
+  reconcile?: boolean
+}
+
+export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
   const cfg = loadConfig()
-  console.log(`[agente] iniciado · base=${cfg.baseUrl} · poll=${cfg.pollMs}ms · reconcile=${cfg.reconcileMs}ms`)
-  let lastReconcile = 0
+  const reconcileEnabled = opts.reconcile !== false
+  console.log(
+    `[agente] iniciado · base=${cfg.baseUrl} · poll=${cfg.pollMs}ms · ` +
+    (reconcileEnabled ? `reconcile=${cfg.reconcileMs}ms` : 'reconcile=DESLIGADO (--no-reconcile)')
+  )
+  // Começa em "agora", não em 0. Com `lastReconcile = 0` a conta era
+  // `Date.now() - 0` — a era Unix inteira em ms —, sempre maior que qualquer
+  // reconcileMs finito, então a reconciliação disparava JÁ NO PRIMEIRO CICLO,
+  // ignorando a cadência. Num evento com roster cheio isso significa ligar o
+  // agente e imediatamente varrer o device e enfileirar o sync inteiro, que é
+  // exatamente o que ninguém espera de uma primeira execução de observação.
+  // Agora o primeiro reconcile acontece só depois de um intervalo completo.
+  let lastReconcile = Date.now()
   for (;;) {
     try {
       const r = await runOnce(cfg)
@@ -101,7 +121,7 @@ export async function mainLoop(): Promise<void> {
         console.log(`[agente] ${new Date().toISOString()} push=${r.pushCount} removal=${r.removalCount} ok=${r.applied} falhas=${r.failed}`)
       }
       // Reconciliação em cadência própria (mais pesada — lista o roster do device).
-      if (Date.now() - lastReconcile >= cfg.reconcileMs) {
+      if (reconcileEnabled && Date.now() - lastReconcile >= cfg.reconcileMs) {
         lastReconcile = Date.now()
         try {
           const rc = await runReconcile(cfg)
