@@ -103,6 +103,7 @@ model Event {
   vehicleCredentials VehicleCredential[]
   vehicleAccessLogs  VehicleAccessLog[]
   terminals          Terminal[]
+  terminalEvents     TerminalEvent[]
   agentTokens        AgentToken[]
 
   @@index([slug])
@@ -479,10 +480,16 @@ model ParticipantEditToken {
 // terminais (adicionar/remover = config, não código). Senha do device em
 // AES-256-GCM (passwordEncrypted), decriptada só na nuvem; entregue ao agente
 // em runtime pelo endpoint autenticado.
+// EQUIPAMENTO FÍSICO. Existe independente de evento: a mesma catraca atende
+// feiras diferentes em períodos diferentes. O vínculo com evento mora em
+// `TerminalEvent` (alocação com período), NÃO aqui.
 model Terminal {
   id String @id @default(uuid())
 
-  // Escopo por evento (coerente com o token do agente por evento)
+  // DEPRECADO — vínculo 1:1 sem período, anterior ao modelo de alocação.
+  // Ainda alimenta o fan-out da Fase 2 (`sync-enqueue.enqueueForContext`), por
+  // isso não foi removido junto. Fonte de verdade do ESCOPO DO SYNC é
+  // `TerminalEvent`; migrar os leitores e então dropar esta coluna.
   eventId String?
   event   Event?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
@@ -493,8 +500,16 @@ model Terminal {
   username  String  @default("admin")
   passwordEncrypted Bytes? // senha do device, AES-256-GCM; nunca em claro/código
 
+  // Identificação do equipamento — preenchida a partir do
+  // /ISAPI/System/deviceInfo, para saber a qual hardware um resultado se refere
+  // (o comportamento de ISAPI varia entre modelo/firmware).
+  deviceModel     String? // ex.: "DS-K1T673DX-BR"
+  firmwareVersion String? // ex.: "V3.18.0"
+  serialNumber    String?
+  fdid            String  @default("1") // biblioteca facial usada no FDLib
+
   gate          String? // local/portão
-  capacityLimit Int     @default(5000) // capacidade de faces do DS-K1T671M-L
+  capacityLimit Int     @default(5000) // capacidade de faces do device
 
   isActive   Boolean   @default(true)
   lastSeenAt DateTime? // último contato bem-sucedido (heartbeat do agente)
@@ -503,11 +518,57 @@ model Terminal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  syncStates ParticipantTerminalSync[]
+  syncStates  ParticipantTerminalSync[]
+  allocations TerminalEvent[]
 
   @@index([eventId])
   @@index([isActive])
+  @@index([ipAddress])
   @@map("terminals")
+}
+
+// ALOCAÇÃO de um terminal a um evento, com período. É a fonte de verdade do
+// escopo do sync: a pergunta deixa de ser "quais participantes ativos existem"
+// e passa a ser "quais participantes ativos do evento alocado a ESTE terminal,
+// dentro do período vigente".
+//
+// Um terminal pode ser alocado a eventos diferentes em períodos diferentes; um
+// evento pode ter vários terminais. Períodos SOBREPOSTOS no mesmo terminal são
+// barrados na criação (`lib/terminals/allocation.ts`), senão "o evento alocado"
+// ficaria ambíguo.
+//
+// EXPIRAÇÃO É ASSIMÉTRICA DE PROPÓSITO: criar alocação é automático, mas expirar
+// NUNCA apaga biometria do terminal. A expiração apenas MARCA (`expiredAt`) e
+// levanta a bandeira `pendingCleanup`; a remoção efetiva exige ação explícita do
+// admin. Uma feira que estende um dia não pode esvaziar a catraca sozinha.
+model TerminalEvent {
+  id String @id @default(uuid())
+
+  terminalId String
+  terminal   Terminal @relation(fields: [terminalId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+
+  // Chave de desligamento pelo admin. Vigência = isActive AND start <= now <= end.
+  isActive Boolean @default(true)
+
+  expiredAt      DateTime? // quando a varredura marcou como expirada
+  pendingCleanup Boolean   @default(false) // há faces deste evento no terminal
+  cleanedAt      DateTime? // quando o admin de fato removeu (ação explícita)
+  cleanedBy      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([terminalId, eventId, startDate])
+  @@index([terminalId, isActive])
+  @@index([eventId])
+  @@index([pendingCleanup])
+  @@map("terminal_events")
 }
 
 // Estado de sincronização POR participante POR terminal (substitui os flags
