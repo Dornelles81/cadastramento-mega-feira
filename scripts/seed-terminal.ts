@@ -73,11 +73,9 @@ async function main() {
     ...(info ?? {}),
     // Senha só é reescrita quando DEVICE_PASS é fornecida (senão preserva a que
     // já está criptografada no banco).
-    ...(PASS ? { passwordEncrypted: encryptString(PASS) } : {}),
-    // DEPRECADO: mantido em sincronia com a alocação enquanto o fan-out da
-    // Fase 2 (`sync-enqueue`) ainda ler `Terminal.eventId`. A fonte de verdade
-    // do escopo do sync é a alocação abaixo.
-    eventId: evento.id
+    ...(PASS ? { passwordEncrypted: encryptString(PASS) } : {})
+    // `eventId` não é mais escrito: o fan-out, o /work e a reconciliação leem a
+    // ALOCAÇÃO (criada abaixo), que é a fonte de verdade do escopo do sync.
   }
 
   const terminal = existente

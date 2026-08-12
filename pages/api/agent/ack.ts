@@ -14,6 +14,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
+import { hadAllocationToEvent } from '../../../lib/terminals/allocation'
 
 type Kind = 'face' | 'card' | 'removal'
 
@@ -44,12 +45,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
       continue
     }
 
-    // Escopo: a linha precisa pertencer a um terminal do evento do token.
+    // Escopo por ALOCAÇÃO — aqui DELIBERADAMENTE sem exigir período vigente.
+    // O ack reporta trabalho que a nuvem JÁ despachou: se a alocação virar
+    // entre o /work e o /ack (pega às 23:59, confirma às 00:01), recusar não
+    // protege nada (o device já foi escrito) e ainda perderia a confirmação,
+    // deixando a linha `pending` para sempre. Basta o terminal ter alocação
+    // para o evento do token. Ver `hadAllocationToEvent`.
     const row = await prisma.participantTerminalSync.findFirst({
-      where: { id: syncId, terminal: { eventId: agent.eventId } },
-      select: { id: true }
+      where: { id: syncId },
+      select: { id: true, terminalId: true }
     })
-    if (!row) {
+    if (!row || !(await hadAllocationToEvent(row.terminalId, agent.eventId))) {
       results.push({ syncId, kind, ok: false, reason: 'fora do escopo do token' })
       continue
     }

@@ -12,6 +12,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
 import { decryptToString, isEncryptedPayload } from '../../../lib/crypto'
+import { listAllocatedTerminalIds } from '../../../lib/terminals/allocation'
 
 async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentContext) {
   if (req.method !== 'GET') {
@@ -21,8 +22,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     return res.status(200).json({ terminals: [] })
   }
 
+  // ESCOPO por ALOCAÇÃO VIGENTE (não mais `Terminal.eventId`). Aqui isso é
+  // especialmente relevante: este endpoint entrega a SENHA DO DEVICE em claro.
+  // Com o período respeitado, um agente cujo evento terminou deixa de receber
+  // credencial de terminal.
+  const allocatedIds = await listAllocatedTerminalIds(agent.eventId)
+  if (allocatedIds.length === 0) {
+    return res.status(200).json({ terminals: [] })
+  }
+
   const rows = await prisma.terminal.findMany({
-    where: { eventId: agent.eventId },
+    where: { id: { in: allocatedIds } },
     orderBy: { createdAt: 'asc' }
   })
 

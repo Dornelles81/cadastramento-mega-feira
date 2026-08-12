@@ -12,6 +12,7 @@ import { prisma } from '../../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
 import { encryptString } from '../../../../lib/crypto'
 import { backfillTerminal } from '../../../../lib/agent/sync-enqueue'
+import { createAllocation } from '../../../../lib/terminals/allocation'
 
 function publicTerminal(t: any) {
   const { passwordEncrypted, ...rest } = t
@@ -21,17 +22,42 @@ function publicTerminal(t: any) {
 async function handler(req: NextApiRequest, res: NextApiResponse, _session: Session) {
   if (req.method === 'GET') {
     const eventId = typeof req.query.eventId === 'string' ? req.query.eventId : undefined
+    // Filtro por ALOCAÇÃO (TerminalEvent), não mais pela coluna deprecada.
+    // Propositalmente sem recorte de período: o admin precisa enxergar também
+    // o terminal cuja alocação ainda não começou ou já terminou — esconder
+    // faria parecer que o equipamento sumiu do evento.
     const rows = await prisma.terminal.findMany({
-      where: eventId ? { eventId } : {},
+      where: eventId ? { allocations: { some: { eventId } } } : {},
       orderBy: { createdAt: 'asc' }
     })
     return res.status(200).json({ terminals: rows.map(publicTerminal) })
   }
 
   if (req.method === 'POST') {
-    const { name, ipAddress, port, useHttps, username, password, gate, capacityLimit, eventId, isActive } = req.body || {}
+    const { name, ipAddress, port, useHttps, username, password, gate, capacityLimit, eventId, startDate, endDate, isActive } = req.body || {}
     if (!name || !ipAddress) {
       return res.status(400).json({ error: 'name e ipAddress são obrigatórios' })
+    }
+
+    // Vínculo com evento vira ALOCAÇÃO COM PERÍODO. O corpo aceita startDate e
+    // endDate; sem eles, o período assumido é o do próprio evento — que é o
+    // significado prático de "este terminal atende esta feira".
+    let periodo: { startDate: Date; endDate: Date } | null = null
+    if (eventId) {
+      const ev = await prisma.event.findUnique({
+        where: { id: String(eventId) },
+        select: { startDate: true, endDate: true }
+      })
+      if (!ev) {
+        return res.status(400).json({ error: `evento ${eventId} não encontrado` })
+      }
+      periodo = {
+        startDate: startDate ? new Date(startDate) : ev.startDate,
+        endDate: endDate ? new Date(endDate) : ev.endDate
+      }
+      if (isNaN(periodo.startDate.getTime()) || isNaN(periodo.endDate.getTime())) {
+        return res.status(400).json({ error: 'startDate/endDate inválidos' })
+      }
     }
 
     const created = await prisma.terminal.create({
@@ -44,10 +70,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse, _session: Sess
         passwordEncrypted: password ? encryptString(String(password)) : undefined,
         gate: gate || null,
         capacityLimit: capacityLimit != null ? Number(capacityLimit) : undefined,
-        eventId: eventId || null,
         isActive: isActive !== false
       }
     })
+
+    if (eventId && periodo) {
+      try {
+        await createAllocation({ terminalId: created.id, eventId: String(eventId), ...periodo })
+      } catch (allocErr: any) {
+        // Terminal criado mas sem alocação: some do escopo do sync em vez de
+        // sincronizar errado. Reportado para o admin corrigir o período.
+        return res.status(201).json({
+          terminal: publicTerminal(created),
+          warning: `terminal criado, mas a alocação falhou: ${allocErr?.message}`
+        })
+      }
+    }
     // Backfill: o roster elegível do contexto já existente passa a ter linha de
     // sync pendente neste terminal novo (não duplica). Idempotente e não-fatal.
     try {

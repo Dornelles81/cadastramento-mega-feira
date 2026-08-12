@@ -46,7 +46,20 @@ async function main() {
     process.exit(1)
   }
 
-  const terminals = await prisma.terminal.count({ where: { eventId: event.id, isActive: true } })
+  // Terminais no escopo real do fan-out: ALOCACAO VIGENTE (TerminalEvent),
+  // nao a coluna deprecada Terminal.eventId. Consulta inline de proposito —
+  // lib/terminals/allocation usa o cliente compartilhado de lib/prisma, e
+  // estes scripts falam com o banco de BRANCH pelo seu proprio PrismaClient.
+  const agora = new Date()
+  const terminals = await prisma.terminalEvent.count({
+    where: {
+      eventId: event.id,
+      isActive: true,
+      startDate: { lte: agora },
+      endDate: { gte: agora },
+      terminal: { isActive: true }
+    }
+  })
   console.log(`evento          : ${event.name} (${event.code})`)
   console.log(`requireFace     : ${event.eventConfigs?.requireFace !== false}`)
   console.log(`exige aprovação : ${event.requiresApprovalForAccess}  → fan-out no POST: ${event.requiresApprovalForAccess === false ? `SIM (${terminals} terminais)` : 'não'}`)

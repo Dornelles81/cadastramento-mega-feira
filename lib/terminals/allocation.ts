@@ -122,6 +122,30 @@ export async function isTerminalAllocatedToEvent(
   return scope.ok && scope.allocation.eventId === eventId
 }
 
+/**
+ * O terminal JÁ TEVE (ou tem) alocação para este evento — sem exigir que o
+ * período esteja vigente agora.
+ *
+ * Existe para o `/api/agent/ack`, e SÓ para ele. O ack reporta trabalho que a
+ * nuvem JÁ despachou: se o período virar entre o `/work` e o `/ack` (agente
+ * pega às 23:59, confirma às 00:01), recusar o ack não protege nada — o device
+ * já foi escrito — e ainda perde a informação, deixando a linha `pending` para
+ * sempre e criando divergência que a reconciliação teria de limpar depois.
+ *
+ * Para escopo de LEITURA/ESCRITA nova (work, terminals, heartbeat) use
+ * `isTerminalAllocatedToEvent`, que exige período vigente.
+ */
+export async function hadAllocationToEvent(
+  terminalId: string,
+  eventId: string
+): Promise<boolean> {
+  const qualquer = await prisma.terminalEvent.findFirst({
+    where: { terminalId, eventId },
+    select: { id: true }
+  })
+  return qualquer !== null
+}
+
 export interface CreateAllocationInput {
   terminalId: string
   eventId: string

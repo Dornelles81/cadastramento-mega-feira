@@ -12,6 +12,7 @@ dotenv.config({ path: '.env.local' })
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'
 import { generateAgentToken, revokeAgentToken } from '../lib/agent/tokens'
+import { createAllocation } from '../lib/terminals/allocation'
 import { runOnce } from '../agent/agent'
 import type { AgentConfig } from '../agent/config'
 
@@ -39,9 +40,11 @@ async function main() {
     })
     created.events.push(ev.id)
     const term = await prisma.terminal.create({
-      data: { eventId: ev.id, name: 'BANCADA F3', ipAddress: '192.168.9.99', isActive: true, passwordEncrypted: encryptString('x') }
+      data: { name: 'BANCADA F3', ipAddress: '192.168.9.99', isActive: true, passwordEncrypted: encryptString('x') }
     })
     created.terminals.push(term.id)
+    // Escopo do sync vem da ALOCACAO (Terminal.eventId nao e mais lido).
+    await createAllocation({ terminalId: term.id, eventId: ev.id, startDate: new Date(now.getTime() - 86400000), endDate: new Date(now.getTime() + 86400000) })
     const p = await prisma.participant.create({
       data: {
         eventId: ev.id, name: 'P F3', cpf: `${Date.now()}`.slice(-11),
@@ -98,6 +101,7 @@ async function main() {
     console.log(`\n=== RESULTADO: ${failures === 0 ? 'TODOS PASSARAM ✓' : failures + ' FALHA(S) ✗'} ===`)
   } finally {
     for (const id of created.tokens) { try { await revokeAgentToken(id) } catch {} }
+    await prisma.terminalEvent.deleteMany({ where: { terminalId: { in: created.terminals } } }).catch(() => {})
     await prisma.participantTerminalSync.deleteMany({ where: { participantId: { in: created.participants } } }).catch(() => {})
     await prisma.participant.deleteMany({ where: { id: { in: created.participants } } }).catch(() => {})
     await prisma.terminal.deleteMany({ where: { id: { in: created.terminals } } }).catch(() => {})

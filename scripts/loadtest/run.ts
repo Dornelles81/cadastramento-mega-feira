@@ -80,7 +80,20 @@ async function preflight(prisma: PrismaClient, probe: ConnProbe) {
       console.error(`\n❌ Evento "${EVENT}" não existe neste banco. Use --event=<slug>.`)
       process.exit(1)
     }
-    const terminals = await prisma.terminal.count({ where: { eventId: ev.id, isActive: true } })
+    // Terminais no escopo real do fan-out: ALOCACAO VIGENTE (TerminalEvent),
+  // nao a coluna deprecada Terminal.eventId. Consulta inline de proposito —
+  // lib/terminals/allocation usa o cliente compartilhado de lib/prisma, e
+  // estes scripts falam com o banco de BRANCH pelo seu proprio PrismaClient.
+  const agora = new Date()
+  const terminals = await prisma.terminalEvent.count({
+    where: {
+      eventId: ev.id,
+      isActive: true,
+      startDate: { lte: agora },
+      endDate: { gte: agora },
+      terminal: { isActive: true }
+    }
+  })
     const fanout = ev.requiresApprovalForAccess === false
     console.log(`  evento         : ${ev.name} (${ev.code})`)
     console.log(`  fan-out no POST: ${fanout ? `SIM — ${terminals} terminal(is) ativo(s) → ~${4 + 2 * terminals} queries extras/cadastro` : 'não (evento exige aprovação)'}`)

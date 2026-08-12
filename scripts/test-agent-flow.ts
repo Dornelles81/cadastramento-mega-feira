@@ -16,6 +16,7 @@ dotenv.config({ path: '.env.local' })
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'
 import { generateAgentToken, revokeAgentToken } from '../lib/agent/tokens'
+import { createAllocation } from '../lib/terminals/allocation'
 
 const BASE = process.env.AGENT_TEST_BASE || 'http://localhost:3000'
 const SUF = `agenttest-${Date.now()}`
@@ -59,12 +60,18 @@ async function main() {
     // --- Terminais (senha criptografada) ---
     const PASS_A = 'SenhaDeviceA#2026'
     const termA = await prisma.terminal.create({
-      data: { eventId: evA.id, name: 'BANCADA A', ipAddress: '192.168.1.50', passwordEncrypted: encryptString(PASS_A) }
+      data: { name: 'BANCADA A', ipAddress: '192.168.1.50', passwordEncrypted: encryptString(PASS_A) }
     })
     const termB = await prisma.terminal.create({
-      data: { eventId: evB.id, name: 'BANCADA B', ipAddress: '192.168.1.60', passwordEncrypted: encryptString('SenhaB') }
+      data: { name: 'BANCADA B', ipAddress: '192.168.1.60', passwordEncrypted: encryptString('SenhaB') }
     })
     created.terminals.push(termA.id, termB.id)
+
+    // Escopo por ALOCACAO: e ela que separa A de B agora, nao Terminal.eventId.
+    // O isolamento testado abaixo (token B nao enxerga A) passa a ser garantido
+    // pelo par (evento alocado + periodo vigente).
+    await createAllocation({ terminalId: termA.id, eventId: evA.id, startDate: now, endDate: end })
+    await createAllocation({ terminalId: termB.id, eventId: evB.id, startDate: now, endDate: end })
 
     // --- Participante elegível com face criptografada (evento A) ---
     const partPush = await prisma.participant.create({
@@ -171,6 +178,7 @@ async function main() {
     console.log(`\n=== RESULTADO: ${failures === 0 ? 'TODOS PASSARAM ✓' : failures + ' FALHA(S) ✗'} ===`)
   } finally {
     // limpeza (ordem respeita FKs; cascade cobre o resto)
+    for (const id of created.terminals) await prisma.terminalEvent.deleteMany({ where: { terminalId: id } })
     for (const id of created.syncs) await prisma.participantTerminalSync.deleteMany({ where: { id } })
     for (const id of created.participants) await prisma.participant.deleteMany({ where: { id } })
     for (const id of created.tokens) await prisma.agentToken.deleteMany({ where: { id } })

@@ -44,7 +44,7 @@ async function main() {
     const now = new Date()
     const ev = await prisma.event.create({ data: { name: 'FV TEST', slug: `fv-${SUF}`, code: `FV-${SUF}`, startDate: now, endDate: new Date(now.getTime() + 86400000), requiresApprovalForAccess: true } })
     created.events.push(ev.id)
-    const term = await prisma.terminal.create({ data: { eventId: ev.id, name: 'FV', ipAddress: '192.168.9.55', isActive: true, passwordEncrypted: encryptString('x') } })
+    const term = await prisma.terminal.create({ data: { name: 'FV', ipAddress: '192.168.9.55', isActive: true, passwordEncrypted: encryptString('x') } })
     created.terminals.push(term.id)
 
     // ESCOPO por ALOCACAO: o fan-out, o /work e a reconciliacao derivam o

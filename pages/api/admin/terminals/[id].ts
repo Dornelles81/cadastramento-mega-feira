@@ -32,8 +32,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse, _session: Sess
     if (username !== undefined) data.username = username
     if (gate !== undefined) data.gate = gate || null
     if (capacityLimit !== undefined) data.capacityLimit = Number(capacityLimit)
-    if (eventId !== undefined) data.eventId = eventId || null
     if (isActive !== undefined) data.isActive = isActive === true
+    // `eventId` NÃO é mais aceito aqui: trocar o evento de um terminal virou
+    // gerir ALOCAÇÃO (com período), não editar uma coluna. Aceitar em silêncio
+    // daria a impressão de que o vínculo mudou sem mudar o escopo do sync.
+    if (eventId !== undefined) {
+      return res.status(400).json({
+        error: 'eventId não é editável aqui. O vínculo terminal↔evento é uma ALOCAÇÃO com período (TerminalEvent) — use o cadastro de alocação.'
+      })
+    }
     // Senha só é reescrita quando vier um valor não-vazio.
     if (password) data.passwordEncrypted = encryptString(String(password))
 

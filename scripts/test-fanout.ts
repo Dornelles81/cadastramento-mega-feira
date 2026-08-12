@@ -47,8 +47,8 @@ async function main() {
     created.events.push(ev.id)
 
     // Terminal ATIVO + terminal INATIVO (mesmo evento)
-    const termActive = await prisma.terminal.create({ data: { eventId: ev.id, name: 'ATIVO', ipAddress: '192.168.9.10', isActive: true, passwordEncrypted: encryptString('x') } })
-    const termInactive = await prisma.terminal.create({ data: { eventId: ev.id, name: 'INATIVO', ipAddress: '192.168.9.11', isActive: false, passwordEncrypted: encryptString('x') } })
+    const termActive = await prisma.terminal.create({ data: { name: 'ATIVO', ipAddress: '192.168.9.10', isActive: true, passwordEncrypted: encryptString('x') } })
+    const termInactive = await prisma.terminal.create({ data: { name: 'INATIVO', ipAddress: '192.168.9.11', isActive: false, passwordEncrypted: encryptString('x') } })
     created.terminals.push(termActive.id, termInactive.id)
 
     // ESCOPO por ALOCAÇÃO: o fan-out não lê mais `Terminal.eventId`. Sem
