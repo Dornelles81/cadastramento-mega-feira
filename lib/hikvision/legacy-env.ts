@@ -1,8 +1,9 @@
 // LEGADO — único ponto que lê credencial de device por variável de ambiente.
 //
-// Existe só para os endpoints single-device antigos (pages/api/hikvision/* e
-// lib/hikvision/service.ts) continuarem funcionando após o client.ts passar a
-// exigir credencial por instância. O caminho novo (agente local) NUNCA usa isto:
+// Existe só para os endpoints single-device antigos que restam
+// (pages/api/hikvision/add-user, delete-user, search-user, test-connection)
+// continuarem funcionando após o client.ts passar a exigir credencial por
+// instância. O caminho novo (agente local) NUNCA usa isto:
 // lá a credencial vem decriptada da tabela Terminal, injetada pelo endpoint do
 // agente na nuvem.
 //
