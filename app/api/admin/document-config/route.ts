@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { prisma } from '../../../../lib/prisma'
 import { authOptions } from '../../../../pages/api/auth/[...nextauth]'
+import { ADMIN_ROLES } from '../../../../lib/api-auth'
 
-const ADMIN_ROLES = ['SUPER_ADMIN', 'EVENT_ADMIN']
-
+// Esta é a única rota de App Router com auth: o withApiAuth de lib/api-auth
+// tem assinatura de Pages Router (NextApiRequest/Response) e não serve aqui.
+// Reaproveita-se então a LISTA DE ROLES, que é o que não pode divergir — uma
+// lista local omitindo 'ADMIN' trancaria fora a maioria das contas reais.
 async function requireAdmin(): Promise<NextResponse | null> {
   const session = await getServerSession(authOptions)
   if (!session?.user) {
