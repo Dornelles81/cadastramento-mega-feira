@@ -65,7 +65,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "media-src 'self' blob:",
-              "connect-src 'self' https://cdn.jsdelivr.net https://*.cognitiveservices.azure.com",
+              "connect-src 'self' https://cdn.jsdelivr.net",
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",
             ].join('; '),
