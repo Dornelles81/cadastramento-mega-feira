@@ -69,3 +69,12 @@ Thumbs.db
 .vercel
 
 .env.loadtest
+
+# Cache incremental do TypeScript — regerado a cada build.
+/tsconfig.tsbuildinfo
+
+# Arquivos ENVIADOS EM RUNTIME (logos de evento etc.), não asset do repo.
+# ATENÇÃO: na Vercel o filesystem é efêmero, então nada gravado aqui em
+# produção sobrevive ao próximo deploy — se um logo precisar existir no ar,
+# a solução é storage externo, não versionar a pasta.
+/public/uploads/
