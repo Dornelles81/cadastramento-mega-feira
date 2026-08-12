@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { requireEventAccess, createAuditLog } from '../../../../../lib/auth'
 import { prisma } from '../../../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../../../lib/face-image'
 
 
 /**
@@ -88,7 +88,10 @@ export default async function handler(
     // Decripta a foto server-side e nunca envia o blob criptografado ao client
     const participantsOut = participants.map(({ faceData, ...p }) => ({
       ...p,
-      faceImageUrl: getFaceImageDataUrl({ faceData, faceImageUrl: p.faceImageUrl })
+      faceImageUrl: tryGetFaceImageDataUrl(
+        { faceData, faceImageUrl: p.faceImageUrl },
+        { participantId: p.id, where: 'admin/eventos/[slug]/participantes' }
+      )
     }))
 
     return res.status(200).json({

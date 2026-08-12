@@ -1,7 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../../lib/face-image'
 
 /**
  * API: Get participant access status
@@ -125,7 +125,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         cpf: participant.cpf,
         email: participant.email,
         phone: participant.phone,
-        faceImageUrl: getFaceImageDataUrl(participant), // decripta GCM ou usa legado
+        faceImageUrl: tryGetFaceImageDataUrl(participant, { participantId: participant.id, where: 'access/status' }),
         approvalStatus: participant.approvalStatus || 'pending',
         isApproved
       },

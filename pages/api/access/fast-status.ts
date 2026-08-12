@@ -1,7 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
  * API: Fast participant status lookup
@@ -79,7 +79,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       id: participant.id,
       name: participant.name,
       cpf: participant.cpf,
-      photo: getFaceImageDataUrl(participant), // decripta GCM ou usa legado
+      photo: tryGetFaceImageDataUrl(participant, { participantId: participant.id, where: 'access/fast-status' }),
       stand: participant.stand?.name || participant.stand?.code,
       eventId: participant.eventId,
       status: participant.approvalStatus || 'pending',

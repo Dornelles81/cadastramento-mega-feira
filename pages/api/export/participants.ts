@@ -2,7 +2,7 @@ import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import * as XLSX from 'xlsx'
 import { prisma } from '../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import { deriveFaceStatus, faceStatusLabel } from '../../../lib/face/status'
 
 
@@ -106,7 +106,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // URL. Cadastros novos guardam a imagem criptografada (GCM) em faceData e
     // faceImageUrl=null — decripta server-side para que o export inclua a foto
     // independentemente do formato de armazenamento (e null nos expurgados).
-    participants = participants.map(p => ({ ...p, faceImageUrl: getFaceImageDataUrl(p) }))
+    participants = participants.map(p => ({
+      ...p,
+      faceImageUrl: tryGetFaceImageDataUrl(p, { participantId: p.id, where: 'export/participants' })
+    }))
 
     // Get total count - use filtered participants length if stand filter is applied
     const totalCount = standFilter ? participants.length : await prisma.participant.count({ where })

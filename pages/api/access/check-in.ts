@@ -1,7 +1,6 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
  * API: Register participant entry (check-in)
@@ -173,11 +172,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         time: accessLog.createdAt,
         gate: accessLog.gate
       },
+      // SEM foto: o cliente (app/admin/access-control) descarta esta resposta e
+      // recarrega o participante em seguida — a conferência visual do operador
+      // acontece ANTES, via /api/access/fast-status ou /api/access/status.
+      // Decriptar 50 KB de biometria aqui era trabalho jogado fora.
       participant: {
         id: participant.id,
         name: participant.name,
         cpf: participant.cpf,
-        faceImageUrl: getFaceImageDataUrl(participant), // decripta GCM ou usa legado
         stand: participant.stand?.name || participant.stand?.code,
         event: participant.event?.name
       }

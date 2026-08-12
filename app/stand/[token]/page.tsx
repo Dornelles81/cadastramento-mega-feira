@@ -8,7 +8,7 @@ import {
   registerPanelAccess,
   maskDocument
 } from '../../../lib/stand-access/validate'
-import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
 import {
   lastDayReset,
@@ -157,7 +157,7 @@ export default async function StandPanelPage({
     name: p.name,
     cpf: p.cpf,
     createdAt: p.createdAt,
-    photo: getFaceImageDataUrl(p)
+    photo: tryGetFaceImageDataUrl(p, { participantId: p.id, where: 'app/stand/[token]' })
   }))
 
   const count = participants.length

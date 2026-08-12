@@ -1,7 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../../lib/face-image'
 
 /**
  * API: Get event access statistics
@@ -191,14 +191,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           id: a.participant.id,
           name: a.participant.name,
           cpf: a.participant.cpf,
-          faceImageUrl: getFaceImageDataUrl(a.participant) // decripta GCM ou usa legado
+          faceImageUrl: tryGetFaceImageDataUrl(a.participant, { participantId: a.participant.id, where: 'access/stats:recentAccess' })
         }
       })),
       participantsInside: insideParticipants.map(p => ({
         id: p.id,
         name: p.name,
         cpf: p.cpf,
-        faceImageUrl: getFaceImageDataUrl(p), // decripta GCM ou usa legado
+        faceImageUrl: tryGetFaceImageDataUrl(p, { participantId: p.id, where: 'access/stats:participantsInside' }),
         stand: p.stand?.name || p.stand?.code
       })),
       hourlyToday: {

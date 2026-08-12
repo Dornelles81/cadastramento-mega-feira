@@ -1,7 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
-import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
  * API: Get access logs with filtering and export
@@ -173,7 +173,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           cpf: log.participant.cpf,
           email: log.participant.email,
           phone: log.participant.phone,
-          faceImageUrl: getFaceImageDataUrl(log.participant), // decripta GCM ou usa legado
+          faceImageUrl: tryGetFaceImageDataUrl(log.participant, { participantId: log.participant.id, where: 'access/logs' }),
           stand: log.participant.stand?.name || log.participant.stand?.code
         },
         event: {

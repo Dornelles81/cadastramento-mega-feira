@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
-import { getFaceImageDataUrl } from '../../../lib/face-image'
+import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 import { decryptDocuments } from '../../../lib/documents'
 
@@ -126,7 +126,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // [assim-mesmo] Captura sem validação (detector morto) — distingue de legado (null
       // sem a chave). Conferência operacional: badge no painel + filtro + coluna no export.
       faceUnvalidated: !!((participant.customData as any)?.__faceUnvalidated),
-      faceImageUrl: getFaceImageDataUrl(participant) || '', // decripta GCM ou usa legado
+      // Tolerante: uma biometria corrompida vira card sem foto, não 500 na
+      // listagem inteira. A falha sai no log com o participantId.
+      faceImageUrl: tryGetFaceImageDataUrl(participant, { participantId: participant.id, where: 'admin/participants-full' }) || '',
       customData: participant.customData || {},
       documents: decryptDocuments(participant.documents) || {}, // decifra server-side p/ o modal
       approvalStatus: participant.approvalStatus || 'pending',
