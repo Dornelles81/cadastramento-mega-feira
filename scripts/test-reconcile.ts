@@ -10,6 +10,7 @@ import * as dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
 import { prisma } from '../lib/prisma'
+import { createAllocation } from '../lib/terminals/allocation'
 import { encryptString } from '../lib/crypto'
 import { generateAgentToken, revokeAgentToken } from '../lib/agent/tokens'
 import { listDeviceRoster } from '../agent/reconcile'
@@ -32,6 +33,10 @@ async function main() {
     created.events.push(ev.id)
     const term = await prisma.terminal.create({ data: { eventId: ev.id, name: 'REC', ipAddress: '192.168.9.77', isActive: true, passwordEncrypted: encryptString('x') } })
     created.terminals.push(term.id)
+
+    // ESCOPO por ALOCACAO: reconcileTerminal deriva o evento da alocacao
+    // vigente. Sem ela a reconciliacao e no-op (trava anti-remocao-em-massa).
+    await createAllocation({ terminalId: term.id, eventId: ev.id, startDate: new Date(now.getTime() - 86400000), endDate: new Date(now.getTime() + 86400000) })
 
     const mkP = async (emp: string, opts: { eligible: boolean } = { eligible: true }) => {
       const p = await prisma.participant.create({ data: {
@@ -85,6 +90,7 @@ async function main() {
     console.log(`\n=== RESULTADO: ${failures === 0 ? 'TODOS PASSARAM ✓' : failures + ' FALHA(S) ✗'} ===`)
   } finally {
     for (const id of created.tokens) { try { await revokeAgentToken(id) } catch {} }
+    await prisma.terminalEvent.deleteMany({ where: { terminalId: { in: created.terminals } } }).catch(() => {})
     await prisma.participantTerminalSync.deleteMany({ where: { participantId: { in: created.participants } } }).catch(() => {})
     await prisma.participant.deleteMany({ where: { id: { in: created.participants } } }).catch(() => {})
     await prisma.terminal.deleteMany({ where: { id: { in: created.terminals } } }).catch(() => {})

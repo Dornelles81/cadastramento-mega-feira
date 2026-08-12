@@ -81,6 +81,47 @@ export async function resolveActiveAllocation(
   }
 }
 
+/**
+ * A direção INVERSA de `resolveActiveAllocation`: os terminais que atendem este
+ * evento AGORA. É o que o fan-out (`sync-enqueue`) e o `/api/agent/work`
+ * precisam — eles partem do evento, não do terminal.
+ *
+ * Só terminais ATIVOS e com alocação vigente. Lista vazia é resposta legítima e
+ * significa "nenhum terminal atende este evento neste momento" — evento fora do
+ * período não sincroniza ninguém, que é justamente o efeito que o
+ * `Terminal.eventId` (vínculo sem período) não conseguia produzir.
+ */
+export async function listAllocatedTerminalIds(
+  eventId: string,
+  now: Date = new Date()
+): Promise<string[]> {
+  const alocacoes = await prisma.terminalEvent.findMany({
+    where: {
+      eventId,
+      isActive: true,
+      startDate: { lte: now },
+      endDate: { gte: now },
+      terminal: { isActive: true }
+    },
+    select: { terminalId: true },
+    distinct: ['terminalId']
+  })
+  return alocacoes.map((a) => a.terminalId)
+}
+
+/**
+ * Este terminal atende este evento AGORA? Guarda de escopo para os endpoints do
+ * agente, que hoje comparam `Terminal.eventId` com o evento do token.
+ */
+export async function isTerminalAllocatedToEvent(
+  terminalId: string,
+  eventId: string,
+  now: Date = new Date()
+): Promise<boolean> {
+  const scope = await resolveActiveAllocation(terminalId, now)
+  return scope.ok && scope.allocation.eventId === eventId
+}
+
 export interface CreateAllocationInput {
   terminalId: string
   eventId: string

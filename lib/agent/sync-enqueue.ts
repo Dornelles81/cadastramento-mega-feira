@@ -10,6 +10,7 @@
 import { prisma } from '../prisma'
 import { isEligible } from './eligibility'
 import { assignIdentityIfEligible } from './identity'
+import { listAllocatedTerminalIds, resolveActiveAllocation } from '../terminals/allocation'
 
 /**
  * Garante 1 linha de push pendente para o subject em CADA terminal ATIVO do
@@ -19,12 +20,10 @@ import { assignIdentityIfEligible } from './identity'
  * atribuída — senão o `/work` pula a linha de qualquer forma.
  */
 export async function enqueueForContext(contextId: string, participantId: string): Promise<void> {
-  const terminals = await prisma.terminal.findMany({
-    where: { eventId: contextId, isActive: true },
-    select: { id: true }
-  })
-  if (terminals.length === 0) return
-  const terminalIds = terminals.map((t) => t.id)
+  // ESCOPO por ALOCAÇÃO VIGENTE (não mais `Terminal.eventId`): só terminais que
+  // atendem este evento AGORA. Fora do período, lista vazia → não enfileira.
+  const terminalIds = await listAllocatedTerminalIds(contextId)
+  if (terminalIds.length === 0) return
 
   // 1) garante a existência da linha (concurrency-safe; não mexe no estado existente)
   for (const terminalId of terminalIds) {
@@ -75,12 +74,18 @@ export async function enqueueFaceChange(participantId: string): Promise<void> {
 export async function backfillTerminal(terminalId: string): Promise<void> {
   const terminal = await prisma.terminal.findUnique({
     where: { id: terminalId },
-    select: { eventId: true, isActive: true }
+    select: { isActive: true }
   })
-  if (!terminal || !terminal.isActive || !terminal.eventId) return
+  if (!terminal || !terminal.isActive) return
+
+  // ESCOPO por ALOCAÇÃO VIGENTE: o evento vem da alocação, não da coluna
+  // deprecada. Terminal cadastrado sem alocação (ou fora do período) não faz
+  // backfill de ninguém.
+  const scope = await resolveActiveAllocation(terminalId)
+  if (!scope.ok) return
 
   const roster = await prisma.participant.findMany({
-    where: { eventId: terminal.eventId, isDeleted: false, employeeNo: { not: null } },
+    where: { eventId: scope.allocation.eventId, isDeleted: false, employeeNo: { not: null } },
     select: {
       id: true, status: true, isDeleted: true, approvalStatus: true,
       faceData: true, faceImageUrl: true,

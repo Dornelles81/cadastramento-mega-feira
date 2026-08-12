@@ -8,6 +8,7 @@
  */
 import { prisma } from '../prisma'
 import { isEligible } from './eligibility'
+import { resolveActiveAllocation } from '../terminals/allocation'
 
 export interface DeviceUser {
   employeeNo: string
@@ -18,6 +19,11 @@ export interface ReconcileResult {
   pushesEnqueued: number
   removalsEnqueued: number
   removeEmployeeNos: string[] // órfãos SEM linha de sync → o agente deleta direto
+  /**
+   * Preenchido quando a reconciliação foi PULADA por falta de alocação vigente.
+   * Ver a trava anti-remoção-em-massa em `reconcileTerminal`.
+   */
+  skipped?: 'sem-alocacao-vigente'
 }
 
 /**
@@ -34,10 +40,26 @@ export function faceNeedsUpdate(
 }
 
 export async function reconcileTerminal(
-  eventId: string,
   terminalId: string,
   deviceUsers: DeviceUser[]
 ): Promise<ReconcileResult> {
+  // ESCOPO por ALOCAÇÃO VIGENTE: o evento é derivado do terminal, não recebido
+  // por parâmetro — quem decide "quais participantes este terminal deve ter" é
+  // a alocação, e passar o eventId por fora permitiria reconciliar contra um
+  // evento que não é o alocado.
+  //
+  // TRAVA CRÍTICA — SEM alocação vigente a reconciliação é NO-OP, nunca limpeza.
+  // Se seguisse adiante, `desired` ficaria vazio e TODOS os usuários do device
+  // virariam órfãos: um terminal cuja feira acabou seria esvaziado sozinho na
+  // primeira reconciliação. Isso contraria a assimetria deliberada da expiração
+  // (`lib/terminals/allocation`): expirar MARCA (`pendingCleanup`), a remoção
+  // efetiva é ação explícita do admin.
+  const scope = await resolveActiveAllocation(terminalId)
+  if (!scope.ok) {
+    return { pushesEnqueued: 0, removalsEnqueued: 0, removeEmployeeNos: [], skipped: 'sem-alocacao-vigente' }
+  }
+  const eventId = scope.allocation.eventId
+
   // ATUAL: map por employeeNo — STRING EXATA. Nunca coagir p/ número: perderia
   // zeros à esquerda ("00000010") e faria um elegível parecer órfão →
   // loop add↔remove. Este match estrito é a principal trava anti-loop.

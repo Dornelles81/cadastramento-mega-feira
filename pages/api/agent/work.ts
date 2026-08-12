@@ -19,6 +19,7 @@ import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
 import { isEligible } from '../../../lib/agent/eligibility'
 import { resolveValidity } from '../../../lib/agent/validity'
+import { listAllocatedTerminalIds } from '../../../lib/terminals/allocation'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -41,17 +42,27 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     MAX_LIMIT
   )
 
-  // Só terminais do evento do token (e, se pedido, um terminal específico DENTRO
-  // do escopo — nunca de outro evento). Serve linhas pendentes E linhas `failed`
-  // que já passaram do backoff (retry coerente por kind), com teto de tentativas.
+  // ESCOPO por ALOCAÇÃO VIGENTE (não mais `Terminal.eventId`): só terminais que
+  // atendem o evento do token AGORA. Fora do período de alocação a lista é
+  // vazia e o agente não recebe trabalho — que é o efeito pretendido, e o que o
+  // vínculo sem período não conseguia produzir.
+  const allocatedIds = await listAllocatedTerminalIds(agent.eventId)
+  if (allocatedIds.length === 0) {
+    return res.status(200).json({ push: [], removals: [] })
+  }
+  // Se um terminal específico foi pedido, ele precisa estar DENTRO do escopo —
+  // nunca de outro evento, nunca fora do período.
+  if (terminalId && !allocatedIds.includes(terminalId)) {
+    return res.status(200).json({ push: [], removals: [] })
+  }
+
+  // Serve linhas pendentes E linhas `failed` que já passaram do backoff (retry
+  // coerente por kind), com teto de tentativas.
   const retryCutoff = new Date(Date.now() - RETRY_BACKOFF_MS)
   const retriable = { attempts: { lt: MAX_ATTEMPTS }, lastAttemptAt: { lt: retryCutoff } }
   const rows = await prisma.participantTerminalSync.findMany({
     where: {
-      terminal: {
-        eventId: agent.eventId,
-        ...(terminalId ? { id: terminalId } : {})
-      },
+      terminalId: terminalId ? terminalId : { in: allocatedIds },
       OR: [
         { faceState: 'pending' },
         { cardState: 'pending' },

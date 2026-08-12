@@ -14,6 +14,7 @@ import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'
 import { generateAgentToken, revokeAgentToken } from '../lib/agent/tokens'
 import { enqueueForContext, enqueueRemoval, backfillTerminal } from '../lib/agent/sync-enqueue'
+import { createAllocation } from '../lib/terminals/allocation'
 
 const BASE = process.env.AGENT_TEST_BASE || 'http://localhost:3000'
 const SUF = `fanout-${Date.now()}`
@@ -49,6 +50,19 @@ async function main() {
     const termActive = await prisma.terminal.create({ data: { eventId: ev.id, name: 'ATIVO', ipAddress: '192.168.9.10', isActive: true, passwordEncrypted: encryptString('x') } })
     const termInactive = await prisma.terminal.create({ data: { eventId: ev.id, name: 'INATIVO', ipAddress: '192.168.9.11', isActive: false, passwordEncrypted: encryptString('x') } })
     created.terminals.push(termActive.id, termInactive.id)
+
+    // ESCOPO por ALOCAÇÃO: o fan-out não lê mais `Terminal.eventId`. Sem
+    // alocação vigente, nenhum dos dois terminais entra — por isso os dois
+    // precisam de alocação aqui. O terminal INATIVO continua sendo excluído,
+    // agora pelo `terminal.isActive` dentro de listAllocatedTerminalIds, que é
+    // o que o teste 1 verifica.
+    const dia = 86400000
+    for (const t of [termActive, termInactive]) {
+      await createAllocation({
+        terminalId: t.id, eventId: ev.id,
+        startDate: new Date(now.getTime() - dia), endDate: new Date(now.getTime() + dia)
+      })
+    }
 
     // Participantes elegíveis (active + approved + face + employeeNo)
     const mkP = async (n: number) => prisma.participant.create({
@@ -121,6 +135,7 @@ async function main() {
   } finally {
     // limpeza (ordem: syncs caem por cascade ao deletar participantes/terminais)
     for (const id of created.tokens) { try { await revokeAgentToken(id) } catch {} }
+    await prisma.terminalEvent.deleteMany({ where: { terminalId: { in: created.terminals } } }).catch(() => {})
     await prisma.participantTerminalSync.deleteMany({ where: { participantId: { in: created.participants } } }).catch(() => {})
     await prisma.participant.deleteMany({ where: { id: { in: created.participants } } }).catch(() => {})
     await prisma.terminal.deleteMany({ where: { id: { in: created.terminals } } }).catch(() => {})

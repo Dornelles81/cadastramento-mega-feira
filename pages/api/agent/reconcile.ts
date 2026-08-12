@@ -8,12 +8,13 @@
  * deletar diretamente (não há linha p/ enfileirar).
  *
  * Body: { terminalId, users: [ { employeeNo, numOfFace, numOfCard } ] }
- * Escopo: o terminal precisa pertencer ao evento do token.
+ * Escopo: o terminal precisa ter ALOCAÇÃO VIGENTE para o evento do token
+ * (TerminalEvent, com período) — não basta o vínculo antigo sem data.
  */
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { prisma } from '../../../lib/prisma'
 import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
 import { reconcileTerminal, type DeviceUser } from '../../../lib/agent/reconcile'
+import { isTerminalAllocatedToEvent } from '../../../lib/terminals/allocation'
 
 async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentContext) {
   if (req.method !== 'POST') {
@@ -29,13 +30,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     return res.status(400).json({ error: 'Body inválido: esperado { terminalId, users: [...] }' })
   }
 
-  // Escopo: só terminal do evento do token.
-  const term = await prisma.terminal.findFirst({
-    where: { id: terminalId, eventId: agent.eventId },
-    select: { id: true }
-  })
-  if (!term) {
-    return res.status(403).json({ error: 'terminal fora do escopo do token' })
+  // Escopo por ALOCAÇÃO VIGENTE: o terminal precisa atender o evento do token
+  // AGORA. Fora do período, 403 — e a reconciliação nem chega a rodar (ela tem
+  // sua própria trava de no-op, mas o escopo é decidido aqui).
+  const noEscopo = await isTerminalAllocatedToEvent(terminalId, agent.eventId)
+  if (!noEscopo) {
+    return res.status(403).json({ error: 'terminal fora do escopo do token (sem alocação vigente para este evento)' })
   }
 
   // Sanitiza o roster (employeeNo string; contagens numéricas).
@@ -43,7 +43,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     .filter((u: any) => u && typeof u.employeeNo === 'string')
     .map((u: any) => ({ employeeNo: u.employeeNo, numOfFace: Number(u.numOfFace) || 0, numOfCard: Number(u.numOfCard) || 0 }))
 
-  const result = await reconcileTerminal(agent.eventId, terminalId, users)
+  const result = await reconcileTerminal(terminalId, users)
   return res.status(200).json(result)
 }
 

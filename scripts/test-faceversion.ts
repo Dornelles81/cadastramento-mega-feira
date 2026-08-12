@@ -11,6 +11,7 @@ import * as dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
 import { prisma } from '../lib/prisma'
+import { createAllocation } from '../lib/terminals/allocation'
 import { encryptString } from '../lib/crypto'
 import { faceVersionOf } from '../lib/face/version'
 import { generateAgentToken, revokeAgentToken } from '../lib/agent/tokens'
@@ -45,6 +46,10 @@ async function main() {
     created.events.push(ev.id)
     const term = await prisma.terminal.create({ data: { eventId: ev.id, name: 'FV', ipAddress: '192.168.9.55', isActive: true, passwordEncrypted: encryptString('x') } })
     created.terminals.push(term.id)
+
+    // ESCOPO por ALOCACAO: o fan-out, o /work e a reconciliacao derivam o
+    // evento da alocacao vigente, nao mais de Terminal.eventId.
+    await createAllocation({ terminalId: term.id, eventId: ev.id, startDate: new Date(now.getTime() - 86400000), endDate: new Date(now.getTime() + 86400000) })
     const p = await prisma.participant.create({ data: {
       eventId: ev.id, name: 'P FV', cpf: `${Date.now()}`.slice(-11), status: 'active', isDeleted: false, approvalStatus: 'approved',
       employeeNo: '93000001', cardNumber: '9300000000000001', faceData: encryptString(urlA), faceVersion: v1
@@ -83,6 +88,7 @@ async function main() {
     console.log(`\n=== RESULTADO: ${failures === 0 ? 'TODOS PASSARAM ✓' : failures + ' FALHA(S) ✗'} ===`)
   } finally {
     for (const id of created.tokens) { try { await revokeAgentToken(id) } catch {} }
+    await prisma.terminalEvent.deleteMany({ where: { terminalId: { in: created.terminals } } }).catch(() => {})
     await prisma.participantTerminalSync.deleteMany({ where: { participantId: { in: created.participants } } }).catch(() => {})
     await prisma.participant.deleteMany({ where: { id: { in: created.participants } } }).catch(() => {})
     await prisma.terminal.deleteMany({ where: { id: { in: created.terminals } } }).catch(() => {})
