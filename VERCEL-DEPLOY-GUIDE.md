@@ -83,8 +83,16 @@ DIRECT_URL = postgresql://<user>:<senha>@<endpoint>.<region>.aws.neon.tech/neond
 
 MASTER_KEY = <chave-de-32-caracteres-ou-mais>
 
-ADMIN_PASSWORD = <senha-admin-forte>
+# OBRIGATÓRIA: não há valor padrão. Sem ela o login do painel não funciona.
+NEXTAUTH_SECRET = <segredo-aleatorio-forte>
+
+NEXTAUTH_URL = https://<seu-dominio>
 ```
+
+> O acesso ao painel usa contas individuais em `EventAdmin` (NextAuth +
+> bcrypt). **Não** configure `ADMIN_PASSWORD` nem `SECRET_KEY`: eram do
+> esquema de senha compartilhada, foram removidas do código e do ambiente, e
+> nenhuma linha as lê. Ver `SECURITY.md`.
 
 ### Variáveis Opcionais (se quiser usar):
 
@@ -162,9 +170,14 @@ vercel --prod --force
 - Verifique se adicionou DATABASE_URL nas variáveis de ambiente
 - Certifique-se que copiou a URL completa com ?sslmode=require
 
-### Se o admin não funcionar:
-- Verifique se adicionou ADMIN_PASSWORD nas variáveis de ambiente
-- Use a senha configurada para acessar
+### Se o login do admin não funcionar:
+- Verifique se `NEXTAUTH_SECRET` existe no ambiente **Production** — sem ela o
+  NextAuth falha e nenhum login passa (`vercel env ls` mostra a existência sem
+  revelar o valor)
+- Confirme `NEXTAUTH_URL` apontando para o domínio público
+- Verifique se a conta existe e está `isActive=true`:
+  `npx tsx scripts/check-admin.ts <email>`
+- Conta pode estar bloqueada por 5 tentativas falhas (15 min)
 
 ---
 

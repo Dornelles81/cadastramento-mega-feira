@@ -1,124 +1,109 @@
-# 🔐 Sistema de Segurança - Gerenciamento de Campos
+# 🔐 Autenticação e Controle de Acesso
 
 ## Visão Geral
 
-O sistema de gerenciamento de campos personalizados (/admin/fields) está protegido por autenticação baseada em senha para garantir que apenas administradores autorizados possam modificar a estrutura dos formulários.
+O painel administrativo (`/admin/*`) é protegido por **NextAuth com contas
+individuais** gravadas na tabela `EventAdmin`. Não existe senha compartilhada,
+não existe token de portador em `sessionStorage` e nenhum segredo é lido do
+código ou de variável de senha.
 
-## Como Funciona
+> **Histórico.** Este documento descrevia até 2026-08 um esquema anterior:
+> login por senha única em `/admin/fields/login`, token SHA-256 em
+> `sessionStorage` e as variáveis `ADMIN_PASSWORD`/`SECRET_KEY`. **Esse esquema
+> não existe mais** — a página, o endpoint `/api/admin/auth` e as duas
+> variáveis foram removidos. Se algum guia antigo pedir para configurar
+> `ADMIN_PASSWORD` ou `SECRET_KEY`, ignore: elas não são lidas por nenhuma
+> linha de código e reintroduzi-las só recria exposição.
 
-### 1. Autenticação
-- **URL de Login**: `/admin/fields/login`
-- **Senha Padrão**: `megafeira2025` (MUDE EM PRODUÇÃO!)
-- **Duração da Sessão**: 24 horas
-- **Armazenamento**: Token em sessionStorage do navegador
+## Como funciona
 
-### 2. Fluxo de Acesso
-1. Usuário acessa `/admin/fields`
-2. Sistema verifica se há token válido
-3. Se não houver, redireciona para `/admin/fields/login`
-4. Após login bem-sucedido, token é gerado e armazenado
-5. Todas as requisições à API de campos verificam o token
+### 1. Login
 
-### 3. Proteção da API
-- Endpoint: `/api/admin/fields`
-- Verificação: Bearer token no header Authorization
-- Métodos protegidos: GET, POST, PUT, DELETE
+- **URL**: `/admin/login`
+- **Credenciais**: e-mail + senha por usuário, em `EventAdmin`
+- **Verificação**: `bcrypt.compare` contra o hash (`pages/api/auth/[...nextauth].ts`)
+- **Normalização**: o e-mail é comparado com `trim`/`lowercase` e
+  case-insensitive — teclado de celular capitaliza a primeira letra
+- **Sessão**: JWT, validade de 24 h
+- **Proteção contra força bruta**: 5 tentativas falhas bloqueiam a conta por
+  15 minutos (`loginAttempts` / `lockedUntil`)
 
-## Configuração
+### 2. Proteção das rotas do painel
 
-### Desenvolvimento
-Por padrão, a senha é `megafeira2025`. Para testar:
-1. Acesse http://localhost:3001/admin/fields/login
-2. Digite a senha: `megafeira2025`
-3. Clique em "Acessar"
+`middleware.ts` aplica `withAuth` ao matcher `/admin/:path*`: sem sessão, o
+acesso é redirecionado para `/admin/login`. Contas com role `OPERATOR` são
+confinadas a `/admin/access-control`.
 
-### Produção
+### 3. Proteção das APIs
 
-**IMPORTANTE**: Mude a senha padrão antes de colocar em produção!
+| Router | Helper | Onde |
+|---|---|---|
+| Pages (`pages/api/**`) | `withApiAuth(handler, { roles })` | `lib/api-auth.ts` |
+| Pages (alternativo) | `requireAuth` / `isSuperAdmin` | `lib/auth.ts` |
+| App (`app/api/**`) | `getServerSession` + checagem de role | ver `document-config/route.ts` |
 
-1. **Configure as variáveis de ambiente**:
-   ```env
-   # .env.local ou .env.production
-   ADMIN_PASSWORD=sua_senha_segura_aqui
-   SECRET_KEY=uma_chave_secreta_longa_e_aleatoria
-   ```
+Ambos leem **apenas o cookie de sessão do NextAuth**. Header `Authorization`
+não é consultado em nenhum endpoint administrativo — se encontrar código
+cliente mandando `Bearer <algo>` para uma rota admin, é resíduo e pode sair.
 
-2. **Requisitos de Senha Segura**:
-   - Mínimo 12 caracteres
-   - Mistura de letras maiúsculas e minúsculas
-   - Números e caracteres especiais
-   - Única e não reutilizada
+**A lista de roles é fonte única**: `ADMIN_ROLES` e `OPERATOR_ROLES` em
+`lib/api-auth.ts`. Não redeclare a lista localmente — uma cópia divergente já
+trancou contas `ADMIN` fora da configuração de documentos.
 
-3. **Exemplo de senha forte**:
-   ```
-   MegaF3!ra@2025#Sec&re
-   ```
+### 4. Papéis
 
-## Recursos de Segurança
+| Role | Alcance |
+|---|---|
+| `SUPER_ADMIN` | Tudo, em todos os eventos |
+| `ADMIN` | Administração; role da maioria das contas reais |
+| `EVENT_ADMIN` | Restrito aos eventos vinculados, com permissões granulares |
+| `OPERATOR` | Só `/admin/access-control` (portaria) |
 
-### ✅ Implementados
-- Hash SHA-256 para senhas
-- Tokens com validade temporal (24h)
-- Verificação em todas as requisições à API
-- Sessão baseada em sessionStorage (limpa ao fechar o navegador)
-- Botão de logout para encerrar sessão
+Permissões por evento (`canView`, `canEdit`, `canApprove`, `canDelete`,
+`canExport`, `canManageStands`, `canManageAdmins`) são avaliadas por
+`hasEventPermission` (`lib/api-auth.ts`) e `checkEventAccess` (`lib/auth.ts`).
 
-### 🔄 Recomendações Adicionais
-- Use HTTPS em produção
-- Implemente rate limiting para prevenir força bruta
-- Configure CORS adequadamente
-- Monitore tentativas de login falhadas
-- Considere 2FA para ambientes críticos
+## Variáveis de ambiente relevantes
 
-## Gerenciamento de Acessos
+```env
+NEXTAUTH_SECRET=<segredo-forte-aleatorio>   # OBRIGATÓRIA — sem fallback
+NEXTAUTH_URL=<url-publica-da-aplicacao>
+MASTER_KEY=<32+ caracteres>                 # AES-256-GCM dos dados biométricos
+```
 
-### Para adicionar múltiplos administradores:
-Atualmente o sistema suporta uma única senha compartilhada. Para múltiplos usuários, considere:
-1. Implementar sistema de usuários com diferentes níveis
-2. Usar serviço de autenticação externo (Auth0, Firebase Auth)
-3. Integrar com Active Directory/LDAP corporativo
+`NEXTAUTH_SECRET` **não tem valor padrão**: sem ela a aplicação falha em vez de
+assinar sessão com segredo público. Confirme que existe no ambiente de
+produção antes de qualquer deploy.
 
-### Para revogar acesso:
-1. Mude a senha no arquivo `.env.local`
-2. Reinicie o servidor
-3. Todos os tokens existentes serão invalidados
+## Gerenciamento de contas
 
-## Troubleshooting
+- **Criar/editar/desativar**: pela tabela `EventAdmin` (`isActive`), ou pela
+  administração de admins do painel.
+- **Revogar acesso**: marque `isActive=false`. A sessão JWT em curso expira em
+  até 24 h.
+- **Diagnóstico**: `npx tsx scripts/check-admin.ts <email> [senha]` lista as
+  contas (role, ativo, tentativas, bloqueio) e testa uma senha contra o hash.
+  É somente-leitura: não faz login nem incrementa `loginAttempts`.
 
-### Problema: "Não autorizado" ao acessar campos
-**Solução**: 
-1. Verifique se fez login em `/admin/fields/login`
-2. Limpe o sessionStorage e faça login novamente
-3. Verifique se o token não expirou (24h)
+## Recursos implementados
 
-### Problema: Senha não funciona
-**Solução**:
-1. Verifique o arquivo `.env.local`
-2. Certifique-se que o servidor foi reiniciado após mudança
-3. Use a senha padrão se não configurou variável de ambiente
+- Senhas com hash **bcrypt**, uma conta por pessoa
+- Sessão JWT de 24 h assinada com `NEXTAUTH_SECRET`
+- Bloqueio por força bruta (5 tentativas → 15 min)
+- Middleware cobrindo todo `/admin/*` e confinamento de `OPERATOR`
+- Autorização por role e por evento nas APIs
+- Documentos e biometria cifrados em repouso (AES-256-GCM, `MASTER_KEY`)
+- Rate limit em endpoints públicos de upload e detecção facial
+- `AuditLog` sem cópia de biometria no hard delete
 
-### Problema: Perdeu a senha
-**Solução**:
-1. Acesse o servidor
-2. Edite `.env.local` com nova senha
-3. Reinicie o aplicativo
+## Recomendações em aberto
 
-## Logs e Auditoria
+- 2FA para `SUPER_ADMIN`
+- Alertas para múltiplas falhas de login
+- Revisão periódica de contas com `isActive=true`
 
-Para ambiente de produção, considere implementar:
-- Log de todas as tentativas de login
-- Registro de mudanças nos campos
-- Alertas para múltiplas tentativas falhadas
-- Backup periódico da configuração de campos
+## Reportando um problema de segurança
 
-## Contato e Suporte
-
-Em caso de problemas de segurança:
 1. Não exponha detalhes publicamente
-2. Entre em contato com o administrador do sistema
-3. Documente o incidente adequadamente
-
----
-
-**⚠️ LEMBRETE IMPORTANTE**: 
-Sempre mude a senha padrão antes de colocar o sistema em produção!
+2. Contate o administrador do sistema
+3. Documente o incidente
