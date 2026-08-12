@@ -56,9 +56,16 @@ Thumbs.db
 # Prisma
 /prisma/migrations/dev.db*
 
+# Dump do --dry-run do sync facial: imagens BIOMÉTRICAS EM CLARO.
+# NUNCA versionar (LGPD). Só existe para inspeção visual local e deve ser
+# apagado depois do teste.
+/tmp-faces/
+
 # Logs (apenas na raiz — "logs" sem âncora engolia app/admin/logs e
 # app/admin/super/logs, deixando as páginas fora do repositório)
 /logs/
 *.log
 
 .vercel
+
+.env.loadtest
