@@ -20,13 +20,14 @@ import { getFaceImageDataUrl } from '../../../lib/face-image'
 import { isEligible } from '../../../lib/agent/eligibility'
 import { resolveValidity } from '../../../lib/agent/validity'
 import { listAllocatedTerminalIds } from '../../../lib/terminals/allocation'
+// Backoff por linha (F3): re-serve uma linha `failed` só depois de
+// RETRY_BACKOFF_MS e enquanto attempts < MAX_ATTEMPTS — daí a reconciliação/
+// operador assume. Constantes compartilhadas com a tela de saúde do sync, que
+// precisa contar como "falha" exatamente o que aqui deixa de ser servido.
+import { RETRY_BACKOFF_MS, MAX_ATTEMPTS } from '../../../lib/agent/retry-policy'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
-// Backoff por linha (F3): re-serve uma linha `failed` só depois de RETRY_BACKOFF_MS
-// e enquanto attempts < MAX_ATTEMPTS — daí a reconciliação/operador assume.
-const RETRY_BACKOFF_MS = 60_000
-const MAX_ATTEMPTS = 8
 
 async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentContext) {
   if (req.method !== 'GET') {
