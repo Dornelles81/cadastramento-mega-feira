@@ -353,6 +353,13 @@ export default function AdminDashboard() {
                     >
                       🚪 Controle de Acesso
                     </button>
+                    <button
+                      onClick={() => router.push(`/admin/eventos/${event.slug}/terminais`)}
+                      className="w-full py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors font-semibold text-sm"
+                      title="Comparação entre terminais: está tudo sincronizando?"
+                    >
+                      📡 Saúde do Sync
+                    </button>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => router.push(`/eventos/${event.slug}/cadastro`)}

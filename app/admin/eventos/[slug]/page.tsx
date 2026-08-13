@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
+import SyncResumo from '../../../../components/admin/SyncResumo'
 
 interface Participant {
   id: string
@@ -1230,9 +1231,19 @@ export default function EventAdminPage() {
               >
                 🏪 Gerenciar Stands
               </a>
+              <a
+                href={`/admin/eventos/${eventSlug}/terminais`}
+                className="text-xs sm:text-sm bg-slate-700 text-white px-3 py-2 rounded hover:bg-slate-800 whitespace-nowrap inline-flex items-center"
+              >
+                📡 Saúde do Sync
+              </a>
             </div>
           </div>
         </div>
+
+        {/* Resumo do sync: resposta de relance a "está tudo indo?", sem navegar.
+            A tela cheia (comparação entre terminais) fica a um clique. */}
+        <SyncResumo eventSlug={eventSlug} darkMode={darkMode} />
 
         {/* Participants Table */}
         <div className={`rounded-lg shadow-sm overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
