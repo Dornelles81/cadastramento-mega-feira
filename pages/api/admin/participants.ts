@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma'
+import { enqueueDeviceRemovalBeforeDelete } from '../../../lib/agent/device-removal'
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
@@ -198,10 +199,35 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         });
       }
 
+      // LGPD — ORDEM CRÍTICA: enfileirar a remoção no device ANTES do delete.
+      // ParticipantTerminalSync tem onDelete: Cascade; apagar o participante
+      // primeiro destrói a linha que serviria para tirar a face do terminal, e
+      // a biometria ficaria na catraca depois de confirmada a exclusão.
+      try {
+        await enqueueDeviceRemovalBeforeDelete(id);
+      } catch (removalErr) {
+        // Sem garantia de limpeza do device, ABORTA: melhor repetir a exclusão
+        // do que apagar o registro e perder o rastro de quem remover.
+        console.error('Falha ao enfileirar remoção no device; delete abortado:', removalErr);
+        return res.status(503).json({
+          success: false,
+          message: 'Não foi possível agendar a remoção da biometria nos terminais. Exclusão cancelada — tente novamente.'
+        });
+      }
+
       // Delete participant
       await prisma.participant.delete({
         where: { id }
       });
+
+      // LGPD: previousData SEM o biométrico. Antes gravava o participante
+      // INTEIRO, então faceData/documents cifrados sobreviviam ao "delete"
+      // dentro de audit_logs — uma cópia da biometria da pessoa que pediu
+      // exclusão. Mesma correção que fc40fb9 aplicou ao endpoint /[id].
+      const auditSnapshot: any = { ...participantToDelete };
+      delete auditSnapshot.faceData;
+      delete auditSnapshot.faceImageUrl;
+      delete auditSnapshot.documents;
 
       // Create audit log
       await prisma.auditLog.create({
@@ -211,7 +237,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           entityId: id,
           adminUser: 'admin',
           adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
-          previousData: participantToDelete as any,
+          previousData: auditSnapshot,
           description: `Participante ${participantToDelete.name} excluído`
         }
       });

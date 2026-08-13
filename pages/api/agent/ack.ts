@@ -45,6 +45,36 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
       continue
     }
 
+    // Remoção vinda da fila que sobreviveu ao hard delete: o /work marca esses
+    // itens com o prefixo `pdr:` porque eles NÃO vivem em
+    // ParticipantTerminalSync — a linha de sync já foi apagada pelo cascade.
+    // Confirmar na tabela errada deixaria a pendência aberta para sempre e o
+    // rosto no device.
+    if (syncId.startsWith('pdr:')) {
+      const pdrId = syncId.slice(4)
+      const pdr = await prisma.pendingDeviceRemoval.findUnique({
+        where: { id: pdrId },
+        select: { id: true, terminalId: true }
+      })
+      if (!pdr || !(await hadAllocationToEvent(pdr.terminalId, agent.eventId))) {
+        results.push({ syncId, kind, ok: false, reason: 'fora do escopo do token' })
+        continue
+      }
+      const okRemocao = status === 'success'
+      await prisma.pendingDeviceRemoval.update({
+        where: { id: pdr.id },
+        data: {
+          attempts: { increment: 1 },
+          // `removedAt` é a PROVA de que a biometria saiu do device. Só é
+          // gravado com confirmação do agente — nunca por otimismo.
+          removedAt: okRemocao ? now : null,
+          lastError: okRemocao ? null : (typeof error === 'string' ? error.slice(0, 1000) : 'erro não informado')
+        }
+      })
+      results.push({ syncId, kind, ok: true })
+      continue
+    }
+
     // Escopo por ALOCAÇÃO — aqui DELIBERADAMENTE sem exigir período vigente.
     // O ack reporta trabalho que a nuvem JÁ despachou: se a alocação virar
     // entre o /work e o /ack (pega às 23:59, confirma às 00:01), recusar não

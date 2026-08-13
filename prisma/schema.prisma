@@ -518,8 +518,9 @@ model Terminal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  syncStates  ParticipantTerminalSync[]
-  allocations TerminalEvent[]
+  syncStates      ParticipantTerminalSync[]
+  allocations     TerminalEvent[]
+  pendingRemovals PendingDeviceRemoval[]
 
   @@index([eventId])
   @@index([isActive])
@@ -603,6 +604,53 @@ model ParticipantTerminalSync {
   @@index([terminalId, removalState]) // fila de remoção
   @@index([terminalId, faceState]) // fila de inclusão
   @@map("participant_terminal_sync")
+}
+
+// TOMBSTONE de remoção no device — sobrevive ao hard delete do participante.
+//
+// PROBLEMA QUE RESOLVE (LGPD): `ParticipantTerminalSync` tem
+// `onDelete: Cascade` para `Participant`. No hard delete, a linha que serviria
+// para enfileirar a remoção morre JUNTO com o participante — destrói-se o
+// instrumento de remoção antes de usá-lo. Resultado: o painel confirma a
+// exclusão e o rosto continua no terminal, abrindo a porta.
+//
+// POR QUE NÃO TEM FK PARA `Participant`: é exatamente isso que a torna imune ao
+// cascade. A linha é gravada ANTES do delete e continua de pé depois que o
+// participante deixa de existir. Guarda só o identificador TÉCNICO
+// (`employeeNo`) — nenhum dado pessoal: nem nome, nem CPF, nem biometria. Para
+// apagar alguém do device basta o número que o device conhece.
+//
+// A FK para `Terminal` existe e é desejada: se o terminal for descadastrado,
+// não há mais device a limpar e a pendência perde o sentido.
+//
+// DIFERENÇA PARA A TRAVA DO RECONCILE: esta fila é REMOÇÃO INDIVIDUAL PEDIDA
+// por um humano, então vale MESMO COM ALOCAÇÃO VENCIDA — o pedido de exclusão
+// costuma chegar justamente depois que a feira acabou. A trava
+// anti-remoção-em-massa do `reconcileTerminal` continua valendo para o caso
+// dela, que é outro: varredura automática de roster inteiro.
+model PendingDeviceRemoval {
+  id String @id @default(uuid())
+
+  // Identificador do usuário NO DEVICE. É o que o ISAPI precisa para o
+  // deleteUser; sozinho não identifica pessoa alguma fora deste sistema.
+  employeeNo String
+
+  terminalId String
+  terminal   Terminal @relation(fields: [terminalId], references: [id], onDelete: Cascade)
+
+  requestedAt DateTime  @default(now())
+  removedAt   DateTime? // confirmado pelo agente via /ack
+  attempts    Int       @default(0)
+  lastError   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // employeeNo é sequencial global e nunca reutilizado (Fase 1), então o par
+  // com o terminal é estável: um pedido por pessoa por device.
+  @@unique([employeeNo, terminalId])
+  @@index([terminalId, removedAt]) // fila do /work: pendências em aberto
+  @@map("pending_device_removals")
 }
 
 // Token do agente local (revogável, escopo por evento). Mesmo padrão dos

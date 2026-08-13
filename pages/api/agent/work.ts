@@ -19,7 +19,7 @@ import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
 import { getFaceImageDataUrl } from '../../../lib/face-image'
 import { isEligible } from '../../../lib/agent/eligibility'
 import { resolveValidity } from '../../../lib/agent/validity'
-import { listAllocatedTerminalIds } from '../../../lib/terminals/allocation'
+import { listAllocatedTerminalIds, hadAllocationToEvent } from '../../../lib/terminals/allocation'
 // Backoff por linha (F3): re-serve uma linha `failed` só depois de
 // RETRY_BACKOFF_MS e enquanto attempts < MAX_ATTEMPTS — daí a reconciliação/
 // operador assume. Constantes compartilhadas com a tela de saúde do sync, que
@@ -48,20 +48,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
   // vazia e o agente não recebe trabalho — que é o efeito pretendido, e o que o
   // vínculo sem período não conseguia produzir.
   const allocatedIds = await listAllocatedTerminalIds(agent.eventId)
-  if (allocatedIds.length === 0) {
-    return res.status(200).json({ push: [], removals: [] })
-  }
-  // Se um terminal específico foi pedido, ele precisa estar DENTRO do escopo —
-  // nunca de outro evento, nunca fora do período.
-  if (terminalId && !allocatedIds.includes(terminalId)) {
-    return res.status(200).json({ push: [], removals: [] })
-  }
+  // Terminal específico pedido precisa estar DENTRO do escopo vigente — nunca
+  // de outro evento, nunca fora do período.
+  const foraDoEscopo = !!terminalId && !allocatedIds.includes(terminalId)
+
+  // ATENÇÃO: nada de retornar cedo aqui. Sem alocação vigente NÃO há push nem
+  // sync a servir, mas a fila de remoção do hard delete (abaixo) TEM que rodar
+  // mesmo assim — o pedido de exclusão costuma chegar depois que a feira
+  // acabou. Um `return` antecipado neste ponto reabriria o buraco de LGPD.
+  const semEscopoVigente = allocatedIds.length === 0 || foraDoEscopo
 
   // Serve linhas pendentes E linhas `failed` que já passaram do backoff (retry
   // coerente por kind), com teto de tentativas.
   const retryCutoff = new Date(Date.now() - RETRY_BACKOFF_MS)
   const retriable = { attempts: { lt: MAX_ATTEMPTS }, lastAttemptAt: { lt: retryCutoff } }
-  const rows = await prisma.participantTerminalSync.findMany({
+  const rows = semEscopoVigente ? [] : await prisma.participantTerminalSync.findMany({
     where: {
       terminalId: terminalId ? terminalId : { in: allocatedIds },
       OR: [
@@ -97,6 +98,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
 
   const push: any[] = []
   const removals: any[] = []
+
+  // ---------------------------------------------------------------------------
+  // Fila de remoção que SOBREVIVEU ao hard delete (PendingDeviceRemoval).
+  //
+  // Escopo DIFERENTE do resto do /work, de propósito: usa o vínculo histórico
+  // (`hadAllocationToEvent`), não a alocação vigente. É remoção INDIVIDUAL
+  // PEDIDA por um humano — o pedido de exclusão costuma chegar depois que a
+  // feira acabou e a alocação venceu, e é exatamente aí que ele não pode ser
+  // ignorado. A trava anti-remoção-em-massa do reconcile continua valendo para
+  // o caso dela, que é varredura automática de roster inteiro.
+  //
+  // O syncId vai prefixado com `pdr:` para o /ack saber em qual tabela
+  // confirmar. O agente trata o campo como opaco: só devolve o que recebeu.
+  const pendentesHardDelete = await prisma.pendingDeviceRemoval.findMany({
+    where: {
+      removedAt: null,
+      attempts: { lt: MAX_ATTEMPTS },
+      ...(terminalId ? { terminalId } : {})
+    },
+    take: limit,
+    orderBy: { requestedAt: 'asc' },
+    select: { id: true, employeeNo: true, terminalId: true }
+  })
+  for (const pdr of pendentesHardDelete) {
+    if (!(await hadAllocationToEvent(pdr.terminalId, agent.eventId))) continue
+    removals.push({ syncId: `pdr:${pdr.id}`, terminalId: pdr.terminalId, employeeNo: pdr.employeeNo })
+  }
 
   for (const row of rows) {
     const p = row.participant

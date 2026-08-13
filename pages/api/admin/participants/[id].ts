@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { enqueueDeviceRemovalBeforeDelete } from '../../../../lib/agent/device-removal'
 import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -190,6 +191,25 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
     } catch (logError) {
       console.log('Audit log not available yet:', logError)
       // Continue without logging
+    }
+
+    // LGPD — ORDEM CRÍTICA: enfileirar a remoção no device ANTES do delete.
+    // ParticipantTerminalSync tem onDelete: Cascade; apagar o participante
+    // primeiro destrói a linha que serviria para remover a face do terminal, e
+    // a biometria ficaria lá depois de o painel confirmar a exclusão. A fila
+    // PendingDeviceRemoval não referencia Participant justamente para
+    // sobreviver a este delete.
+    let remocaoDevice: Awaited<ReturnType<typeof enqueueDeviceRemovalBeforeDelete>> = null
+    try {
+      remocaoDevice = await enqueueDeviceRemovalBeforeDelete(id)
+    } catch (removalErr) {
+      // Não conseguimos garantir a limpeza do device: ABORTA o delete. Melhor o
+      // admin tentar de novo do que apagar o registro e deixar o rosto na
+      // catraca sem nenhum rastro de quem remover.
+      console.error('Falha ao enfileirar remoção no device; delete abortado:', removalErr)
+      return res.status(503).json({
+        error: 'Não foi possível agendar a remoção da biometria nos terminais. Exclusão cancelada — tente novamente.'
+      })
     }
 
     // Delete related records first to avoid foreign key constraint violations
