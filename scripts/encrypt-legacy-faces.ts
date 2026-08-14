@@ -27,7 +27,9 @@
  * O dry-run roda a verificação de chave por completo (é só leitura), então
  * serve como auditoria de integridade mesmo sem intenção de migrar.
  */
-import 'dotenv/config'
+import * as dotenv from 'dotenv'
+dotenv.config({ path: '.env.local' })
+
 import { PrismaClient } from '@prisma/client'
 import { decryptToString, encryptString, isEncryptedPayload } from '../lib/crypto'
 import { faceVersionOf } from '../lib/face/version'
