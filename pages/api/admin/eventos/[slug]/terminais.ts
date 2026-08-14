@@ -6,6 +6,10 @@
  * device ficou fora do ar, e na feira isso significa "a pessoa passa numa
  * entrada e não na outra".
  *
+ * `sincronizados` conta ESTADO DESEJADO REFLETIDO NO DEVICE — não "já foi
+ * escrito alguma vez". Linhas em remoção não entram (ver o FILTER abaixo), de
+ * modo que o total é conferível contra o `userNumber` real do equipamento.
+ *
  * CUSTO: DUAS consultas, independente de haver 1 ou 4 terminais.
  *   1) os terminais alocados (poucas linhas);
  *   2) UM agregado com `count(*) FILTER`, agrupado por terminal.
@@ -84,7 +88,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     agregado = await prisma.$queryRaw<LinhaAgregada[]>`
       SELECT
         "terminalId",
-        count(*) FILTER (WHERE "faceState" = 'synced')            AS sincronizados,
+        -- "sincronizados" = ESTADO DESEJADO REFLETIDO NO DEVICE. Por isso o
+        -- recorte por removalState: aplicada a remoção, a linha continua com
+        -- faceState='synced' (o campo não é revertido) e passaria a contar para
+        -- sempre alguém que já saiu do terminal. Quem está marcado para remoção
+        -- também não conta, mesmo com a face ainda fisicamente lá — essa linha
+        -- já aparece na coluna de pendentes, que é onde ela deve ser cobrada.
+        count(*) FILTER (WHERE "faceState"    = 'synced'
+                          AND "removalState" = 'none')            AS sincronizados,
         count(*) FILTER (WHERE "faceState"    = 'pending'
                             OR "cardState"    = 'pending'
                             OR "removalState" = 'pending')        AS pendentes,
