@@ -11,6 +11,10 @@
  *
  * Se o terminal estiver alcançável, modelo/firmware/serial são lidos do próprio
  * device (/ISAPI/System/deviceInfo) em vez de digitados.
+ *
+ * Ao final faz o BACKFILL: o terminal nasce com o roster elegível já enfileirado,
+ * em vez de esperar a reconciliação do agente. Nada é escrito no device aqui —
+ * só as linhas de sync pendentes, que o agente aplica no próximo ciclo.
  */
 import * as dotenv from 'dotenv'
 import * as path from 'path'
@@ -21,7 +25,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'
 import { HikvisionClient } from '../lib/hikvision/client'
-import { createAllocation } from '../lib/terminals/allocation'
+import { createAllocation, resolveActiveAllocation } from '../lib/terminals/allocation'
+import { backfillTerminal } from '../lib/agent/sync-enqueue'
 
 const argv = process.argv.slice(2)
 const arg = (n: string) => argv.find(a => a.startsWith(`--${n}=`))?.split('=').slice(1).join('=')
@@ -102,6 +107,32 @@ async function main() {
       endDate: evento.endDate
     })
     console.log(`✅ alocado a "${evento.name}": ${aloc.id} (${aloc.startDate.toISOString().slice(0, 10)} → ${aloc.endDate.toISOString().slice(0, 10)})`)
+  }
+
+  // Fan-out imediato: o terminal nasce POPULADO com o roster elegível do evento.
+  // Sem isto ele fica com ZERO linha de sync até a reconciliação do agente
+  // passar (até `reconcileMs`, e nunca sob `--no-reconcile`) — na instalação
+  // isso se parece exatamente com "o terminal não sincroniza", que é o
+  // diagnóstico errado na pior hora.
+  //
+  // Vai DEPOIS da alocação de propósito: `backfillTerminal` resolve o escopo
+  // pela alocação VIGENTE; chamado antes, não acharia evento e sairia no-op.
+  // Idempotente (upsert), então re-rodar o seed não duplica nem re-empurra.
+  await backfillTerminal(terminal.id)
+  const linhas = await prisma.participantTerminalSync.count({ where: { terminalId: terminal.id } })
+  console.log(`🌱 backfill: ${linhas} linha(s) de sync neste terminal`)
+
+  if (linhas === 0) {
+    // Zero é um resultado legítimo (roster vazio) OU um terminal que não vai
+    // sincronizar nada. Dizer QUAL evita a caça ao fantasma na instalação.
+    const escopo = await resolveActiveAllocation(terminal.id)
+    if (!escopo.ok) {
+      console.log(`   ⚠️  sem alocação vigente agora — ${escopo.detail}`)
+      console.log('   O terminal só receberá roster dentro do período da alocação.')
+    } else {
+      console.log(`   (roster de "${escopo.allocation.eventName}" não tem ninguém elegível ainda:`)
+      console.log('    exige status=active, face utilizável, employeeNo e — se o evento pedir — aprovação)')
+    }
   }
 }
 
