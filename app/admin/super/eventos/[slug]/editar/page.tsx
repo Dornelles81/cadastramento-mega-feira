@@ -3,6 +3,10 @@
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
+import {
+  DEFAULT_DAYS_BEFORE_START,
+  registrationDeadlineLabel
+} from '../../../../../../lib/event/registration-deadline'
 
 interface Event {
   id: string
@@ -12,6 +16,7 @@ interface Event {
   description: string | null
   startDate: string
   endDate: string
+  registrationDeadline?: string | null
   maxCapacity: number
   status: string
   isActive: boolean
@@ -54,6 +59,7 @@ export default function EditarEventoPage() {
     description: '',
     startDate: '',
     endDate: '',
+    registrationDeadline: '',
     maxCapacity: 2000,
     status: 'draft',
     isActive: true,
@@ -120,6 +126,8 @@ export default function EditarEventoPage() {
         description: event.description || '',
         startDate: formatDateForInput(event.startDate),
         endDate: formatDateForInput(event.endDate),
+        // Vazio é significativo: mantém o prazo recomendado no cálculo automático.
+        registrationDeadline: event.registrationDeadline ? formatDateForInput(event.registrationDeadline) : '',
         maxCapacity: event.maxCapacity || 2000,
         status: event.status || 'draft',
         isActive: event.isActive !== undefined ? event.isActive : true,
@@ -179,7 +187,12 @@ export default function EditarEventoPage() {
       const response = await fetch(`/api/admin/eventos/${eventSlug}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        // registrationDeadline vazio vira null: limpa o campo no banco e o prazo
+        // volta a ser calculado (startDate - 4 dias).
+        body: JSON.stringify({
+          ...formData,
+          registrationDeadline: formData.registrationDeadline || null
+        })
       })
 
       const data = await response.json()
@@ -406,6 +419,30 @@ export default function EditarEventoPage() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
                   required
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Prazo recomendado de cadastro
+                </label>
+                <input
+                  type="date"
+                  value={formData.registrationDeadline}
+                  onChange={(e) => setFormData({ ...formData, registrationDeadline: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Aparece no convite enviado ao participante como recomendação — o cadastro
+                  continua aberto durante todo o evento, sem bloqueio por data.
+                  {' '}
+                  {formData.registrationDeadline
+                    ? 'Deixe em branco para voltar ao cálculo automático.'
+                    : `Em branco = calculado automaticamente (início do evento menos ${DEFAULT_DAYS_BEFORE_START} dias)${
+                        registrationDeadlineLabel({ startDate: formData.startDate })
+                          ? `: ${registrationDeadlineLabel({ startDate: formData.startDate })}`
+                          : ''
+                      }.`}
+                </p>
               </div>
 
               <div>

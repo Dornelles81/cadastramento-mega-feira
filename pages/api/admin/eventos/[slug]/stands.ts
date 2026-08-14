@@ -20,7 +20,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Find event by slug
     const event = await prisma.event.findUnique({
       where: { slug: slug.toLowerCase() },
-      select: { id: true, name: true, code: true, slug: true }
+      // startDate + registrationDeadline alimentam o prazo recomendado exibido
+      // no convite de cadastro (lib/event/registration-deadline.ts).
+      select: { id: true, name: true, code: true, slug: true, startDate: true, registrationDeadline: true }
     });
 
     if (!event) {

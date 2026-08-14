@@ -45,6 +45,10 @@ interface StandLinksCellProps {
   /** Nome do evento p/ montar os textos do WhatsApp. Ausente (tela legada sem
    *  event.name) → botões de WhatsApp ficam de fora; o resto funciona igual. */
   eventName?: string;
+  /** Prazo RECOMENDADO de cadastro já formatado (dd/MM/aaaa), vindo de
+   *  registrationDeadlineLabel(event). Só entra no convite de cadastro; ausente
+   *  → a linha do prazo não aparece. Nunca bloqueia cadastro. */
+  registrationDeadline?: string | null;
 }
 
 function formatDateTime(value?: string | null): string | null {
@@ -55,8 +59,9 @@ function formatDateTime(value?: string | null): string | null {
 }
 
 /* ===================== WhatsApp (dois comunicados, ambos pro GESTOR) =====================
- * Dois textos enviados em MOMENTOS DIFERENTES: o de gestão (perigoso — permite excluir) e o
- * de cadastro (o gestor repassa à equipe). [EVENTO]/[STAND]/[LINK_*] preenchidos na hora.
+ * Dois textos enviados em MOMENTOS DIFERENTES: o de gestão (perigoso — permite excluir, fala
+ * COM o responsável e cita o stand) e o de cadastro (fala com o PARTICIPANTE final, que o
+ * gestor repassa; sem menção ao stand). [EVENTO]/[STAND]/[LINK_*] preenchidos na hora.
  * O link de cadastro usa a ROTA DIRETA /cadastro (pula a landing). Ambos só existem no
  * instante da geração (o banco guarda só o hash) → o botão vive no bloco recém-gerado. */
 // Emojis montados em RUNTIME via String.fromCodePoint — o arquivo-fonte não contém nenhum byte
@@ -80,6 +85,7 @@ const WA_EMOJI = {
   camera: String.fromCodePoint(0x1f4f8),      // camera com flash (foto)
   link: String.fromCodePoint(0x1f517),        // elo/corrente (o link)
   hands: String.fromCodePoint(0x1f64c),       // maos erguidas (despedida)
+  clock: String.fromCodePoint(0x23f0),        // despertador (prazo recomendado)
 };
 
 function waTextGestao(evento: string, stand: string, link: string): string {
@@ -93,17 +99,35 @@ ${e.people} Para as pessoas com direito à credencial se cadastrarem, use o link
 Qualquer dúvida, é só falar com a organização. ${e.smile}`;
 }
 
-function waTextCadastro(evento: string, stand: string, link: string): string {
+/**
+ * Convite de cadastro. Falado NA SEGUNDA PESSOA, direto ao participante final —
+ * quem recebe é quem se cadastra. (Antes o texto mandava "encaminhe a cada
+ * pessoa da sua equipe": chegando ao participante, ele lia, achava que não era
+ * com ele, e não se cadastrava.)
+ *
+ * Duas escolhas de redação que NÃO devem regredir:
+ *  - "do evento ${evento}": o artigo concorda com a palavra "evento", não com o
+ *    nome próprio. É o que evita "da Expofest"/"do Expodireto" errado sem exigir
+ *    um campo de gênero no cadastro do evento.
+ *  - o nome do STAND ficou de fora: o link já leva ao stand certo, e citá-lo só
+ *    dava ao participante a impressão de que a mensagem era para outra pessoa.
+ *
+ * `prazo` é RECOMENDAÇÃO, não trava — o cadastro segue aberto durante todo o
+ * evento (ver lib/event/registration-deadline.ts). Sem prazo resolvido, a linha
+ * simplesmente não sai.
+ */
+function waTextCadastro(evento: string, link: string, prazo?: string | null): string {
   const e = WA_EMOJI;
-  // stand entra entre asteriscos (*...*) → negrito no WhatsApp. encodeURIComponent
-  // NÃO escapa '*' (fica literal), então o negrito é preservado no wa.me.
-  return `Olá! ${e.wave} Aqui é a organização do ${evento}.
+  const linhaPrazo = prazo
+    ? `${e.clock} Recomendamos fazer o cadastro até ${prazo} — assim sua credencial já estará pronta na chegada.\n\n`
+    : '';
+  return `Olá! ${e.wave} Aqui é a organização do evento ${evento}.
 
-Este é o link de cadastro do stand *${stand}*. ${e.clipboard}
+Você vai participar e precisa da sua credencial de acesso. ${e.clipboard}
 
-Encaminhe a cada pessoa da sua equipe que vai atuar no stand e precisa de credencial de acesso. Cada uma faz o próprio cadastro: preenche os dados e tira uma foto ${e.camera}, assim a credencial será gerada automaticamente.
+Faça seu cadastro pelo link abaixo: preencha seus dados e tire uma foto ${e.camera}. A credencial é gerada automaticamente.
 
-${e.mobile} Melhor abrir no navegador do celular (Chrome ou Safari).
+${linhaPrazo}${e.mobile} Melhor abrir no navegador do celular (Chrome ou Safari).
 
 ${e.link} ${link}
 
@@ -146,7 +170,12 @@ function openWhatsApp(texto: string, phone?: string | null): void {
   window.open(url, '_blank', 'noopener');
 }
 
-export default function StandLinksCell({ stand, onChanged, eventName }: StandLinksCellProps) {
+export default function StandLinksCell({
+  stand,
+  onChanged,
+  eventName,
+  registrationDeadline,
+}: StandLinksCellProps) {
   const [open, setOpen] = useState(false);
   // Link em claro retornado pela última geração, por scope (some ao fechar o modal).
   const [generated, setGenerated] = useState<{ register?: string; manage?: string }>({});
@@ -297,7 +326,10 @@ export default function StandLinksCell({ stand, onChanged, eventName }: StandLin
   // Envio direto pro telefone do responsável se ele validar; senão, picker de contato.
   const shareRegisterWhatsApp = (generatedLink: string) => {
     if (!eventName) return;
-    openWhatsApp(waTextCadastro(eventName, stand.name, `${generatedLink}/cadastro`), stand.responsiblePhone);
+    openWhatsApp(
+      waTextCadastro(eventName, `${generatedLink}/cadastro`, registrationDeadline),
+      stand.responsiblePhone
+    );
   };
 
   // GESTÃO: link "perigoso" (permite excluir) → confirm() antes; Texto 1, link como está.

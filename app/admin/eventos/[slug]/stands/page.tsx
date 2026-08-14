@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import StandLinksCell from '../../../../../components/admin/StandLinksCell';
+import { registrationDeadlineLabel } from '../../../../../lib/event/registration-deadline';
 
 interface Participant {
   id: string;
@@ -82,6 +83,9 @@ interface Event {
   name: string;
   slug: string;
   code: string;
+  startDate?: string;
+  /** Prazo recomendado de cadastro definido no evento; vazio → calculado. */
+  registrationDeadline?: string | null;
 }
 
 type OccupancyFilter = 'all' | 'empty' | 'partial' | 'full';
@@ -1271,7 +1275,12 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                                 )}
                               </td>
                               <td className="px-4 py-3">
-                                <StandLinksCell stand={stand} onChanged={loadStands} eventName={event?.name} />
+                                <StandLinksCell
+                                  stand={stand}
+                                  onChanged={loadStands}
+                                  eventName={event?.name}
+                                  registrationDeadline={event ? registrationDeadlineLabel(event) : null}
+                                />
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <button onClick={() => handleEdit(stand)} className="text-blue-600 hover:text-blue-800 text-sm font-medium mr-3">

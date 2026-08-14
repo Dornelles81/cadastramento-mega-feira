@@ -35,6 +35,12 @@ model Event {
   endDate   DateTime
   timezone  String   @default("America/Sao_Paulo")
 
+  // Prazo RECOMENDADO de cadastro, exibido no convite enviado ao participante.
+  // É orientação para a pessoa se antecipar — NUNCA bloqueio: o cadastro segue
+  // aberto durante todo o evento. Vazio (null) → calculado como startDate menos
+  // 4 dias (ver lib/event/registration-deadline.ts).
+  registrationDeadline DateTime?
+
   // Capacity
   maxCapacity  Int @default(2000)
   currentCount Int @default(0)

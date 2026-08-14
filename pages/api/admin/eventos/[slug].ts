@@ -58,6 +58,9 @@ export default async function handler(
         description,
         startDate,
         endDate,
+        // Prazo recomendado de cadastro (orientação, nunca trava). '' ou null
+        // limpa o campo e volta ao cálculo automático (startDate - 4 dias).
+        registrationDeadline,
         maxCapacity,
         status,
         isActive,
@@ -131,6 +134,11 @@ export default async function handler(
           ...(description !== undefined && { description }),
           ...(startDate && { startDate: new Date(`${startDate}T12:00:00Z`) }),
           ...(endDate && { endDate: new Date(`${endDate}T12:00:00Z`) }),
+          ...(registrationDeadline !== undefined && {
+            registrationDeadline: registrationDeadline
+              ? new Date(`${registrationDeadline}T12:00:00Z`)
+              : null
+          }),
           ...(maxCapacity && { maxCapacity: parseInt(maxCapacity) }),
           ...(status && { status }),
           ...(typeof isActive === 'boolean' && { isActive }),
