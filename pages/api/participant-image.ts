@@ -28,11 +28,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         id: true,
         name: true,
         faceImageUrl: true,
-        faceData: true
+        faceData: true,
+        status: true,
+        isDeleted: true
       }
     })
 
-    if (!participant) {
+    // Excluído pelo gestor do stand ('removed') ou purgado LGPD (isDeleted):
+    // este endpoint deixa de existir para ele. 404 igual ao de id inexistente,
+    // de propósito — um 403 vazaria que o cadastro existe, e cair no placeholder
+    // de iniciais (abaixo) vazaria o NOME de quem foi excluído.
+    //
+    // Este é o controle real: vale para qualquer chamador. Pular o fetch na UI
+    // é só otimização, não pode ser a proteção.
+    if (!participant || participant.status === 'removed' || participant.isDeleted) {
       return res.status(404).json({ error: 'Participant not found' })
     }
 
