@@ -3,6 +3,7 @@ import { invalidateStandCache } from '../../../../../lib/cache';
 import { requireAuth } from '../../../../../lib/auth';
 import { prisma } from '../../../../../lib/prisma'
 import { occupiedSlotsRelationWhere } from '../../../../../lib/stand-access/occupancy'
+import { visibleParticipantsRelationWhere } from '../../../../../lib/participants/visibility'
 
 
 // API para gerenciamento de Stands por Evento (CRUD)
@@ -76,7 +77,11 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
         eventId: eventId
       },
       include: {
+        // Modal "Editar stand": mesma régua da lista (handleGet sem id, abaixo)
+        // e da trava do DELETE — só quem está cadastrado agora. Sem isto o modal
+        // mostrava quem o gestor do stand já havia excluído (status='removed').
         participants: {
+          where: visibleParticipantsRelationWhere(),
           select: {
             id: true,
             name: true,
@@ -87,7 +92,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
           }
         },
         _count: {
-          select: { participants: true }
+          select: { participants: { where: visibleParticipantsRelationWhere() } }
         }
       }
     });
@@ -331,7 +336,9 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse, eventId: str
     data: updateData,
     include: {
       _count: {
-        select: { participants: true }
+        // Mesma régua do resto do arquivo (a UI recarrega a lista depois do PUT,
+        // então isto é só coerência do payload — não muda comportamento).
+        select: { participants: { where: visibleParticipantsRelationWhere() } }
       }
     }
   });

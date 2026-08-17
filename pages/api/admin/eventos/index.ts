@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { requireAuth, isSuperAdmin } from '../../../../lib/auth'
 import { prisma } from '../../../../lib/prisma'
+import { visibleParticipantsRelationWhere } from '../../../../lib/participants/visibility'
 
 
 /**
@@ -37,7 +38,10 @@ export default async function handler(
       include: {
         _count: {
           select: {
-            participants: true,
+            // "Cadastrados" do card = quem está cadastrado AGORA. Excluídos pelo
+            // gestor do stand (status='removed') e purgados LGPD (isDeleted) não
+            // contam — senão o número nunca desce depois de uma exclusão.
+            participants: { where: visibleParticipantsRelationWhere() },
             stands: true,
             admins: true
           }
