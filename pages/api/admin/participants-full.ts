@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
 import { visibleParticipantsRelationWhere } from '../../../lib/participants/visibility'
+import { buscarRemocoes, montarRemocao } from '../../../lib/participants/removal-badge'
 import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 import { decryptDocuments } from '../../../lib/documents'
@@ -124,36 +125,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`✅ Returning ${participants.length} participants`)
 
-    // ========================================================================
-    // ATOR DA EXCLUSÃO: vem do audit log (fonte de verdade e imutável), com
-    // removedBy como fallback para linhas antigas sem log. Uma query só para
-    // todos os removidos da página — nunca N+1.
-    // ========================================================================
-    const idsRemovidos = participants.filter(p => p.status === 'removed').map(p => p.id)
-    const exclusaoPorParticipante = new Map<string, { at: string | null; by: string | null }>()
-    if (idsRemovidos.length > 0) {
-      const logs = await prisma.auditLog.findMany({
-        where: {
-          action: 'PARTICIPANT_REMOVED',
-          OR: [
-            { entityId: { in: idsRemovidos } },
-            { targetParticipantId: { in: idsRemovidos } }
-          ]
-        },
-        orderBy: { createdAt: 'desc' },
-        select: { entityId: true, targetParticipantId: true, actorIdentifier: true, createdAt: true }
-      })
-      for (const log of logs) {
-        const pid = log.targetParticipantId ?? log.entityId
-        // orderBy desc + primeiro a gravar vence = fica a exclusão mais recente
-        if (pid && !exclusaoPorParticipante.has(pid)) {
-          exclusaoPorParticipante.set(pid, {
-            at: log.createdAt.toISOString(),
-            by: log.actorIdentifier
-          })
-        }
-      }
-    }
+    // Ator da exclusão para o badge (audit log + fallback denormalizado)
+    const exclusaoPorParticipante = await buscarRemocoes(
+      participants.filter(p => p.status === 'removed').map(p => p.id)
+    )
 
     // Format response
     const formattedParticipants = participants.map(participant => {
@@ -195,16 +170,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Estado de exclusão para o badge. `removal` só existe para removidos; o
       // ator vem do audit log, com removedAt/removedBy de fallback (legado).
       status: participant.status,
-      removal: removido
-        ? {
-            at: exclusaoPorParticipante.get(participant.id)?.at
-              ?? participant.removedAt?.toISOString()
-              ?? null,
-            by: exclusaoPorParticipante.get(participant.id)?.by
-              ?? participant.removedBy
-              ?? null
-          }
-        : null
+      removal: removido ? montarRemocao(participant, exclusaoPorParticipante) : null
     }
     })
 

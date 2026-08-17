@@ -15,6 +15,10 @@ interface Participant {
   phone?: string;
   createdAt: string;
   approvalStatus?: string;
+  /** 'active' | 'removed' — removido = excluído pelo gestor do stand */
+  status?: string;
+  /** Presente só para removidos: quando e por quem (audit log) */
+  removal?: { at: string | null; by: string | null } | null;
 }
 
 interface Stand {
@@ -105,6 +109,15 @@ function getApprovalLabel(status?: string) {
   return { label: 'Pendente', cls: 'bg-yellow-100 text-yellow-800' };
 }
 
+/** "Excluído pelo gestor em 17/08 por fulano@..." — a causa do CPF bloqueado. */
+function textoRemocao(removal?: { at: string | null; by: string | null } | null) {
+  const quando = removal?.at
+    ? new Date(removal.at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    : null;
+  const quem = removal?.by || 'responsável do stand';
+  return `Excluído pelo gestor${quando ? ` em ${quando}` : ''} por ${quem}`;
+}
+
 export default function EventStandsPage({ params }: { params: Promise<{ slug: string }> }) {
   const resolvedParams = use(params);
   const slug = resolvedParams.slug;
@@ -121,6 +134,8 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingStand, setEditingStand] = useState<Stand | null>(null);
+  // Toggle "mostrar removidos" do modal (default desligado, reposto a cada abertura)
+  const [showRemoved, setShowRemoved] = useState(false);
 
   // Relatório de ocupação
   const [reportMode, setReportMode] = useState(false);
@@ -392,6 +407,8 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
 
   const handleEdit = async (stand: Stand) => {
     try {
+      // Abre sempre no default (só cadastrados); o toggle é opt-in por abertura
+      setShowRemoved(false);
       const response = await fetch(`/api/admin/eventos/${slug}/stands?id=${stand.id}`);
       if (response.ok) {
         const detailedStand = await response.json();
@@ -415,6 +432,28 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
     } catch (error) {
       console.error('Error loading stand details:', error);
       alert('Erro ao carregar detalhes do stand');
+    }
+  };
+
+  // Liga/desliga os removidos na lista do modal. Recarrega só o stand aberto —
+  // não toca em formData, para não perder o que o admin já digitou.
+  const toggleRemovidos = async (mostrar: boolean) => {
+    if (!editingStand) return;
+    setShowRemoved(mostrar);
+    try {
+      const qs = mostrar ? '&includeRemoved=1' : '';
+      const response = await fetch(`/api/admin/eventos/${slug}/stands?id=${editingStand.id}${qs}`);
+      if (response.ok) {
+        const detailedStand = await response.json();
+        setEditingStand(detailedStand);
+      } else {
+        setShowRemoved(!mostrar);
+        alert('Erro ao recarregar a lista de participantes');
+      }
+    } catch (error) {
+      console.error('Error reloading stand participants:', error);
+      setShowRemoved(!mostrar);
+      alert('Erro ao recarregar a lista de participantes');
     }
   };
 
@@ -1088,9 +1127,34 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                     </div>
                   </div>
 
-                  {editingStand && editingStand.participants && editingStand.participants.length > 0 && (
+                  {editingStand && (() => {
+                    const lista = editingStand.participants || [];
+                    const cadastrados = lista.filter(p => p.status !== 'removed');
+                    const removidos = lista.filter(p => p.status === 'removed');
+                    return (
                     <div className="mt-6 border-t pt-6">
-                      <h3 className="text-lg font-bold mb-4">Participantes Vinculados ({editingStand.participants.length})</h3>
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                        <h3 className="text-lg font-bold">Participantes Vinculados ({cadastrados.length})</h3>
+                        {/* O filtro sozinho esconde a CAUSA de um CPF bloqueado para
+                            recadastro; o toggle devolve essa informação ao admin. */}
+                        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showRemoved}
+                            onChange={(e) => toggleRemovidos(e.target.checked)}
+                            className="h-4 w-4 text-blue-600"
+                          />
+                          Mostrar excluídos pelo gestor
+                        </label>
+                      </div>
+
+                      {lista.length === 0 ? (
+                        <p className="text-sm text-gray-500">
+                          {showRemoved
+                            ? 'Nenhum participante neste stand.'
+                            : 'Nenhum participante cadastrado. Se alguém já ocupou esta vaga, marque "Mostrar excluídos pelo gestor".'}
+                        </p>
+                      ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead className="bg-gray-50">
@@ -1103,22 +1167,34 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
-                            {editingStand.participants.map(participant => {
+                            {lista.map(participant => {
                               const appr = getApprovalLabel(participant.approvalStatus);
+                              const removido = participant.status === 'removed';
                               return (
-                                <tr key={participant.id} className="hover:bg-gray-50">
+                                <tr key={participant.id} className={removido ? 'bg-gray-50/70 text-gray-500' : 'hover:bg-gray-50'}>
                                   <td className="px-4 py-3 text-sm text-gray-900">{participant.name}</td>
                                   <td className="px-4 py-3 text-sm text-gray-600">{participant.cpf}</td>
                                   <td className="px-4 py-3 text-sm text-gray-600">{participant.email || '-'}</td>
                                   <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${appr.cls}`}>{appr.label}</span>
+                                    {removido ? (
+                                      <span
+                                        className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700"
+                                        title={textoRemocao(participant.removal)}
+                                      >
+                                        {textoRemocao(participant.removal)}
+                                      </span>
+                                    ) : (
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${appr.cls}`}>{appr.label}</span>
+                                    )}
                                   </td>
                                   <td className="px-4 py-3 text-right">
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteParticipant(participant)}
                                       className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                      title="Excluir este participante (apaga cadastro, foto e documentos)"
+                                      title={removido
+                                        ? 'Apagar de vez o registro (libera o CPF para novo cadastro)'
+                                        : 'Excluir este participante (apaga cadastro, foto e documentos)'}
                                     >
                                       Excluir
                                     </button>
@@ -1129,11 +1205,15 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                           </tbody>
                         </table>
                       </div>
+                      )}
+
                       <p className="text-xs text-gray-500 mt-2">
-                        Para excluir o stand, remova todos os participantes acima. A exclusão apaga permanentemente o cadastro, a foto e os documentos de cada pessoa (LGPD).
+                        Para excluir o stand, remova todos os participantes cadastrados acima. A exclusão apaga permanentemente o cadastro, a foto e os documentos de cada pessoa (LGPD).
+                        {removidos.length > 0 && ' Quem já foi excluído pelo gestor não impede a exclusão do stand, mas segue com o CPF bloqueado para recadastro até ser apagado aqui.'}
                       </p>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   <div className="flex gap-3 pt-4">
                     <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">

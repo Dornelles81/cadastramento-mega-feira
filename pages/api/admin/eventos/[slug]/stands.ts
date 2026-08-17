@@ -4,6 +4,7 @@ import { requireAuth } from '../../../../../lib/auth';
 import { prisma } from '../../../../../lib/prisma'
 import { occupiedSlotsRelationWhere } from '../../../../../lib/stand-access/occupancy'
 import { visibleParticipantsRelationWhere } from '../../../../../lib/participants/visibility'
+import { buscarRemocoes, montarRemocao } from '../../../../../lib/participants/removal-badge'
 
 
 // API para gerenciamento de Stands por Evento (CRUD)
@@ -67,31 +68,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
 // GET - Listar stands do evento ou buscar por ID
 async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: string): Promise<void> {
-  const { id, active } = req.query;
+  const { id, active, includeRemoved } = req.query;
 
   // Buscar stand específico por ID (verificando que pertence ao evento)
   if (id) {
+    // Modal "Editar stand": por padrão só quem está cadastrado agora (mesma
+    // régua da lista abaixo e da trava do DELETE). Com ?includeRemoved=1 o
+    // toggle traz também os excluídos pelo gestor — é o que explica ao admin
+    // por que aquele CPF continua bloqueado para recadastro.
+    const mostrarRemovidos = includeRemoved === '1' || includeRemoved === 'true';
+
     const stand = await prisma.stand.findFirst({
       where: {
         id: id as string,
         eventId: eventId
       },
       include: {
-        // Modal "Editar stand": mesma régua da lista (handleGet sem id, abaixo)
-        // e da trava do DELETE — só quem está cadastrado agora. Sem isto o modal
-        // mostrava quem o gestor do stand já havia excluído (status='removed').
         participants: {
-          where: visibleParticipantsRelationWhere(),
+          ...(mostrarRemovidos ? {} : { where: visibleParticipantsRelationWhere() }),
           select: {
             id: true,
             name: true,
             cpf: true,
             email: true,
             createdAt: true,
-            approvalStatus: true
+            approvalStatus: true,
+            // Badge de removido. Note que nem aqui nem no toggle trafega foto,
+            // biometria ou documento — o modal nunca recebeu esses campos.
+            status: true,
+            removedAt: true,
+            removedBy: true
           }
         },
         _count: {
+          // Contagem do cabeçalho é sempre a de cadastrados: não infla quando o
+          // admin liga o toggle
           select: { participants: { where: visibleParticipantsRelationWhere() } }
         }
       }
@@ -102,7 +113,16 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: str
       return;
     }
 
-    res.status(200).json(stand);
+    // Ator/data da exclusão a partir do audit log, só para os removidos da lista
+    const remocoes = await buscarRemocoes(
+      stand.participants.filter(p => p.status === 'removed').map(p => p.id)
+    );
+    const participants = stand.participants.map(p => ({
+      ...p,
+      removal: p.status === 'removed' ? montarRemocao(p, remocoes) : null
+    }));
+
+    res.status(200).json({ ...stand, participants });
     return;
   }
 
