@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
 import SyncResumo from '../../../../components/admin/SyncResumo'
+import { textoRemocao } from '../../../../lib/participants/removal-label'
 
 interface Participant {
   id: string
@@ -29,6 +30,10 @@ interface Participant {
   rejectionReason?: string
   credentialPrinted?: boolean
   credentialPrintedAt?: string
+  /** 'active' | 'removed' — removido = excluído pelo gestor do stand */
+  status?: string
+  /** Presente só para removidos: quando e por quem (audit log) */
+  removal?: { at: string | null; by: string | null } | null
 }
 
 const MOCK_PARTICIPANTS: Participant[] = [
@@ -122,6 +127,9 @@ export default function EventAdminPage() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedStand, setSelectedStand] = useState<string>('all')
+  // Toggle "mostrar excluídos pelo gestor" (default off). Sem ele, o filtro
+  // esconde a CAUSA de um CPF continuar bloqueado para recadastro.
+  const [showRemoved, setShowRemoved] = useState(false)
   const [faceUnvalidatedOnly, setFaceUnvalidatedOnly] = useState(false) // [assim-mesmo] listar só sem-validação
   const [stands, setStands] = useState<Stand[]>([])
   const [darkMode, setDarkMode] = useState(false)
@@ -288,9 +296,11 @@ export default function EventAdminPage() {
       })
 
       // Use admin API with event filter - CRITICAL: Only load this event's participants.
-      // excludeRemoved=1: oculta excluídos-pelo-dono (status='removed') e purgados LGPD
-      // (isDeleted=true) — server-side, só nesta tela (HikCentral não passa o param).
-      const response = await fetch(`/api/admin/participants-full?${queryParam}&excludeRemoved=1`)
+      // O default do endpoint já esconde removidos (status='removed') e purgados
+      // LGPD (isDeleted); includeRemoved=1 é o toggle da barra de filtros.
+      const response = await fetch(
+        `/api/admin/participants-full?${queryParam}${showRemoved ? '&includeRemoved=1' : ''}`
+      )
       if (response.ok) {
         const data = await response.json()
         let participants = data.participants || []
@@ -308,7 +318,13 @@ export default function EventAdminPage() {
         // Load images for each participant (only if not already in data)
         const images: Record<string, string> = {}
         for (const participant of data.participants || []) {
-          // Use faceImageUrl if available, otherwise try to fetch
+          // Use faceImageUrl if available, otherwise try to fetch.
+          // Removido não tem foto: a exclusão apagou a biometria e o
+          // /api/participant-image responde 404 para ele (esse é o controle).
+          // Pular aqui só evita um request inútil e o flash de carregamento.
+          if (participant.status === 'removed') {
+            continue
+          }
           if (participant.faceImageUrl) {
             images[participant.id] = participant.faceImageUrl
           } else {
@@ -349,7 +365,9 @@ export default function EventAdminPage() {
     }, 500) // 500ms debounce
 
     return () => clearTimeout(timeoutId)
-  }, [searchTerm, hasAccess, event])
+    // showRemoved entra aqui porque muda a QUERY no servidor (includeRemoved),
+    // não só a exibição — ligar o toggle precisa recarregar a lista
+  }, [searchTerm, showRemoved, hasAccess, event])
 
   // Show loading while checking authentication
   if (status === 'loading') {
@@ -1149,11 +1167,29 @@ export default function EventAdminPage() {
                 ⚠ Só sem validação
               </label>
             </div>
+            {/* Excluídos pelo gestor do stand: fora da lista por padrão, mas
+                visíveis sob demanda — é o que explica um CPF bloqueado. */}
+            <div className="flex items-end">
+              <label className={`flex items-center gap-2 px-4 py-3 rounded-lg cursor-pointer text-sm whitespace-nowrap ${
+                showRemoved
+                  ? 'bg-gray-200 text-gray-800 border border-gray-400'
+                  : darkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'
+              }`} title="Mostrar também quem foi excluído pelo responsável do stand (sem foto e sem documentos)">
+                <input
+                  type="checkbox"
+                  checked={showRemoved}
+                  onChange={(e) => setShowRemoved(e.target.checked)}
+                  className="accent-gray-500"
+                />
+                🗑 Mostrar excluídos pelo gestor
+              </label>
+            </div>
             <button
               onClick={() => {
                 setSearchTerm('')
                 setSelectedStand('all')
                 setFaceUnvalidatedOnly(false)
+                setShowRemoved(false)
               }}
               className={`px-4 py-3 rounded-lg transition-colors text-sm whitespace-nowrap ${
                 darkMode
@@ -1336,7 +1372,17 @@ export default function EventAdminPage() {
                     </td>
                     <td className={`px-2 md:px-4 py-3 font-mono text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.cpf}</td>
                     <td className="px-2 md:px-4 py-3 hidden sm:table-cell">
-                      {participant.approvalStatus === 'approved' ? (
+                      {participant.status === 'removed' ? (
+                        // Substitui o status de aprovação: para um removido, o que
+                        // importa é que ele saiu — e por quem, para o admin saber
+                        // com quem falar antes de liberar o CPF.
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700"
+                          title={textoRemocao(participant.removal)}
+                        >
+                          🗑 {textoRemocao(participant.removal)}
+                        </span>
+                      ) : participant.approvalStatus === 'approved' ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           ✅ Aprovado
                         </span>

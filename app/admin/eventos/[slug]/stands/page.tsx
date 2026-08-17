@@ -6,6 +6,7 @@ import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import StandLinksCell from '../../../../../components/admin/StandLinksCell';
 import { registrationDeadlineLabel } from '../../../../../lib/event/registration-deadline';
+import { textoRemocao } from '../../../../../lib/participants/removal-label';
 
 interface Participant {
   id: string;
@@ -109,14 +110,6 @@ function getApprovalLabel(status?: string) {
   return { label: 'Pendente', cls: 'bg-yellow-100 text-yellow-800' };
 }
 
-/** "Excluído pelo gestor em 17/08 por fulano@..." — a causa do CPF bloqueado. */
-function textoRemocao(removal?: { at: string | null; by: string | null } | null) {
-  const quando = removal?.at
-    ? new Date(removal.at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-    : null;
-  const quem = removal?.by || 'responsável do stand';
-  return `Excluído pelo gestor${quando ? ` em ${quando}` : ''} por ${quem}`;
-}
 
 export default function EventStandsPage({ params }: { params: Promise<{ slug: string }> }) {
   const resolvedParams = use(params);
