@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { requireAuth, isSuperAdmin } from '../../../../lib/auth'
 import { prisma } from '../../../../lib/prisma'
+import { visibleParticipantsRelationWhere } from '../../../../lib/participants/visibility'
 
 
 /**
@@ -36,7 +37,9 @@ export default async function handler(
           eventConfigs: true,
           _count: {
             select: {
-              participants: true,
+              // Contagem de PESSOAS cadastradas (não de vagas ocupadas): quem o
+              // gestor do stand excluiu não conta. Ver lib/participants/visibility.
+              participants: { where: visibleParticipantsRelationWhere() },
               stands: true,
               admins: true
             }

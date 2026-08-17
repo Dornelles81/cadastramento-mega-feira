@@ -5,12 +5,15 @@ import { visibleParticipantsRelationWhere } from '../../../../lib/participants/v
 
 
 /**
- * API: Listar todos os eventos (SUPER ADMIN apenas)
+ * API: Listar eventos visíveis para quem está logado.
  *
  * Segurança:
  * - Requer autenticação
- * - Requer role SUPER_ADMIN
- * - Retorna eventos com contagem de participantes
+ * - SUPER_ADMIN e OPERATOR (portaria/scanner): todos os eventos ativos
+ * - Demais admins: SOMENTE os eventos com acesso ativo em EventAdminAccess,
+ *   com as permissões reais daquele vínculo (nunca o all-true do super)
+ * - Retorna a contagem VIVA de participantes — o dashboard usava o número do
+ *   JWT, congelado no login por 24h, que não descia depois de uma exclusão
  */
 export default async function handler(
   req: NextApiRequest,
@@ -24,16 +27,44 @@ export default async function handler(
     // Require authentication
     const session = await requireAuth(req, res)
 
-    // Allow SUPER_ADMIN and OPERATOR (operator needs event list for scanner)
+    // SUPER_ADMIN e OPERATOR (o scanner da portaria precisa da lista) veem tudo.
+    // Admin comum entra aqui também — mas SÓ enxerga os eventos onde tem vínculo
+    // ativo, filtrado no banco (nunca por filtro no client).
     const isOperator = session?.user?.role === 'OPERATOR'
-    if (!isSuperAdmin(session) && !isOperator) {
-      return res.status(403).json({ error: 'Acesso negado. Apenas Super Admin.' })
+    const veTodosOsEventos = isSuperAdmin(session) || isOperator
+    const adminId = session?.user?.id as string | undefined
+
+    if (!veTodosOsEventos && !adminId) {
+      return res.status(403).json({ error: 'Acesso negado.' })
     }
+
+    // Permissões reais por evento para o admin comum (o super segue com all-true)
+    const vinculos = veTodosOsEventos
+      ? []
+      : await prisma.eventAdminAccess.findMany({
+          where: { adminId, isActive: true },
+          select: {
+            eventId: true,
+            canView: true,
+            canEdit: true,
+            canApprove: true,
+            canDelete: true,
+            canExport: true,
+            canManageStands: true,
+            canManageAdmins: true
+          }
+        })
+    const permissoesPorEvento = new Map(
+      vinculos.map(({ eventId, ...permissions }) => [eventId, permissions])
+    )
 
     // Fetch all events with participant count
     const events = await prisma.event.findMany({
       where: {
-        isActive: true
+        isActive: true,
+        ...(veTodosOsEventos
+          ? {}
+          : { id: { in: [...permissoesPorEvento.keys()] } })
       },
       include: {
         _count: {
@@ -74,7 +105,7 @@ export default async function handler(
       logoUrl: event.eventConfigs?.logoUrl,
       primaryColor: event.eventConfigs?.primaryColor,
       _count: event._count,
-      permissions: {
+      permissions: permissoesPorEvento.get(event.id) ?? {
         canView: true,
         canEdit: true,
         canApprove: true,

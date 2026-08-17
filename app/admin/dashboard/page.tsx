@@ -48,23 +48,28 @@ export default function AdminDashboard() {
   }, [status, session])
 
   const loadEvents = async () => {
+    // A lista do token (session.user.events) traz o _count congelado no login:
+    // depois de uma exclusão o card "Cadastrados" só descia no login seguinte.
+    // Agora TODOS os papéis buscam a contagem viva na API — que já devolve, para
+    // o admin comum, apenas os eventos dele e as permissões reais do vínculo.
+    // O token continua como rede de segurança se a chamada falhar.
+    const doToken: Event[] = session?.user?.events || []
     try {
-      let loadedEvents: Event[] = []
-      if (session?.user?.role === 'SUPER_ADMIN') {
-        const response = await fetch('/api/admin/eventos')
-        if (response.ok) {
-          const data = await response.json()
-          loadedEvents = data.events
-          setEvents(loadedEvents)
-        }
+      let loadedEvents: Event[] = doToken
+      const response = await fetch('/api/admin/eventos')
+      if (response.ok) {
+        const data = await response.json()
+        loadedEvents = data.events ?? doToken
       } else {
-        loadedEvents = session?.user?.events || []
-        setEvents(loadedEvents)
+        console.error('Falha ao carregar eventos:', response.status)
       }
+      setEvents(loadedEvents)
       // Fetch access stats for all events in parallel
       loadAccessStats(loadedEvents)
     } catch (error) {
       console.error('Error loading events:', error)
+      setEvents(doToken)
+      loadAccessStats(doToken)
     } finally {
       setLoading(false)
     }

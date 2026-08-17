@@ -2,6 +2,7 @@ import NextAuth, { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../../../lib/prisma'
+import { visibleParticipantsRelationWhere } from '../../../lib/participants/visibility'
 
 
 export const authOptions: NextAuthOptions = {
@@ -36,7 +37,12 @@ export const authOptions: NextAuthOptions = {
                     isActive: true,
                     _count: {
                       select: {
-                        participants: true
+                        // Mesma régua do card do dashboard: removidos pelo gestor
+                        // do stand não contam. Este número entra no JWT e por
+                        // isso envelhece até o próximo login — o dashboard passou
+                        // a buscar a contagem viva em /api/admin/eventos; isto
+                        // aqui é só o fallback quando aquela chamada falha.
+                        participants: { where: visibleParticipantsRelationWhere() }
                       }
                     }
                   }
