@@ -43,6 +43,8 @@ export interface ReconcileRunResult {
   pushes: number
   removals: number
   directDeletes: number
+  /** Órfãos que o device recusou apagar — biometria que CONTINUA lá. */
+  deleteFailures: number
 }
 
 /**
@@ -51,7 +53,7 @@ export interface ReconcileRunResult {
  */
 export async function runReconcile(cfg: AgentConfig): Promise<ReconcileRunResult> {
   const terminals = await getTerminals(cfg)
-  let pushes = 0, removals = 0, directDeletes = 0
+  let pushes = 0, removals = 0, directDeletes = 0, deleteFailures = 0
   for (const t of terminals) {
     if (!t.password) continue
     const client = new HikvisionClient({ ipAddress: t.ipAddress, port: t.port, useHttps: t.useHttps, username: t.username, password: t.password })
@@ -65,8 +67,20 @@ export async function runReconcile(cfg: AgentConfig): Promise<ReconcileRunResult
     pushes += r.pushesEnqueued
     removals += r.removalsEnqueued
     for (const emp of r.removeEmployeeNos) {
-      try { await client.deleteUser(emp); directDeletes++ } catch { /* próximo ciclo reconcilia de novo */ }
+      // Uma linha POR ÓRFÃO, no sucesso e na falha. O sucesso é o que prova, no
+      // dia do evento, que um cadastro feito à mão no painel do terminal foi
+      // limpo — sem ele a limpeza acontece em silêncio e ninguém consegue
+      // confirmar que aconteceu. A falha é biometria de alguém CONTINUANDO no
+      // device: o próximo ciclo tenta de novo, mas o operador precisa saber já.
+      try {
+        await client.deleteUser(emp)
+        directDeletes++
+        console.log(`[agente] órfão removido: emp=${emp} terminal=${t.ipAddress}`)
+      } catch (e: any) {
+        deleteFailures++
+        console.error(`[agente] FALHA ao remover órfão emp=${emp} terminal=${t.ipAddress}: ${e?.message ?? e}`)
+      }
     }
   }
-  return { terminals: terminals.length, pushes, removals, directDeletes }
+  return { terminals: terminals.length, pushes, removals, directDeletes, deleteFailures }
 }

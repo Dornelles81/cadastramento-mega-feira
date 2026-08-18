@@ -125,8 +125,10 @@ export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
         lastReconcile = Date.now()
         try {
           const rc = await runReconcile(cfg)
-          if (rc.pushes + rc.removals + rc.directDeletes > 0) {
-            console.log(`[agente] reconcile: pushes=${rc.pushes} removals=${rc.removals} deletes=${rc.directDeletes} (${rc.terminals} terminais)`)
+          // deleteFailures entra na condição: um ciclo que SÓ falhou não pode
+          // passar despercebido por não ter nada de positivo para somar.
+          if (rc.pushes + rc.removals + rc.directDeletes + rc.deleteFailures > 0) {
+            console.log(`[agente] reconcile: pushes=${rc.pushes} removals=${rc.removals} deletes=${rc.directDeletes} falhas=${rc.deleteFailures} (${rc.terminals} terminais)`)
           }
         } catch (e: any) {
           console.error(`[agente] erro na reconciliação: ${e?.message ?? e}`)

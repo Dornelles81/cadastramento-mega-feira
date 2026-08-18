@@ -69,6 +69,59 @@ await runOnce(loadConfig())   // 1 ciclo: terminals + heartbeat + work + ack
 > primeiro ciclo sempre disparava a varredura — ligar o agente num evento com
 > roster cheio sincronizava tudo na hora, sem aviso.
 
+## 📄 Log: direto em arquivo, nunca por pipe
+
+**Não rode `mega-agente.exe | tee agente.log`** — nem qualquer variante com pipe.
+Use redirecionamento simples, ou o serviço (que já faz isso via NSSM):
+
+```powershell
+# certo
+mega-agente.exe >> C:\MegaAgente\logs\agente.log 2>&1
+
+# errado — perde log
+mega-agente.exe | tee C:\MegaAgente\logs\agente.log
+```
+
+O processo do meio bufferiza em blocos e, se morrer antes do flush (fechar a
+janela, matar o terminal), as linhas que estavam no buffer **somem para sempre**.
+E o agente **sobrevive ao pipe morto**: continua rodando e escrevendo nos
+terminais, agora sem deixar rastro algum.
+
+> Aconteceu em 17/08/2026 na bancada: o agente rodou a noite inteira invisível
+> depois que a janela foi encerrada. A remoção de um usuário órfão não apareceu
+> em log nenhum — e a ausência de linha foi interpretada, erradamente, como bug
+> no código da reconciliação. O código estava certo; o cano é que estava roto.
+
+## ✅ Verificar se o agente está rodando — por PROCESSO, não por janela
+
+Janela fechada **não** significa agente parado. Matar o terminal (ou o shell que
+o iniciou) mata o embrulho, não o processo do agente.
+
+```powershell
+# como serviço
+Get-Service MegaAgente
+Get-CimInstance Win32_Process -Filter "Name='mega-agente.exe'" | Select ProcessId, CreationDate
+
+# rodando via tsx/node (depuração): o nome do processo é node.exe
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -match 'agent/run' } |
+  Select ProcessId, CreationDate, CommandLine
+
+# parar de verdade
+Stop-Process -Id <PID> -Force        # avulso
+& nssm stop MegaAgente               # serviço
+```
+
+Faça essa verificação **antes de qualquer teste de bancada**: um agente esquecido
+reconcilia a cada 60s e apaga o órfão de teste antes de você conseguir observá-lo.
+
+## Instalação como serviço do Windows
+
+`agent/instalar-servico.ps1` (fonte versionada) instala via NSSM, com reinício
+automático, log em arquivo e rotação diária/10 MB. Copie-o junto do `.exe` para a
+pasta do serviço e execute **como Administrador**. A cópia em `dist/` é artefato
+de build (`/dist` é gitignored) — a fonte é a de `agent/`.
+
 ## Empacotamento como .exe (recomendado: @yao-pkg/pkg)
 
 `vercel/pkg` foi arquivado; o fork **`@yao-pkg/pkg`** é mantido e é a opção mais
