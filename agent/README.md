@@ -115,7 +115,42 @@ Stop-Process -Id <PID> -Force        # avulso
 Faça essa verificação **antes de qualquer teste de bancada**: um agente esquecido
 reconcilia a cada 60s e apaga o órfão de teste antes de você conseguir observá-lo.
 
-## Instalação como serviço do Windows
+## 🚚 Instalação no PC do evento — ordem obrigatória
+
+**Passo 1, SEMPRE: gerar o `.exe` a partir do código mais recente.** Nunca
+reaproveitar binário antigo — nem o que está em `dist/`, nem o do pen drive da
+instalação anterior.
+
+```bash
+git pull   # o código do evento é o do main, não o do seu disco
+
+npx esbuild agent/run.ts --bundle --platform=node --target=node18 --outfile=dist/agent.cjs
+npx @yao-pkg/pkg dist/agent.cjs --targets node18-win-x64 --output dist/mega-agente.exe
+```
+
+(Os dois comandos são o build completo; `docs/agente-exe-build.md` descreve o
+atalho opcional `npm run agent:exe`, que **ainda não está** no `package.json`.)
+
+O `.exe` é um **retrato congelado** do agente no instante do build. Correções
+entregues depois dele — inclusive as de log e de sincronismo — só chegam ao
+terminal quando o binário é regerado. Um `.exe` de semanas atrás roda sem
+reclamar e sem avisar que está velho: não há checagem de versão contra a nuvem.
+
+Por isso o build **não** deve ser feito "com antecedência, para adiantar". Gere
+no dia da instalação, com o PC do evento já em mãos.
+
+Ordem completa:
+
+1. `git pull` + os dois comandos de build acima → `dist/mega-agente.exe` **recém-gerado**
+2. copiar para a pasta do serviço (`C:\MegaAgente`): `mega-agente.exe`,
+   `agent.config.json` (com o token do evento), `nssm.exe` e
+   `instalar-servico.ps1`
+3. executar `instalar-servico.ps1` **como Administrador**
+4. conferir pelo log e pelo processo (seções acima) que subiu de fato
+5. `--dry-run` uma vez antes de liberar, para validar token e conectividade
+   sem escrever nos terminais
+
+### Instalação como serviço do Windows
 
 `agent/instalar-servico.ps1` (fonte versionada) instala via NSSM, com reinício
 automático, log em arquivo e rotação diária/10 MB. Copie-o junto do `.exe` para a
