@@ -15,6 +15,7 @@ import {
 } from './api'
 import { applyPush, applyRemoval } from './apply'
 import { runReconcile } from './reconcile'
+import { log, logError } from './log'
 import { HikvisionClient } from '../lib/hikvision/client'
 
 export interface RunResult {
@@ -102,7 +103,7 @@ export interface MainLoopOptions {
 export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
   const cfg = loadConfig()
   const reconcileEnabled = opts.reconcile !== false
-  console.log(
+  log(
     `[agente] iniciado · base=${cfg.baseUrl} · poll=${cfg.pollMs}ms · ` +
     (reconcileEnabled ? `reconcile=${cfg.reconcileMs}ms` : 'reconcile=DESLIGADO (--no-reconcile)')
   )
@@ -118,7 +119,7 @@ export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
     try {
       const r = await runOnce(cfg)
       if (r.pushCount + r.removalCount > 0) {
-        console.log(`[agente] ${new Date().toISOString()} push=${r.pushCount} removal=${r.removalCount} ok=${r.applied} falhas=${r.failed}`)
+        log(`[agente] push=${r.pushCount} removal=${r.removalCount} ok=${r.applied} falhas=${r.failed}`)
       }
       // Reconciliação em cadência própria (mais pesada — lista o roster do device).
       if (reconcileEnabled && Date.now() - lastReconcile >= cfg.reconcileMs) {
@@ -128,14 +129,14 @@ export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
           // deleteFailures entra na condição: um ciclo que SÓ falhou não pode
           // passar despercebido por não ter nada de positivo para somar.
           if (rc.pushes + rc.removals + rc.directDeletes + rc.deleteFailures > 0) {
-            console.log(`[agente] reconcile: pushes=${rc.pushes} removals=${rc.removals} deletes=${rc.directDeletes} falhas=${rc.deleteFailures} (${rc.terminals} terminais)`)
+            log(`[agente] reconcile: pushes=${rc.pushes} removals=${rc.removals} deletes=${rc.directDeletes} falhas=${rc.deleteFailures} (${rc.terminals} terminais)`)
           }
         } catch (e: any) {
-          console.error(`[agente] erro na reconciliação: ${e?.message ?? e}`)
+          logError(`[agente] erro na reconciliação: ${e?.message ?? e}`)
         }
       }
     } catch (e: any) {
-      console.error(`[agente] erro no ciclo: ${e?.message ?? e}`)
+      logError(`[agente] erro no ciclo: ${e?.message ?? e}`)
     }
     await sleep(cfg.pollMs)
   }

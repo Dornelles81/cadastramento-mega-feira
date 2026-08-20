@@ -13,11 +13,14 @@
  */
 import { loadConfig } from './config'
 import { runOnce, mainLoop } from './agent'
+import { log, logError } from './log'
 
 async function main() {
   if (process.argv.includes('--dry-run')) {
     const cfg = loadConfig()
-    console.log('[DRY-RUN] sem escrita no device. Plano do /work atual:')
+    // Cabeçalho carimbado; os itens do plano ficam indentados abaixo dele, sem
+    // hora própria - são continuação visual de uma leitura só.
+    log('[DRY-RUN] sem escrita no device. Plano do /work atual:')
     const r = await runOnce(cfg, { dryRun: true })
     if (r.planned.length === 0) console.log('  (nada pendente)')
     else r.planned.forEach(p => console.log('  - ' + p))
@@ -27,6 +30,6 @@ async function main() {
 }
 
 main().catch((e: any) => {
-  console.error('[agente] erro fatal:', e?.message ?? e)
+  logError(`[agente] erro fatal: ${e?.message ?? e}`)
   process.exit(1)
 })

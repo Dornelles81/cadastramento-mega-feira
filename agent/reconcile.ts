@@ -8,6 +8,7 @@
 import type { AgentConfig } from './config'
 import { getTerminals, postReconcile, type DeviceUser } from './api'
 import { HikvisionClient } from '../lib/hikvision/client'
+import { log, logError } from './log'
 
 // Cliente mínimo que o lister precisa (facilita testar com mock).
 export interface RosterClient {
@@ -75,10 +76,10 @@ export async function runReconcile(cfg: AgentConfig): Promise<ReconcileRunResult
       try {
         await client.deleteUser(emp)
         directDeletes++
-        console.log(`[agente] órfão removido: emp=${emp} terminal=${t.ipAddress}`)
+        log(`[agente] órfão removido: emp=${emp} terminal=${t.ipAddress}`)
       } catch (e: any) {
         deleteFailures++
-        console.error(`[agente] FALHA ao remover órfão emp=${emp} terminal=${t.ipAddress}: ${e?.message ?? e}`)
+        logError(`[agente] FALHA ao remover órfão emp=${emp} terminal=${t.ipAddress}: ${e?.message ?? e}`)
       }
     }
   }
