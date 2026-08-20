@@ -1,8 +1,8 @@
-# Instala o Mega Agente como SERVIÇO do Windows via NSSM.
+﻿# Instala o Mega Agente como SERVIÇO do Windows via NSSM.
 # EXECUTAR COMO ADMINISTRADOR.
 #
 # Este arquivo é a FONTE versionada do instalador. A pasta do serviço
-# (C:\MegaAgente) e o dist\ do build são cópias — ao mudar algo aqui, recopie.
+# (C:\MegaAgente) e o dist\ do build são cópias - ao mudar algo aqui, recopie.
 #
 # O que este script faz:
 #   - registra o serviço apontando para mega-agente.exe
@@ -10,15 +10,15 @@
 #   - reinicia sozinho se o processo cair, com throttle anti-loop
 #   - grava stdout/stderr DIRETO EM ARQUIVO, com rotação (diária ou a cada 10 MB)
 #
-# LOG — por que direto em arquivo, sem `tee` nem pipe no meio:
+# LOG - por que direto em arquivo, sem `tee` nem pipe no meio:
 #   Rodar o agente como `mega-agente.exe | tee agente.log` (ou qualquer pipe)
 #   perde log. O processo do meio bufferiza em blocos e, se ele morrer antes do
-#   flush — fechar a janela, matar o terminal —, as linhas que estavam no buffer
+#   flush - fechar a janela, matar o terminal -, as linhas que estavam no buffer
 #   somem para sempre. Pior: o agente SOBREVIVE ao pipe morto e continua
 #   escrevendo nos terminais sem deixar rastro nenhum. Foi exatamente o que
 #   aconteceu em 17/08/2026: o agente rodou a noite inteira invisível, e a
 #   remoção de um órfão não apareceu em log nenhum. O NSSM abaixo escreve nos
-#   descritores do processo, sem intermediário — é o modo correto.
+#   descritores do processo, sem intermediário - é o modo correto.
 #
 # Nada aqui apaga dados nem toca o terminal: só configura como o .exe é executado.
 
@@ -46,7 +46,7 @@ New-Item -ItemType Directory -Force -Path $PastaLogs | Out-Null
 
 # --------------------------------------------------- remove instalação antiga
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
-  Write-Host "Serviço $ServiceName já existe — removendo para reinstalar."
+  Write-Host "Serviço $ServiceName já existe - removendo para reinstalar."
   & $Nssm stop $ServiceName confirm | Out-Null
   & $Nssm remove $ServiceName confirm | Out-Null
   Start-Sleep -Seconds 2
@@ -85,7 +85,17 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
 & $Nssm set $ServiceName AppRotateSeconds 86400           # ...a cada 24h
 & $Nssm set $ServiceName AppRotateBytes 10485760          # ...ou a cada 10 MB, o que vier antes
 # Carimbo de data/hora em cada linha: sem isso, log de 58 dias é ilegível.
+# ATENÇÃO: AppTimestampLog só existe no NSSM >= 2.25 (build de CI do nssm.cc).
+# O 2.24 - última versão ESTÁVEL, e a que vai na pasta de instalação - NÃO
+# conhece este parâmetro: devolve erro e segue em frente, deixando o log sem
+# carimbo. Verificado no próprio binário em 19/08/2026. Por isso o aviso
+# explícito abaixo: sem ele a promessa do comentário acima seria silenciosamente
+# falsa, e log sem hora é primo do log que não existe.
 & $Nssm set $ServiceName AppTimestampLog 1
+if ($LASTEXITCODE -ne 0) {
+  Write-Warning ('Este NSSM não suporta AppTimestampLog: o log NÃO terá carimbo ' +
+    'de data/hora. Para ter timestamp, troque o nssm.exe pelo build 2.25+ do nssm.cc.')
+}
 
 # --------------------------------------------------------------------- sobe
 & $Nssm start $ServiceName
@@ -116,5 +126,5 @@ Write-Host '  Get-CimInstance Win32_Process -Filter "Name=''mega-agente.exe''" |
 Write-Host ("  Get-Content '{0}' -Tail 30 -Wait     # log ao vivo" -f (Join-Path $PastaLogs 'agente.log'))
 Write-Host ''
 Write-Host 'Rodando fora do serviço (tsx/node, para depuração), o processo NAO aparece'
-Write-Host 'como mega-agente.exe — procure por node.exe com agent/run.ts na linha de comando:'
+Write-Host 'como mega-agente.exe - procure por node.exe com agent/run.ts na linha de comando:'
 Write-Host '  Get-CimInstance Win32_Process -Filter "Name=''node.exe''" | Where-Object { $_.CommandLine -match ''agent/run'' }'
