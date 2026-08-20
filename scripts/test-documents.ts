@@ -9,7 +9,9 @@
  * Requer MASTER_KEY (mesma chave da face) — carrega de .env.local.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-documents.ts')
 
 import {
   encryptDocuments, decryptDocuments, countPlaintextDocs, hasPlaintextDocs,

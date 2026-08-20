@@ -6,7 +6,9 @@
  * Requer o dev server no ar (http://localhost:3000) com NEXTAUTH_SECRET/MASTER_KEY.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-admin-crud.ts')
 
 import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma'

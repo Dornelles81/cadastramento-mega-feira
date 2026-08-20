@@ -7,7 +7,9 @@
  * Requer o dev server no ar. Limpa tudo no fim.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-reconcile.ts')
 
 import { prisma } from '../lib/prisma'
 import { createAllocation } from '../lib/terminals/allocation'

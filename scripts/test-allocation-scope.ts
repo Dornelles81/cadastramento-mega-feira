@@ -19,7 +19,9 @@
  * Cria e apaga seus próprios dados.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-allocation-scope.ts')
 
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'

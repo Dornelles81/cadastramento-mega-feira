@@ -7,7 +7,9 @@
  * e imutabilidade (segunda atribuição não muda nada). Limpa tudo no final.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-identity.ts')
 
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'

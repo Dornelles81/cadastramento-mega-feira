@@ -11,7 +11,9 @@
  *   AGENT_TEST_BASE pode sobrescrever a URL base.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-agent-flow.ts')
 
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'

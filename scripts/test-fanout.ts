@@ -8,7 +8,9 @@
  * Limpa tudo no fim. Requer o dev server no ar (http://localhost:3000).
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-fanout.ts')
 
 import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'

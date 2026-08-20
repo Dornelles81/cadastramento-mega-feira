@@ -15,7 +15,9 @@
  * Cria e apaga seus próprios dados.
  */
 import * as dotenv from 'dotenv'
+import { assertBancoDeTeste } from './_guard'
 dotenv.config({ path: '.env.local' })
+assertBancoDeTeste('test-sync-status-filter.ts')
 
 import * as path from 'path'
 import { spawnSync } from 'child_process'
