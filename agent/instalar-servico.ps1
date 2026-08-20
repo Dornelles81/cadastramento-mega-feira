@@ -85,16 +85,32 @@ if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
 & $Nssm set $ServiceName AppRotateSeconds 86400           # ...a cada 24h
 & $Nssm set $ServiceName AppRotateBytes 10485760          # ...ou a cada 10 MB, o que vier antes
 # Carimbo de data/hora em cada linha: sem isso, log de 58 dias é ilegível.
-# ATENÇÃO: AppTimestampLog só existe no NSSM >= 2.25 (build de CI do nssm.cc).
-# O 2.24 - última versão ESTÁVEL, e a que vai na pasta de instalação - NÃO
-# conhece este parâmetro: devolve erro e segue em frente, deixando o log sem
-# carimbo. Verificado no próprio binário em 19/08/2026. Por isso o aviso
-# explícito abaixo: sem ele a promessa do comentário acima seria silenciosamente
-# falsa, e log sem hora é primo do log que não existe.
+#
+# POR QUE O PACOTE LEVA UM PRE-RELEASE DO NSSM (2.24-101-g897c7ad, de 2017)
+# e não o "estável" 2.24 (2014) - dois motivos, e o primeiro é o mais sério:
+#
+#   1. O próprio nssm.cc avisa, na página de download: "Users of Windows 10
+#      Creators Update or newer should use prelease build 2.24-101 or any newer
+#      build to avoid an issue with services failing to start." O PC do evento é
+#      Win11, ou seja, dentro do escopo do aviso: com o 2.24 o SERVIÇO PODE NÃO
+#      INICIAR. O contorno oficial (AppNoConsole=1) não serve aqui, porque o
+#      agente é app de console e a parada limpa acima depende justamente do
+#      console (AppStopMethodConsole).
+#   2. AppTimestampLog não existe no 2.24 - conferido no próprio binário. Sem
+#      ele o log fica sem hora, que depois do episódio de 17/08/2026 (agente
+#      rodando invisível) é abrir mão da única coisa que torna o log utilizável.
+#
+# "Release" ali é só rótulo: o nssm não tem release estável desde 2014, então
+# não existe a opção "nova e estável". Os dois binários são não-assinados. O
+# 2.24-101 é o pre-release DESTACADO pelo site, com SHA1 conferido contra ele
+# (ca2f6782a05af85facf9b620e047b01271edd11d).
+#
+# O if abaixo continua valendo: se alguém repuser um NSSM antigo na pasta, o
+# aviso aparece em vez de o log ficar silenciosamente sem hora.
 & $Nssm set $ServiceName AppTimestampLog 1
 if ($LASTEXITCODE -ne 0) {
   Write-Warning ('Este NSSM não suporta AppTimestampLog: o log NÃO terá carimbo ' +
-    'de data/hora. Para ter timestamp, troque o nssm.exe pelo build 2.25+ do nssm.cc.')
+    'de data/hora. Use o build 2.24-101-g897c7ad (ou mais novo) do nssm.cc.')
 }
 
 # --------------------------------------------------------------------- sobe
