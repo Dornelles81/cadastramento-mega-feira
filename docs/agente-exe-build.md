@@ -1,11 +1,20 @@
-# Mega Agente — build do `.exe` (guia para quando houver Windows)
+# Mega Agente — build do `.exe`
 
-> **Estado:** o `.exe` **NÃO** está construído. Este guia deixa tudo pronto para
-> empacotar e validar **numa máquina Windows**, quando ela existir. O `.exe` só é
-> necessário para o sync dos terminais (outubro) — **não** é preciso para a coleta
-> de faciais que a Expofest já pode iniciar. Não construa às cegas no Linux: o
-> `pkg` até gera um binário Windows a partir do Linux, mas a **validação** (rodar,
-> SmartScreen, escrita real no terminal) exige Windows na rede dos terminais.
+> **Estado:** o `.exe` **já foi construído** — em **19/08/2026**, a partir do
+> `main` em `c97d03b`, alvo **`node22-win-x64`**, para o mini PC do evento
+> (192.168.1.20). Empacotado e validado no Windows (o binário sobe e lê o
+> `agent.config.json`; `--dry-run` autenticou contra produção).
+>
+> **Isso não dispensa o build da próxima vez.** A regra continua sendo a da
+> seção "Instalação no PC do evento" de [`agent/README.md`](../agent/README.md):
+> **gerar o `.exe` do `main` atual a cada instalação, nunca reaproveitar
+> binário** — nem o que estiver em `dist/`, nem o do pen drive anterior. O `.exe`
+> é um retrato congelado do agente no instante do build e não avisa que está
+> velho: não há checagem de versão contra a nuvem.
+>
+> A **validação** (rodar, SmartScreen, escrita real no terminal) exige Windows na
+> rede dos terminais. O `pkg` até gera binário Windows a partir do Linux, mas
+> validar, não.
 
 O código-fonte do agente está em [`agent/`](../agent/) e já é funcional via `tsx`
 (provado no teste de bancada F3/F4/F5). O empacotamento `.exe` é só conveniência
