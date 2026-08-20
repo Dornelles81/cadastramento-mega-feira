@@ -45,7 +45,7 @@ São **dois passos**: (a) juntar o agente num único arquivo JS; (b) empacotar e
 npx esbuild agent/run.ts --bundle --platform=node --target=node18 --outfile=dist/agent.cjs
 
 # (b) empacota em .exe Windows x64 (runtime Node embutido)
-npx @yao-pkg/pkg dist/agent.cjs --targets node18-win-x64 --output dist/mega-agente.exe
+npx @yao-pkg/pkg dist/agent.cjs --targets node22-win-x64 --output dist/mega-agente.exe
 ```
 
 Notas:
@@ -53,9 +53,15 @@ Notas:
   via mais robusta hoje para um único `.exe`. Alternativa oficial: Node SEA
   (Single Executable Applications) — funciona, mas exige mais passos (bundle +
   `postject`); só vale se o `pkg` der problema.
-- **Alvo `node18-win-x64`:** estável e testado. Pode usar `node20-win-x64` ou
-  `node22-win-x64` se preferir runtime mais novo — o alvo do `pkg` é independente
-  da versão do Node que você tem instalado para empacotar.
+- **Alvo `node22-win-x64` (não use `node18-win-x64`):** o `pkg` 6.22.0 não tem
+  mais o binário base do node18 no cache remoto — responde `404 Not Found —
+  node-v18.20.8-win-x64`, cai para compilar o Node do fonte e falha no Windows
+  com `spawnSync patch ENOENT` (não existe `patch`). O `node22-win-x64` baixa
+  pronto e foi o usado no build de 19/08/2026 (mini PC do evento).
+  `node20-win-x64` é a alternativa. O alvo do `pkg` é independente da versão do
+  Node que você tem instalado para empacotar — nada a ver com o
+  `--target=node18` do **esbuild**, que é alvo de sintaxe do bundle e continua
+  correto.
 - **Sem dependências nativas:** o agente só usa `axios` (JS puro) e `crypto`/`fs`/
   `path` (builtins do Node). Por isso o `pkg` empacota sem `.node` avulso. Se um dia
   entrar uma dep nativa, ela teria que ir como arquivo solto ao lado do `.exe`.
@@ -66,7 +72,7 @@ ao `"scripts"` do `package.json` (faça isso **na máquina Windows**, num commit
 próprio, para não misturar com outro WIP):
 ```json
 "agent:bundle": "esbuild agent/run.ts --bundle --platform=node --target=node18 --outfile=dist/agent.cjs",
-"agent:exe": "npm run agent:bundle && pkg dist/agent.cjs --targets node18-win-x64 --output dist/mega-agente.exe"
+"agent:exe": "npm run agent:bundle && pkg dist/agent.cjs --targets node22-win-x64 --output dist/mega-agente.exe"
 ```
 (exige `npm i -D esbuild @yao-pkg/pkg`).
 

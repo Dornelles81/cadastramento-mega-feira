@@ -125,8 +125,15 @@ instalação anterior.
 git pull   # o código do evento é o do main, não o do seu disco
 
 npx esbuild agent/run.ts --bundle --platform=node --target=node18 --outfile=dist/agent.cjs
-npx @yao-pkg/pkg dist/agent.cjs --targets node18-win-x64 --output dist/mega-agente.exe
+npx @yao-pkg/pkg dist/agent.cjs --targets node22-win-x64 --output dist/mega-agente.exe
 ```
+
+> **Não troque o alvo do `pkg` de volta para `node18-win-x64`.** O `pkg` 6.22.0
+> não tem mais esse binário base no cache remoto: responde `404 Not Found —
+> node-v18.20.8-win-x64`, cai para compilar o Node do fonte e morre no Windows
+> com `spawnSync patch ENOENT` (não existe `patch`). O `--target=node18` do
+> **esbuild** é outra coisa (alvo de sintaxe do bundle) e continua correto.
+> Verificado em 19/08/2026, ao montar o mini PC do evento.
 
 (Os dois comandos são o build completo; `docs/agente-exe-build.md` descreve o
 atalho opcional `npm run agent:exe`, que **ainda não está** no `package.json`.)
@@ -167,8 +174,9 @@ com mais passos: bundle + postject). Fluxo:
 # 1) bundle do agente num único arquivo CJS (resolve lib/hikvision + axios)
 npx esbuild agent/run.ts --bundle --platform=node --target=node18 --outfile=dist/agent.cjs
 
-# 2) empacota em .exe Windows x64
-npx @yao-pkg/pkg dist/agent.cjs --targets node18-win-x64 --output mega-agente.exe
+# 2) empacota em .exe Windows x64 (alvo node22: o node18 não existe mais no
+#    cache remoto do pkg — ver aviso na seção de instalação)
+npx @yao-pkg/pkg dist/agent.cjs --targets node22-win-x64 --output mega-agente.exe
 ```
 
 Distribuir a pasta com: `mega-agente.exe` + `agent.config.json`.
