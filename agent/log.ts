@@ -16,6 +16,23 @@
  *
  * ISO 8601 em UTC de propósito: ordenável como texto e sem ambiguidade de fuso
  * ou horário de verão num log que pode atravessar 58 dias de evento.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ REGRA: mensagem de log é ASCII PURO. Sem acento, sem `·`, sem travessão. │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ * Não é preciosismo. O Node escreve UTF-8, o NSSM grava os bytes crus, e o
+ * `Get-Content` do PowerShell 5.1 lê arquivo sem BOM como CP1252 — então
+ * "órfão removido" aparece como "Ã³rfÃ£o removido" para quem ler sem
+ * `-Encoding UTF8`. Visto em 20/08/2026, na primeira subida do serviço no mini
+ * PC: a linha `iniciado · base=...` saiu como `iniciado Â· base=...`.
+ *
+ * Existe a flag, mas depender dela é depender de alguém lembrar dela às 2 da
+ * manhã, no meio de um evento. ASCII sai certo em qualquer leitor: Get-Content
+ * sem flag, Notepad, `type`, colado num chat, aberto por outra pessoa.
+ *
+ * Vale para tudo que chega ao log, INCLUSIVE `new Error(...)` lançado em
+ * api.ts/apply.ts — a mensagem do erro vira linha de log. Comentários e código
+ * seguem em português normal, com acento: eles não vão para o arquivo.
  */
 
 function carimbo(): string {

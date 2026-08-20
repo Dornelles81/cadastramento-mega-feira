@@ -104,7 +104,7 @@ export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
   const cfg = loadConfig()
   const reconcileEnabled = opts.reconcile !== false
   log(
-    `[agente] iniciado · base=${cfg.baseUrl} · poll=${cfg.pollMs}ms · ` +
+    `[agente] iniciado | base=${cfg.baseUrl} | poll=${cfg.pollMs}ms | ` +
     (reconcileEnabled ? `reconcile=${cfg.reconcileMs}ms` : 'reconcile=DESLIGADO (--no-reconcile)')
   )
   // Começa em "agora", não em 0. Com `lastReconcile = 0` a conta era
@@ -132,7 +132,7 @@ export async function mainLoop(opts: MainLoopOptions = {}): Promise<void> {
             log(`[agente] reconcile: pushes=${rc.pushes} removals=${rc.removals} deletes=${rc.directDeletes} falhas=${rc.deleteFailures} (${rc.terminals} terminais)`)
           }
         } catch (e: any) {
-          logError(`[agente] erro na reconciliação: ${e?.message ?? e}`)
+          logError(`[agente] erro na reconciliacao: ${e?.message ?? e}`)
         }
       }
     } catch (e: any) {

@@ -125,7 +125,13 @@ Get-Service -Name $ServiceName | Format-List Name, Status, StartType
 Write-Host ''
 Write-Host '=== PRIMEIRAS LINHAS DO LOG ==='
 $log = Join-Path $PastaLogs 'agente.log'
-if (Test-Path $log) { Get-Content $log -Tail 20 } else { Write-Host '(log ainda vazio)' }
+# -Encoding UTF8 SEMPRE: o agente escreve UTF-8, o NSSM grava os bytes crus, e o
+# Get-Content do PowerShell 5.1 assume CP1252 em arquivo sem BOM. Sem a flag,
+# qualquer caractere nao-ASCII vindo de baixo (erro de biblioteca, mensagem do
+# Node) sai como "Ã³rfÃ£o". As mensagens do agente ja sao ASCII puro de
+# proposito (ver agent/log.ts) - a flag e a segunda camada, para o que nao
+# controlamos.
+if (Test-Path $log) { Get-Content $log -Tail 20 -Encoding UTF8 } else { Write-Host '(log ainda vazio)' }
 
 Write-Host ''
 Write-Host "Serviço instalado. Logs em: $PastaLogs"
@@ -139,7 +145,7 @@ Write-Host 'terminal que o iniciou e segue escrevendo nos terminais faciais.'
 Write-Host ''
 Write-Host ("  Get-Service {0}" -f $ServiceName)
 Write-Host '  Get-CimInstance Win32_Process -Filter "Name=''mega-agente.exe''" | Select ProcessId, CreationDate'
-Write-Host ("  Get-Content '{0}' -Tail 30 -Wait     # log ao vivo" -f (Join-Path $PastaLogs 'agente.log'))
+Write-Host ("  Get-Content '{0}' -Tail 30 -Wait -Encoding UTF8   # log ao vivo" -f (Join-Path $PastaLogs 'agente.log'))
 Write-Host ''
 Write-Host 'Rodando fora do serviço (tsx/node, para depuração), o processo NAO aparece'
 Write-Host 'como mega-agente.exe - procure por node.exe com agent/run.ts na linha de comando:'

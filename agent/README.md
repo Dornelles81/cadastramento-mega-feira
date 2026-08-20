@@ -92,6 +92,23 @@ terminais, agora sem deixar rastro algum.
 > em log nenhum — e a ausência de linha foi interpretada, erradamente, como bug
 > no código da reconciliação. O código estava certo; o cano é que estava roto.
 
+### Ler o log: sempre com `-Encoding UTF8`
+
+```powershell
+Get-Content C:\MegaAgente\logs\agente.log -Tail 30 -Wait -Encoding UTF8
+```
+
+Sem a flag o PowerShell 5.1 lê arquivo sem BOM como CP1252 e qualquer byte
+não-ASCII vira mojibake — na primeira subida do serviço no mini PC (20/08/2026),
+`iniciado · base=...` apareceu como `iniciado Â· base=...`. O arquivo estava
+certo; a leitura é que não.
+
+Por isso as mensagens do agente são **ASCII puro** (ver `agent/log.ts`): sem
+acento, sem `·`, sem travessão — inclusive nas mensagens de `new Error(...)`, que
+viram linha de log. As duas coisas são camadas do mesmo cuidado: o ASCII faz o
+log sair certo mesmo sem a flag, e a flag cobre o que vem de baixo (erro de
+biblioteca, mensagem do Node) e que não controlamos.
+
 ## ✅ Verificar se o agente está rodando — por PROCESSO, não por janela
 
 Janela fechada **não** significa agente parado. Matar o terminal (ou o shell que

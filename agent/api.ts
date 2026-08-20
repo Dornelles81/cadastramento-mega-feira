@@ -66,7 +66,9 @@ async function req(cfg: AgentConfig, method: string, p: string, body?: any) {
     },
     body: body ? JSON.stringify(body) : undefined
   })
-  if (res.status === 401) throw new Error('401 — token inválido ou revogado (peça um token novo ao admin)')
+  // Mensagem em ASCII puro: ela vai para o log (ver agent/log.ts) e e o erro
+  // MAIS provavel no dia da instalacao - tem que sair legivel em qualquer leitor.
+  if (res.status === 401) throw new Error('401 - token invalido ou revogado (peca um token novo ao admin)')
   let json: any = null
   try { json = await res.json() } catch { /* sem corpo */ }
   return { status: res.status, json }

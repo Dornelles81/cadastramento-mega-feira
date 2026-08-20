@@ -76,10 +76,10 @@ export async function runReconcile(cfg: AgentConfig): Promise<ReconcileRunResult
       try {
         await client.deleteUser(emp)
         directDeletes++
-        log(`[agente] órfão removido: emp=${emp} terminal=${t.ipAddress}`)
+        log(`[agente] orfao removido: emp=${emp} terminal=${t.ipAddress}`)
       } catch (e: any) {
         deleteFailures++
-        logError(`[agente] FALHA ao remover órfão emp=${emp} terminal=${t.ipAddress}: ${e?.message ?? e}`)
+        logError(`[agente] FALHA ao remover orfao emp=${emp} terminal=${t.ipAddress}: ${e?.message ?? e}`)
       }
     }
   }
