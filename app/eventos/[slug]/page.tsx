@@ -195,13 +195,29 @@ export default function EventoPage() {
       const notStarted = now < startDate
       const isFull = eventData.currentCount >= eventData.maxCapacity
 
-      // Cadastro público desativado para eventos com acesso delegado por
-      // stand: o cadastro é feito pelo link enviado ao responsável. EXCEÇÃO: uma
-      // EDIÇÃO (token novo `editToken` ou o antigo `update`) não é cadastro novo
-      // e não pode ser bloqueada pela delegação de stand.
       const search = new URLSearchParams(window.location.search)
       const updateMode = search.has('update') || search.has('editToken')
-      if (eventData.delegatedStandAccess && !updateMode) {
+
+      // Uma EDIÇÃO (`editToken`, ou o antigo `update`) NÃO é cadastro novo: o
+      // titular já está cadastrado e só está corrigindo o próprio dado. Não
+      // consome vaga, não depende de o cadastro estar aberto, não depende de o
+      // evento estar em curso. Por isso ela sai ANTES de TODA a cadeia de
+      // bloqueio — e não apenas do ramo da delegação de stand.
+      //
+      // A isenção existia, mas um ramo acima do necessário: como a cadeia é
+      // `else if`, a edição escapava da delegação e caía no `status`. Em
+      // 20/08/2026 o link de edição do Expofest respondeu "As inscricoes para
+      // este evento abrem em 09/10/2026", porque o evento estava em
+      // `status='draft'`. Evento ENCERRADO tinha o mesmo efeito: participante da
+      // FEICAP (`status='completed'`) não conseguia corrigir a própria foto,
+      // recebendo "Este evento ja foi encerrado.".
+      //
+      // Quem autoriza a edição é o TOKEN, validado no servidor em
+      // `/editar/[token]` — expira em fim-do-evento+7d e é revogável. O estado
+      // do evento não tem nada a dizer sobre isso.
+      if (updateMode) {
+        setCurrentStep('consent')
+      } else if (eventData.delegatedStandAccess) {
         setEventError('O cadastro deste evento agora é feito pelo link enviado ao responsável do seu stand. Solicite o link a ele ou à organização do evento.')
       } else if (eventData.status !== 'active') {
         if (isExpired) {
