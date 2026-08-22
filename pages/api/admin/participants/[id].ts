@@ -3,6 +3,33 @@ import { prisma } from '../../../../lib/prisma'
 import { enqueueDeviceRemovalBeforeDelete } from '../../../../lib/agent/device-removal'
 import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
 
+/**
+ * LGPD — snapshot de participante para o audit log, SEM o dado sensível.
+ *
+ * `previousData`/`newData` guardam a linha inteira do participante, e a linha
+ * inteira inclui a biometria. Uma cópia cifrada da face dentro de `audit_logs`
+ * SOBREVIVE à exclusão do participante: em 22/08/2026 havia 20 MB de biometria
+ * de 134 pessoas que já não existiam mais na tabela `participants` — a exclusão
+ * apagou o cadastro e deixou o rosto.
+ *
+ * Esta função existe para que a regra tenha UM lugar só. A correção original
+ * foi aplicada apenas no `handleDelete`, e o `handleUpdate` — no mesmo arquivo,
+ * 50 linhas acima — continuou gravando a face por mais um ano, em DUAS cópias
+ * por edição (`previousData` e `newData`). Duas cópias da regra foi exatamente
+ * o que permitiu consertar uma e esquecer a outra.
+ *
+ * O que fica: todo o resto — nome, CPF, contato, evento, stand, estados,
+ * carimbos. A trilha de auditoria continua respondendo quem mudou o quê e
+ * quando. O que sai: só o que não pode sobreviver a um pedido de exclusão.
+ */
+function snapshotSemBiometria<T extends Record<string, any>>(participante: T): Partial<T> {
+  const snapshot: any = { ...participante }
+  delete snapshot.faceData
+  delete snapshot.faceImageUrl
+  delete snapshot.documents
+  return snapshot
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query
 
@@ -104,8 +131,8 @@ async function handleUpdate(id: string, data: any, adminIp: string, res: NextApi
             ${id},
             'admin',
             ${adminIp},
-            ${JSON.stringify(currentParticipant)}::jsonb,
-            ${JSON.stringify(updatedParticipant)}::jsonb,
+            ${JSON.stringify(snapshotSemBiometria(currentParticipant))}::jsonb,
+            ${JSON.stringify(snapshotSemBiometria(updatedParticipant))}::jsonb,
             ${JSON.stringify(changes)}::jsonb,
             ${`Participante ${currentParticipant.name} foi editado`},
             NOW()
@@ -139,15 +166,9 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
       return res.status(404).json({ error: 'Participant not found' })
     }
 
-    // LGPD: NUNCA guardar cópia do dado sensível no audit log. O previousData
-    // registra só metadados (nome/CPF/contato/evento) — o biométrico cifrado
-    // (faceData/faceImageUrl/documents) é REMOVIDO do snapshot, alinhado ao
-    // padrão do stand-removal (que só guarda nome + CPF mascarado). Sem isso,
-    // uma cópia cifrada da biometria sobreviveria ao delete em audit_logs.
-    const auditSnapshot: any = { ...participant }
-    delete auditSnapshot.faceData
-    delete auditSnapshot.faceImageUrl
-    delete auditSnapshot.documents
+    // LGPD: NUNCA guardar cópia do dado sensível no audit log — ver
+    // `snapshotSemBiometria`, que é a mesma regra usada no handleUpdate.
+    const auditSnapshot = snapshotSemBiometria(participant)
 
     // Try to create audit log, but don't fail if it doesn't work
     try {
