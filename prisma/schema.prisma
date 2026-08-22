@@ -615,8 +615,14 @@ model ParticipantTerminalSync {
   updatedAt DateTime @updatedAt
 
   @@unique([participantId, terminalId])
+  // Os TRÊS estados que o /work consulta precisam de índice, porque a consulta
+  // é um OR entre eles. Faltando um, o BitmapOr não se forma e o Postgres cai
+  // para varrer o prefixo `terminalId` inteiro e filtrar: medido em 32.000
+  // linhas (8.000 × 4 terminais), 5,66 ms descartando 31.872 linhas, contra
+  // 0,36 ms com os três. O `cardState` era o que faltava.
   @@index([terminalId, removalState]) // fila de remoção
   @@index([terminalId, faceState]) // fila de inclusão
+  @@index([terminalId, cardState]) // fila de card — completa o OR do /work
   @@map("participant_terminal_sync")
 }
 
