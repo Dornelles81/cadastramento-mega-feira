@@ -8,9 +8,14 @@
  * Uso:
  *   DEVICE_PASS=<senha> tsx scripts/seed-terminal.ts
  *   DEVICE_PASS=<senha> tsx scripts/seed-terminal.ts --ip=192.168.1.30 --evento=treinamento-credenciamento
+ *   DEVICE_PASS=<senha> tsx scripts/seed-terminal.ts --ip=... --capacidade=50000
  *
  * Se o terminal estiver alcançável, modelo/firmware/serial são lidos do próprio
- * device (/ISAPI/System/deviceInfo) em vez de digitados.
+ * device (/ISAPI/System/deviceInfo) e a CAPACIDADE DE FACES do
+ * /ISAPI/AccessControl/UserInfo/capabilities — em vez de digitados ou herdados
+ * do @default(5000) do schema, que não vale para nenhum modelo em uso.
+ * Terminal NOVO cujo aparelho não responda e cujo modelo não esteja mapeado é
+ * RECUSADO até que --capacidade= seja informada.
  *
  * Ao final faz o BACKFILL: o terminal nasce com o roster elegível já enfileirado,
  * em vez de esperar a reconciliação do agente. Nada é escrito no device aqui —
@@ -39,6 +44,7 @@ const PASS      = process.env.DEVICE_PASS || ''
 const FDID      = arg('fdid') || process.env.DEVICE_FDID || '1'
 const NOME      = arg('nome') || 'Terminal Bancada'
 const EVENTO    = arg('evento') || 'treinamento-credenciamento'
+const CAPACIDADE = arg('capacidade') !== undefined ? Number(arg('capacidade')) : undefined
 
 /** Lê a identificação real do equipamento; null se não estiver alcançável. */
 async function lerDeviceInfo(): Promise<{ deviceModel: string | null; firmwareVersion: string | null; serialNumber: string | null } | null> {
@@ -54,6 +60,86 @@ async function lerDeviceInfo(): Promise<{ deviceModel: string | null; firmwareVe
   }
 }
 
+/**
+ * Capacidade de faces PERGUNTADA AO PRÓPRIO EQUIPAMENTO.
+ *
+ * Fonte melhor que qualquer ficha técnica, e isso não é teoria: em 23/08/2026 o
+ * datasheet oficial do DS-K1T673DX-BR (assets.hikvision.com, revisão 2024-10-08)
+ * dizia "Face capacity 10,000", e os dois aparelhos em bancada, no firmware
+ * V3.18.0, responderam `maxRecordNum = 50000`. Para o DS-K1T671M-L havia DOIS
+ * datasheets oficiais em conflito — 6.000 no global, 10.000 no pt-BR — e o
+ * aparelho respondeu 10.000. Ficha técnica envelhece e varia por região; o
+ * firmware sabe de si.
+ *
+ * `UserInfo/capabilities.UserInfo.maxRecordNum` é o teto de usuários e
+ * `FDLib/capabilities.FDRecordDataMaxNum` o de registros faciais. Nos três
+ * aparelhos os dois números coincidem; havendo divergência vale o MENOR, que é
+ * o que de fato limita (não adianta caber o usuário se não couber a face).
+ */
+async function lerCapacidadeDoDevice(): Promise<number | null> {
+  if (!PASS) return null
+  try {
+    const { DigestAuth } = await import('../lib/hikvision/digest-auth')
+    const auth = new DigestAuth(USER, PASS)
+    const base = `${USE_HTTPS ? 'https' : 'http'}://${IP}:${PORT}`
+    const ler = async (caminho: string, extrai: (d: any) => unknown) => {
+      try {
+        const r = await auth.request({
+          method: 'GET', url: base + caminho,
+          headers: { Accept: 'application/json' }, timeout: 15000
+        })
+        const n = Number(extrai(r.data))
+        return Number.isFinite(n) && n > 0 ? n : null
+      } catch { return null }
+    }
+    const candidatos = [
+      await ler('/ISAPI/AccessControl/UserInfo/capabilities?format=json', (d) => d?.UserInfo?.maxRecordNum),
+      await ler('/ISAPI/Intelligent/FDLib/capabilities?format=json', (d) => d?.FDRecordDataMaxNum)
+    ].filter((n): n is number => n !== null)
+    return candidatos.length ? Math.min(...candidatos) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Mapa modelo → capacidade, DELIBERADAMENTE VAZIO.
+ *
+ * Só entra aqui número confirmado no próprio equipamento — nunca copiado de
+ * ficha técnica ou de página de revenda. Foi cópia de revenda que produziu o
+ * "50.000 faces" que quase virou código: coincidiu com a verdade por acaso,
+ * enquanto o datasheet do fabricante dizia outra coisa.
+ *
+ * Existe como rede para firmware que não exponha `capabilities`. Enquanto o
+ * device responder, este mapa não é consultado.
+ */
+const CAPACIDADE_POR_MODELO: Record<string, number> = {}
+
+/**
+ * Resolve a capacidade a gravar, em ordem de confiança decrescente.
+ * `null` = não foi possível determinar; quem cria terminal novo aborta.
+ */
+function resolverCapacidade(
+  informada: number | undefined,
+  doDevice: number | null,
+  modelo: string | null | undefined,
+  existente: number | undefined
+): { valor: number | null; origem: string } {
+  // A flag vence tudo: é intenção humana explícita. Mas se contradiz o
+  // equipamento, isso aparece — discordância silenciosa aqui é o bug de novo.
+  if (informada !== undefined) {
+    if (doDevice !== null && doDevice !== informada) {
+      console.log(`⚠️  --capacidade=${informada} diverge do que o device afirma (${doDevice}). Usando a sua.`)
+    }
+    return { valor: informada, origem: '--capacidade' }
+  }
+  if (doDevice !== null) return { valor: doDevice, origem: 'lido do equipamento (ISAPI)' }
+  const doMapa = modelo ? CAPACIDADE_POR_MODELO[modelo] : undefined
+  if (doMapa !== undefined) return { valor: doMapa, origem: `mapa do modelo ${modelo}` }
+  if (existente !== undefined) return { valor: existente, origem: 'preservado do cadastro anterior' }
+  return { valor: null, origem: 'indeterminada' }
+}
+
 async function main() {
   const evento = await prisma.event.findFirst({
     where: { slug: EVENTO },
@@ -61,12 +147,35 @@ async function main() {
   })
   if (!evento) throw new Error(`Evento com slug "${EVENTO}" não encontrado`)
 
-  const existente = await prisma.terminal.findFirst({ where: { ipAddress: IP }, select: { id: true, passwordEncrypted: true } })
+  const existente = await prisma.terminal.findFirst({
+    where: { ipAddress: IP },
+    select: { id: true, passwordEncrypted: true, capacityLimit: true }
+  })
   if (!existente && !PASS) {
     throw new Error('Terminal novo exige a senha: DEVICE_PASS=<senha> tsx scripts/seed-terminal.ts')
   }
 
   const info = await lerDeviceInfo()
+
+  // Capacidade: perguntada ao equipamento, com a flag como override e o cadastro
+  // anterior como piso. Terminal NOVO sem nenhuma dessas fontes é recusado — o
+  // @default(5000) do schema não corresponde a nenhum modelo em uso, e herdá-lo
+  // em silêncio foi o que obrigou a corrigir os três terminais à mão em 22/08.
+  const capacidadeDoDevice = await lerCapacidadeDoDevice()
+  const { valor: capacidade, origem: origemCapacidade } = resolverCapacidade(
+    CAPACIDADE, capacidadeDoDevice, info?.deviceModel, existente?.capacityLimit
+  )
+  if (capacidade === null) {
+    throw new Error(
+      `não foi possível determinar a capacidade de faces deste terminal.\n` +
+      `   O equipamento não respondeu ao /ISAPI/.../capabilities e o modelo ` +
+      `${info?.deviceModel ? `"${info.deviceModel}" não está no mapa` : 'é desconhecido'}.\n` +
+      `   Informe explicitamente:  --capacidade=<faces>\n` +
+      `   O número está na tela do próprio terminal (Configuração → Sistema) ou na ficha do modelo.\n` +
+      `   Cadastrar sem isso faria o terminal herdar 5000 do schema, que não vale para nenhum modelo em uso.`
+    )
+  }
+
   const dados = {
     name: NOME,
     ipAddress: IP,
@@ -75,6 +184,7 @@ async function main() {
     username: USER,
     fdid: FDID,
     isActive: true,
+    capacityLimit: capacidade,
     ...(info ?? {}),
     // Senha só é reescrita quando DEVICE_PASS é fornecida (senão preserva a que
     // já está criptografada no banco).
@@ -90,6 +200,7 @@ async function main() {
   console.log(`${existente ? '♻️  atualizado' : '✅ criado'}: Terminal ${terminal.id}`)
   console.log(`   ${terminal.name} — ${terminal.ipAddress}:${terminal.port}`)
   console.log(`   modelo=${terminal.deviceModel ?? '(n/d)'} firmware=${terminal.firmwareVersion ?? '(n/d)'} serial=${terminal.serialNumber ?? '(n/d)'}`)
+  console.log(`   capacidade=${terminal.capacityLimit.toLocaleString('pt-BR')} faces (${origemCapacidade})`)
   console.log(`   FDID=${terminal.fdid} | senha criptografada: ${terminal.passwordEncrypted ? 'sim' : 'NÃO'}`)
 
   // Alocação ao evento, pelo período do próprio evento.
