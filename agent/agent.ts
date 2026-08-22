@@ -26,6 +26,29 @@ export interface RunResult {
   planned: string[] // descrição das ops (preenchido sempre; é o que o dry-run mostra)
 }
 
+/**
+ * Extrai o número de usuários da resposta do ISAPI
+ * `/AccessControl/UserInfo/Count`. A forma canônica é
+ * `{ UserInfoCount: { userNumber: N } }`, mas o formato varia entre modelo e
+ * firmware — e aqui já convivem dois (DS-K1T673DX-BR V3.18.0 e
+ * DS-K1T671M-L V3.2.30). Por isso tenta as variantes conhecidas e, não
+ * reconhecendo nenhuma, devolve `undefined` em vez de chutar: contagem ausente
+ * é honesta, contagem errada vira decisão de capacidade errada.
+ */
+function extrairUserCount(resp: any): number | undefined {
+  const candidatos = [
+    resp?.UserInfoCount?.userNumber,
+    resp?.UserInfoCount?.userCount,
+    resp?.userNumber,
+    resp?.userCount
+  ]
+  for (const v of candidatos) {
+    const n = typeof v === 'string' ? Number(v) : v
+    if (typeof n === 'number' && Number.isFinite(n) && n >= 0) return n
+  }
+  return undefined
+}
+
 function noCredAcks(item: PushItem): Ack[] {
   const a: Ack[] = []
   if (item.needFace) a.push({ syncId: item.syncId, kind: 'face', status: 'failed', error: 'sem credencial do terminal' })
@@ -45,13 +68,25 @@ export async function runOnce(cfg: AgentConfig, opts: { dryRun?: boolean } = {})
 
   // Heartbeat: sonda leve por terminal (getUserCount) → lastSeenAt/saúde no admin.
   // Pulado no dry-run (não toca o device).
+  //
+  // A contagem VAI JUNTO. Antes, o `getUserCount()` era chamado e o resultado
+  // jogado fora — servia só como prova de vida. Com isso a nuvem não tinha ideia
+  // de quantas faces existem no device, e o `capacityLimit` era uma coluna
+  // estática que ninguém comparava com a realidade. Num evento de 8.000 pessoas
+  // contra um limite de 5.000, o terminal enche, passa a recusar, e a primeira
+  // notícia disso seria um push falhando no meio da feira. A informação já era
+  // lida; só não era guardada.
   if (!opts.dryRun && clients.size > 0) {
     const hb: HeartbeatItem[] = []
     for (const t of terminals) {
       const c = clients.get(t.id)
       if (!c) continue
-      try { await c.getUserCount(); hb.push({ terminalId: t.id, online: true }) }
-      catch (e: any) { hb.push({ terminalId: t.id, online: false, error: String(e?.message ?? e).slice(0, 300) }) }
+      try {
+        const resp = await c.getUserCount()
+        hb.push({ terminalId: t.id, online: true, userCount: extrairUserCount(resp) })
+      } catch (e: any) {
+        hb.push({ terminalId: t.id, online: false, error: String(e?.message ?? e).slice(0, 300) })
+      }
     }
     await postHeartbeat(cfg, hb)
   }

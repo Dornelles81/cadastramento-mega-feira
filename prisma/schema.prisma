@@ -517,6 +517,14 @@ model Terminal {
   gate          String? // local/portão
   capacityLimit Int     @default(5000) // capacidade de faces do device
 
+  // Quantos usuários o DEVICE reporta ter, lido do ISAPI a cada heartbeat.
+  // Sem isto, `capacityLimit` era um número que ninguém comparava com a
+  // realidade: o terminal encheria e a primeira notícia seria um push falhando
+  // no meio do evento. null = ainda não medido, ou firmware cuja resposta não
+  // soubemos interpretar (o agente prefere não reportar a chutar).
+  deviceUserCount   Int?
+  deviceUserCountAt DateTime? // quando a contagem acima foi medida
+
   isActive   Boolean   @default(true)
   lastSeenAt DateTime? // último contato bem-sucedido (heartbeat do agente)
   lastError  String?

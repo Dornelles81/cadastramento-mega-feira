@@ -34,15 +34,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
   const allocated = new Set(await listAllocatedTerminalIds(agent.eventId))
 
   for (const item of items) {
-    const { terminalId, online, error } = item || {}
+    const { terminalId, online, error, userCount } = item || {}
     if (typeof terminalId !== 'string') continue
     if (!allocated.has(terminalId)) continue
+
+    // A contagem só é gravada quando VEM número. Device offline não tem
+    // contagem, e firmware cuja resposta o agente não reconheceu manda
+    // `undefined` — nos dois casos a coluna mantém a última medição boa, com
+    // `deviceUserCountAt` dizendo de quando ela é. Zerar aqui seria pior que
+    // não saber: "0 usuários no terminal" é uma afirmação forte e errada.
+    const contagemValida =
+      typeof userCount === 'number' && Number.isFinite(userCount) && userCount >= 0
 
     const result = await prisma.terminal.updateMany({
       where: { id: terminalId },
       data: {
         lastSeenAt: now,
-        lastError: online ? null : (typeof error === 'string' ? error.slice(0, 1000) : 'offline')
+        lastError: online ? null : (typeof error === 'string' ? error.slice(0, 1000) : 'offline'),
+        ...(contagemValida ? { deviceUserCount: userCount, deviceUserCountAt: now } : {})
       }
     })
     updated += result.count

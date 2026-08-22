@@ -45,6 +45,13 @@ export interface HeartbeatItem {
   terminalId: string
   online: boolean
   error?: string
+  /**
+   * Quantos usuários existem HOJE no device, lido do ISAPI no mesmo probe que
+   * já provava a vida. Opcional de propósito: device offline não tem contagem,
+   * e firmware cuja resposta não reconhecemos manda `undefined` em vez de um
+   * número inventado. A nuvem só sobrescreve a coluna quando vem número.
+   */
+  userCount?: number
 }
 export interface DeviceUser {
   employeeNo: string
