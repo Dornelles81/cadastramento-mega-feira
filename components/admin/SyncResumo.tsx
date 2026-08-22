@@ -20,6 +20,9 @@ import { useState, useEffect } from 'react';
 interface Resumo {
   totalTerminais: number;
   terminaisAtrasados: number;
+  /** Ocupação do device passando do patamar — ver OCUPACAO_ATENCAO no endpoint. */
+  terminaisQuaseCheios: number;
+  terminaisCriticos: number;
   divergenciaSincronizados: number;
   totalPendentes: number;
   totalFalhas: number;
@@ -69,9 +72,14 @@ export default function SyncResumo({ eventSlug, darkMode }: { eventSlug: string;
   if (!erro && resumo && resumo.totalTerminais === 0) return null;
 
   const filaTravada = (resumo?.maisAntigoPendenteMs ?? 0) > 24 * 60 * 60 * 1000;
-  const problema = erro || !resumo || resumo.semNenhumHeartbeat || resumo.totalFalhas > 0 || filaTravada;
+  // Terminal em ocupação CRÍTICA entra como problema, não como aviso: cheio, ele
+  // recusa cadastro novo, e isso não tem conserto no dia. Vale o mesmo peso de
+  // uma falha de sync.
+  const problema = erro || !resumo || resumo.semNenhumHeartbeat || resumo.totalFalhas > 0 ||
+    filaTravada || (resumo?.terminaisCriticos ?? 0) > 0;
   const atencao = !problema && resumo !== null &&
-    (resumo.divergenciaSincronizados > 0 || resumo.terminaisAtrasados > 0 || resumo.totalPendentes > 0);
+    (resumo.divergenciaSincronizados > 0 || resumo.terminaisAtrasados > 0 ||
+      resumo.totalPendentes > 0 || resumo.terminaisQuaseCheios > 0);
 
   const cor = problema
     ? 'bg-red-50 border-red-300 text-red-800'
@@ -93,6 +101,10 @@ export default function SyncResumo({ eventSlug, darkMode }: { eventSlug: string;
     if (resumo.totalPendentes > 0) partes.push(`${resumo.totalPendentes} pendente(s)`);
     if (resumo.totalFalhas > 0) partes.push(`${resumo.totalFalhas} falha(s)`);
     if (filaTravada) partes.push(`item parado há ${duracao(resumo.maisAntigoPendenteMs)}`);
+    // Enchimento de terminal só tem solução ANTES de acontecer — por isso vem
+    // para a faixa, e não fica esperando alguém abrir a tela cheia.
+    if (resumo.terminaisCriticos > 0) partes.push(`${resumo.terminaisCriticos} QUASE SEM VAGA`);
+    else if (resumo.terminaisQuaseCheios > 0) partes.push(`${resumo.terminaisQuaseCheios} com device enchendo`);
     texto = partes.join(' · ');
   }
 

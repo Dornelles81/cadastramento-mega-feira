@@ -30,6 +30,33 @@ import { MAX_ATTEMPTS } from '../../../../../lib/agent/retry-policy'
 /** Heartbeat mais velho que isto acende alerta no terminal. */
 export const HEARTBEAT_STALE_MS = 60 * 60 * 1000 // 1 hora
 
+/**
+ * Ocupação do device a partir da qual a tela avisa.
+ *
+ * O terminal tem limite físico de faces (`capacityLimit`, default 5000). Cheio,
+ * ele passa a RECUSAR novos usuários — e sem este aviso a primeira notícia seria
+ * um push falhando durante a feira, que é quando não há o que fazer.
+ *
+ * 80% é onde ainda dá para agir (redistribuir stands entre terminais, subir o
+ * limite se o modelo permitir, acrescentar equipamento). 95% é onde a margem
+ * acabou. Os dois patamares são exportados para a tela e a faixa-resumo usarem
+ * o MESMO critério — dois números diferentes para a mesma pergunta seria pior
+ * que não avisar.
+ */
+export const OCUPACAO_ATENCAO = 0.8
+export const OCUPACAO_CRITICA = 0.95
+
+export type NivelOcupacao = 'desconhecido' | 'ok' | 'atencao' | 'critico'
+
+/** Nível de ocupação do device. Sem medição não há palpite: 'desconhecido'. */
+function nivelOcupacao(usuarios: number | null, capacidade: number): NivelOcupacao {
+  if (usuarios === null || capacidade <= 0) return 'desconhecido'
+  const p = usuarios / capacidade
+  if (p >= OCUPACAO_CRITICA) return 'critico'
+  if (p >= OCUPACAO_ATENCAO) return 'atencao'
+  return 'ok'
+}
+
 interface LinhaAgregada {
   terminalId: string
   sincronizados: bigint
@@ -71,7 +98,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
         select: {
           id: true, name: true, ipAddress: true, port: true,
           isActive: true, lastSeenAt: true, lastError: true,
-          deviceModel: true
+          deviceModel: true,
+          capacityLimit: true, deviceUserCount: true, deviceUserCountAt: true
         }
       }
     }
@@ -140,6 +168,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
         atrasado: heartbeatIdadeMs === null || heartbeatIdadeMs > HEARTBEAT_STALE_MS
       },
       ultimoErro: t.lastError,
+      // Ocupação REAL do equipamento, medida pelo agente no heartbeat. É outra
+      // coisa que `sincronizados`: aquilo é o que a nuvem MANDOU, isto é o que o
+      // device TEM — inclusive cadastros feitos à mão no painel do terminal, que
+      // ocupam vaga e não aparecem em lugar nenhum do nosso lado.
+      // `usuarios: null` = ainda não medido (agente antigo, sem o campo no
+      // payload) ou firmware cuja resposta não foi reconhecida. Nesse caso NÃO
+      // há percentual nem nível: inventar 0% seria afirmar "vazio".
+      ocupacao: {
+        usuarios: t.deviceUserCount,
+        capacidade: t.capacityLimit,
+        medidoEm: t.deviceUserCountAt ? t.deviceUserCountAt.toISOString() : null,
+        percentual:
+          t.deviceUserCount !== null && t.capacityLimit > 0
+            ? t.deviceUserCount / t.capacityLimit
+            : null,
+        nivel: nivelOcupacao(t.deviceUserCount, t.capacityLimit)
+      },
       sincronizados: Number(ag?.sincronizados ?? 0),
       pendentes: Number(ag?.pendentes ?? 0),
       falhas: Number(ag?.falhas ?? 0),
@@ -172,10 +217,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     geradoEm: agora.toISOString(),
     limiteHeartbeatMs: HEARTBEAT_STALE_MS,
     maxTentativas: MAX_ATTEMPTS,
+    ocupacaoAtencao: OCUPACAO_ATENCAO,
+    ocupacaoCritica: OCUPACAO_CRITICA,
     terminais,
     resumo: {
       totalTerminais: terminais.length,
       terminaisAtrasados: terminais.filter((t) => t.heartbeat.atrasado).length,
+      // Sobe para a faixa-resumo: encher terminal é problema que só tem solução
+      // ANTES de acontecer, então precisa aparecer sem exigir navegação.
+      terminaisQuaseCheios: terminais.filter((t) => t.ocupacao.nivel === 'atencao').length,
+      terminaisCriticos: terminais.filter((t) => t.ocupacao.nivel === 'critico').length,
+      terminaisSemMedicao: terminais.filter((t) => t.ocupacao.nivel === 'desconhecido').length,
       // Diferença entre o terminal mais adiantado e o mais atrasado. > 0 = alguém ficou para trás.
       divergenciaSincronizados: maiorTotal - menorTotal,
       totalPendentes: terminais.reduce((s, t) => s + t.pendentes, 0),

@@ -27,6 +27,13 @@ interface Terminal {
   alocacao: { inicio: string; fim: string; vigente: boolean };
   heartbeat: { ultimo: string | null; idadeMs: number | null; atrasado: boolean };
   ultimoErro: string | null;
+  ocupacao: {
+    usuarios: number | null;
+    capacidade: number;
+    medidoEm: string | null;
+    percentual: number | null;
+    nivel: 'desconhecido' | 'ok' | 'atencao' | 'critico';
+  };
   sincronizados: number;
   pendentes: number;
   falhas: number;
@@ -39,16 +46,32 @@ interface Saude {
   geradoEm: string;
   limiteHeartbeatMs: number;
   maxTentativas: number;
+  ocupacaoAtencao: number;
+  ocupacaoCritica: number;
   terminais: Terminal[];
   resumo: {
     totalTerminais: number;
     terminaisAtrasados: number;
+    terminaisQuaseCheios: number;
+    terminaisCriticos: number;
+    terminaisSemMedicao: number;
     divergenciaSincronizados: number;
     totalPendentes: number;
     totalFalhas: number;
     maisAntigoPendenteMs: number | null;
     semNenhumHeartbeat: boolean;
   };
+}
+
+/**
+ * Cor da ocupação do device. O patamar vem do servidor (`ocupacaoAtencao` /
+ * `ocupacaoCritica`) já resolvido em `nivel` — a tela não recalcula o critério,
+ * senão passariam a existir dois lugares decidindo o que é "cheio".
+ */
+function corOcupacao(nivel: Terminal['ocupacao']['nivel']): string {
+  if (nivel === 'critico') return 'text-red-700 font-semibold';
+  if (nivel === 'atencao') return 'text-amber-700 font-semibold';
+  return 'text-gray-900';
 }
 
 /** Duração legível: a unidade importa mais que a precisão ("há 2 dias"). */
@@ -213,6 +236,10 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
                 <tr>
                   <th className="text-left px-4 py-3 font-medium">Terminal</th>
                   <th className="text-left px-4 py-3 font-medium">Último heartbeat</th>
+                  <th className="text-right px-4 py-3 font-medium">
+                    No device
+                    <span className="block text-xs font-normal text-gray-400">ocupação real</span>
+                  </th>
                   <th className="text-right px-4 py-3 font-medium">Sincronizados</th>
                   <th className="text-right px-4 py-3 font-medium">Pendentes</th>
                   <th className="text-right px-4 py-3 font-medium">Falhas</th>
@@ -222,7 +249,7 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
               <tbody className="divide-y divide-gray-100">
                 {dados?.terminais.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
                       Nenhum terminal alocado a este evento. Sem alocação vigente, nada é
                       sincronizado — cadastre a alocação para o período do evento.
                     </td>
@@ -262,6 +289,31 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
                           </div>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {t.ocupacao.usuarios === null ? (
+                          <span
+                            className="text-gray-400"
+                            title="O agente ainda não reportou a contagem. Versões antigas do mega-agente.exe não enviam este dado — regere o binário do main atual."
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <>
+                            <span className={corOcupacao(t.ocupacao.nivel)}>
+                              {t.ocupacao.usuarios.toLocaleString('pt-BR')}
+                              <span className="text-gray-400 font-normal">
+                                {' / '}
+                                {t.ocupacao.capacidade.toLocaleString('pt-BR')}
+                              </span>
+                              {t.ocupacao.nivel === 'critico' && ' 🔴'}
+                              {t.ocupacao.nivel === 'atencao' && ' ⚠️'}
+                            </span>
+                            <span className="block text-xs font-normal text-gray-400">
+                              {Math.round((t.ocupacao.percentual ?? 0) * 100)}%
+                            </span>
+                          </>
+                        )}
+                      </td>
                       <td className={`px-4 py-3 text-right tabular-nums font-semibold ${atrasadoNoTotal ? 'text-amber-700' : 'text-gray-900'}`}>
                         {t.sincronizados}
                         {atrasadoNoTotal && (
@@ -285,6 +337,19 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
           &quot;Falhas&quot; = linhas que bateram o teto de {dados?.maxTentativas} tentativas e não são
           mais servidas ao agente. Heartbeat é destacado a partir de{' '}
           {Math.round((dados?.limiteHeartbeatMs ?? 0) / 60000)} min sem sinal.
+        </p>
+        <p className="text-xs text-gray-400 mt-2">
+          &quot;No device&quot; = quantos usuários o equipamento REPORTA ter, lido pelo agente a cada
+          heartbeat — é diferente de &quot;Sincronizados&quot;, que é o que a nuvem mandou. A
+          diferença entre os dois inclui cadastros feitos à mão no painel do terminal, que ocupam
+          vaga e não aparecem do nosso lado. Destacado a partir de{' '}
+          {Math.round((dados?.ocupacaoAtencao ?? 0.8) * 100)}% e em vermelho a partir de{' '}
+          {Math.round((dados?.ocupacaoCritica ?? 0.95) * 100)}% da capacidade. Cheio, o terminal
+          passa a RECUSAR novos usuários.
+          {(dados?.resumo.terminaisSemMedicao ?? 0) > 0 && (
+            <> Traço (—) = o agente ainda não reportou a contagem; versões do{' '}
+            <code>mega-agente.exe</code> anteriores a 23/08/2026 não enviam esse dado.</>
+          )}
         </p>
       </div>
     </div>
