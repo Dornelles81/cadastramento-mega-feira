@@ -21,8 +21,48 @@ export function buildUser(item: PushItem): HikvisionUser {
   }
 }
 
+/**
+ * Corpo de erro do PRÓPRIO device, achatado em uma linha.
+ *
+ * É aqui que mora o motivo: `{statusCode, statusString, subStatusCode,
+ * errorCode, errorMsg}`. Sem ele o ack vira só "uploadFace falhou — HTTP 400",
+ * que não distingue imagem recusada de usuário inexistente — e o motivo se
+ * perde PARA SEMPRE, porque a nuvem nunca fala com o device: ela só sabe o que
+ * o ack contou. Um diagnóstico que deveria durar cinco minutos vira seis horas.
+ *
+ * Não vaza credencial: `sanitizeError` põe aqui o CORPO DA RESPOSTA do device
+ * (`error.response.data`), não a config do axios — é justamente esse recorte
+ * que existe para a senha nunca escapar do client.
+ */
+function deviceBody(e: any): string | null {
+  const d = (e as HikvisionError)?.deviceStatus
+  if (d == null) return null
+
+  const achatar = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 400) || null
+
+  if (Buffer.isBuffer(d)) return achatar(d.toString('utf8'))
+  if (typeof d === 'string') return achatar(d) // resposta XML
+  if (typeof d === 'object') {
+    // Ordem estável dos campos ISAPI que importam. Se o device responder algo
+    // fora desse formato, serializa inteiro em vez de devolver nada.
+    const o = d as Record<string, unknown>
+    const campos = ['statusCode', 'statusString', 'subStatusCode', 'errorCode', 'errorMsg']
+      .filter(k => o[k] !== undefined)
+      .map(k => `${k}=${String(o[k])}`)
+    return achatar(campos.length ? campos.join(' ') : JSON.stringify(d))
+  }
+  return achatar(String(d))
+}
+
+/**
+ * Mensagem de falha do ack, que a nuvem grava em
+ * `ParticipantTerminalSync.lastError`. Teto de 1000 = o mesmo slice de
+ * `/api/agent/ack`, para não ser cortada em silêncio logo depois.
+ */
 function errMsg(e: any): string {
-  return String(e instanceof HikvisionError ? e.message : (e?.message ?? e)).slice(0, 500)
+  const cabeca = String(e instanceof HikvisionError ? e.message : (e?.message ?? e))
+  const corpo = deviceBody(e)
+  return (corpo ? `${cabeca} — device: ${corpo}` : cabeca).slice(0, 1000)
 }
 function subStatus(e: any): string | undefined {
   return (e?.deviceStatus as any)?.subStatusCode
