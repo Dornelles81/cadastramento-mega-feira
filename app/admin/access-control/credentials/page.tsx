@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
+import { carregarMedidor, medidorCarregado, type Medidor } from '@/lib/medir-texto'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,14 @@ interface StandInfo {
   code: string
   category?: string | null
   hall?: string | null
+}
+
+// Contagem por stand vinda do groupBy do servidor — alimenta o rótulo do dropdown.
+interface StandCount {
+  id: string
+  name: string
+  code: string
+  count: number
 }
 
 interface ParticipantCredential {
@@ -78,13 +87,33 @@ interface LabelLayout {
   showQR: boolean; align: 'left' | 'center'
   event: { font: number; y: number; maxW: number; maxWWithNum: number; numRightX: number }
   name: { font: number; wrap: number; y1: number; y2: number }
-  // Auto-fit do nome (só label6): reduz a fonte medindo com getTextWidth até caber; abaixo do
-  // mínimo, quebra em até maxLines. fontMax/fontMin/hardMin em pt, areaW em mm, ySingle = baseline
-  // do nome quando fica em 1 linha. Ausente no 8×4 → mantém splitTextToSize fixo.
-  nameFit?: { fontMax: number; fontMin: number; hardMin: number; maxLines: number; areaW: number; ySingle: number }
+  // label6 — hierarquia do nome em 2 blocos, ambos em 1 linha e com baseline FIXA (etiquetas
+  // uniformes na pilha). firstFit = PRIMEIRO NOME em destaque; restFit = restante, menor.
+  // `ySolo` = baseline do primeiro nome quando não há restante (nome de um token só): sobe o
+  // bloco para ele não ficar solto no alto. fontMax/fontMin/step em pt, areaW/y em mm.
+  firstFit?: { fontMax: number; fontMin: number; step: number; areaW: number; y: number; ySolo: number }
+  restFit?: { fontMax: number; fontMin: number; step: number; areaW: number; y: number }
   stand: { font: number; wrap: number; y1: number; y2: number }
+  // Auto-fit do stand (só label6): reduz a fonte em passos de `step` até caber em maxLines e
+  // ancora o bloco pela ÚLTIMA linha em `bottom` (mm) — é isso que impede a 2ª linha de cair
+  // fora da etiqueta. `topLimit` é o teto do bloco (mm): o stand reduz a fonte em vez de subir
+  // sobre o nome. Se nem no piso couber em maxLines, libera até maxLinesHard linhas — a fonte
+  // NUNCA desce de fontMin. fontMax/fontMin/step em pt, areaW/bottom/topLimit em mm.
+  standFit?: { fontMax: number; fontMin: number; step: number; maxLines: number; maxLinesHard: number; areaW: number; bottom: number; topLimit: number }
   qr?: { x: number; y: number; size: number; numX: number; numY: number; numFont: number }
 }
+// pt → mm: jsPDF mede fonte sempre em pt, mas os documentos aqui são unit:'mm'.
+const PT_TO_MM = 0.3528
+
+// ─── Área útil horizontal do 6×4 ────────────────────────────────────────────
+// A margem NÃO é estética: a área imprimível da 4B-2074B é menor que os 60mm nominais. Com
+// 4pt de margem o stand mais largo ("ASSOCIACAO DOS CRIADORES…", 56.48mm) saiu encostando na
+// borda direita no papel. 7pt por lado é o offset medido na impressão real. Vale para os TRÊS
+// blocos — cabeçalho, nome e stand: o recuo é da impressora, não do texto.
+const L6_PW = 60
+const L6_MARGIN = 7 * PT_TO_MM // 2.47mm
+const L6_AREA_W = Math.round((L6_PW - 2 * L6_MARGIN) * 100) / 100 // 55.06mm
+
 const LABEL_LAYOUTS: Record<LabelStyle, LabelLayout> = {
   // 8×4cm — FEICAP 2026 (números idênticos ao código anterior; NÃO alterar)
   label: {
@@ -97,86 +126,279 @@ const LABEL_LAYOUTS: Record<LabelStyle, LabelLayout> = {
   // 6×4cm — SEM QR, nome PROTAGONISTA (centralizado), leitura à distância. Sem foto
   // (a família etiqueta é P&B térmica sem foto). Wraps/anchors calibráveis na Elgin.
   label6: {
-    PW: 60, PH: 40, stripe: 6, textX: 8, showQR: false, align: 'center',
-    event: { font: 8, y: 7, maxW: 50, maxWWithNum: 50, numRightX: 0 },
-    name: { font: 24, wrap: 50, y1: 20, y2: 29 },
-    // Auto-fit: 28pt (protagonista) → reduz até 14pt em 1 linha → 2 linhas a partir de 14pt →
-    // piso 8pt p/ palavra única gigante. ySingle centraliza o nome grande na faixa dele.
-    nameFit: { fontMax: 28, fontMin: 14, hardMin: 8, maxLines: 2, areaW: 50, ySingle: 24 },
-    stand: { font: 12, wrap: 50, y1: 31, y2: 37 }
+    // stripe 0 = SEM faixa preta. Sem ela o conteúdo é centralizado no centro REAL da
+    // página (centerX = PW/2 = 30mm); com a faixa ele ficava 3mm torto para a direita.
+    PW: L6_PW, PH: 40, stripe: 0, textX: 8, showQR: false, align: 'center',
+    // Os três blocos compartilham L6_AREA_W — ver o comentário da constante.
+    event: { font: 8, y: 7, maxW: L6_AREA_W, maxWWithNum: L6_AREA_W, numRightX: 0 },
+    // name.{font,wrap,y1,y2} não é usado no label6 (firstFit/restFit mandam); fica só como
+    // fallback do tipo.
+    name: { font: 24, wrap: L6_AREA_W, y1: 20, y2: 29 },
+    // Hierarquia: PRIMEIRO NOME grande na baseline 22.0 (25.0 se não houver sobrenome) e o
+    // restante menor na 28.5. Baselines FIXAS — etiquetas diferentes ficam alinhadas na pilha.
+    // A PRÉVIA da tela lê estas mesmas constantes (o card é desenhado em tamanho físico real).
+    firstFit: { fontMax: 26, fontMin: 13, step: 0.25, areaW: L6_AREA_W, y: 22, ySolo: 25 },
+    restFit: { fontMax: 12, fontMin: 7, step: 0.25, areaW: L6_AREA_W, y: 28.5 },
+    // stand.{font,wrap,y1,y2} não são usados no label6 (standFit manda); ficam só como
+    // fallback do tipo. Calibração do stand é em standFit.
+    stand: { font: 12, wrap: L6_AREA_W, y1: 31, y2: 37 },
+    // bottom = baseline da última linha, a 2.8mm da borda (térmica direta; 0.8mm era apertado
+    // demais). topLimit 30.5 deixa ≥ 1.07mm do descendente do restante do nome (29.43mm a 12pt).
+    // fontMin 6pt é PISO RÍGIDO: a 203 dpi a Helvetica-Bold abaixo disso fecha os contornos na
+    // térmica — por isso libera a 3ª linha antes de reduzir mais.
+    standFit: { fontMax: 12, fontMin: 6, step: 0.25, maxLines: 2, maxLinesHard: 3, areaW: L6_AREA_W, bottom: 37.2, topLimit: 30.5 }
   }
 }
 
-// Auto-fit do nome no label6 (PDF): mede com jsPDF e devolve as linhas + o tamanho de fonte (pt).
-// Prefere 1 linha grande; abaixo de fontMin quebra em até maxLines; reduz sob o mínimo só quando
-// nem quebrando cabe (palavra única gigante / nome muito longo). NÃO é usado pelo 8×4.
-type PdfLike = {
-  setFont(family: string, style: string): void
-  setFontSize(size: number): void
-  getTextWidth(text: string): number
-  splitTextToSize(text: string, maxWidth: number): string[]
+// Cache do auto-fit: a chave é (texto + a config que decide o encaixe). Dentro de um stand o
+// nome do stand é IDÊNTICO para todos os participantes — sem isto, imprimir 300 etiquetas
+// refazia 300 vezes a mesma varredura de 12pt a 6pt medindo no jsPDF. Os primeiros nomes
+// repetidos (Maria, João) também caem aqui. Vive no módulo: sobrevive entre impressões.
+const cacheFit = new Map<string, unknown>()
+function memoFit<T>(escopo: string, texto: string, cfg: object, calcular: () => T): T {
+  const chave = `${escopo}\u0000${texto}\u0000${JSON.stringify(cfg)}`
+  const guardado = cacheFit.get(chave)
+  if (guardado !== undefined) return guardado as T
+  const valor = calcular()
+  cacheFit.set(chave, valor)
+  return valor
 }
-function fitLabel6Name(
-  doc: PdfLike,
-  name: string,
-  N: { fontMax: number; fontMin: number; hardMin: number; maxLines: number; areaW: number }
+
+// Divisão do nome no label6: token[0] = primeiro nome (bloco em destaque), token[1..] juntos =
+// restante. Espaços múltiplos são descartados. REGRA ISOLADA de propósito — para mudar para
+// "primeiro + último sobrenome" basta mexer aqui.
+function splitNome(name: string): { first: string; rest: string } {
+  const tokens = name.trim().split(/\s+/).filter(Boolean)
+  return { first: tokens[0] || '', rest: tokens.slice(1).join(' ') }
+}
+
+// Auto-fit de UMA linha por largura (blocos do nome no label6): maior fonte entre fontMax e
+// fontMin que couber em areaW. No piso, trunca com … — o bloco nunca some nem estoura.
+// `m` é a régua compartilhada (lib/medir-texto): o PDF e a prévia chamam esta MESMA função.
+function fitLinhaUnica(
+  m: Medidor,
+  text: string,
+  F: { fontMax: number; fontMin: number; step: number; areaW: number }
+): { line: string; size: number } {
+  return memoFit('linha', text, F, () => calcularLinhaUnica(m, text, F))
+}
+function calcularLinhaUnica(
+  m: Medidor,
+  text: string,
+  F: { fontMax: number; fontMin: number; step: number; areaW: number }
+): { line: string; size: number } {
+  for (let s = F.fontMax; s >= F.fontMin; s -= F.step) {
+    if (m.largura(text, s) <= F.areaW) return { line: text, size: s }
+  }
+  if (m.largura(text, F.fontMin) <= F.areaW) return { line: text, size: F.fontMin }
+  let line = text
+  while (line.length > 1 && m.largura(line.replace(/\s+$/, '') + '…', F.fontMin) > F.areaW) {
+    line = line.slice(0, -1)
+  }
+  return { line: line.replace(/\s+$/, '') + '…', size: F.fontMin }
+}
+
+// Proporção da Helvetica para medir ALTURA (jsPDF só expõe largura): a caixa alta sobe ≈ 0.717 em
+// acima da baseline (o descendente desce ≈ 0.22 em, usado só nas contas de folga do layout).
+const CAP_RATIO = 0.717
+
+// Auto-fit do stand no label6 (PDF): reduz a fonte até o texto caber em LARGURA (maxLines linhas)
+// E em ALTURA — o topo do bloco não pode passar de `topLimit`. Como o stand é ancorado no rodapé,
+// sem o teto ele subiria por cima do nome. Ordem das concessões: reduzir fonte até fontMin →
+// liberar a 3ª linha (maxLinesHard) e reduzir de novo → truncar com …. A fonte NUNCA vai abaixo
+// de fontMin (203 dpi na térmica). `m` é a régua compartilhada — o PDF e a prévia chamam esta
+// MESMA função, com o mesmo instrumento de medida. Não é usado no 8×4.
+function fitLabel6Stand(
+  m: Medidor,
+  text: string,
+  S: {
+    fontMax: number; fontMin: number; step: number
+    maxLines: number; maxLinesHard: number; areaW: number; bottom: number; topLimit: number
+  }
 ): { lines: string[]; size: number } {
-  doc.setFont('helvetica', 'bold')
-  // 1) uma linha — maior fonte (≥ fontMin) que couber na largura útil
-  for (let s = N.fontMax; s >= N.fontMin; s--) {
-    doc.setFontSize(s)
-    if (doc.getTextWidth(name) <= N.areaW) return { lines: [name], size: s }
+  return memoFit('stand', text, S, () => calcularLabel6Stand(m, text, S))
+}
+function calcularLabel6Stand(
+  m: Medidor,
+  text: string,
+  S: {
+    fontMax: number; fontMin: number; step: number
+    maxLines: number; maxLinesHard: number; areaW: number; bottom: number; topLimit: number
   }
-  // 2) quebra em até maxLines, a partir do mínimo e reduzindo (long demais / palavra gigante)
-  for (let s = N.fontMin; s >= N.hardMin; s--) {
-    doc.setFontSize(s)
-    const lines = doc.splitTextToSize(name, N.areaW)
-    if (lines.length <= N.maxLines && lines.every(l => doc.getTextWidth(l) <= N.areaW)) {
-      return { lines, size: s }
+): { lines: string[]; size: number } {
+  // topo do bloco = baseline da 1ª linha − altura de caixa alta
+  const blockTop = (size: number, n: number) =>
+    S.bottom - (n - 1) * (size * 1.15 * PT_TO_MM) - size * CAP_RATIO * PT_TO_MM
+
+  for (const limite of [S.maxLines, S.maxLinesHard]) {
+    for (let size = S.fontMax; size >= S.fontMin; size -= S.step) {
+      const lines = m.quebrar(text, size, S.areaW)
+      if (lines.length <= limite && blockTop(size, lines.length) >= S.topLimit) return { lines, size }
     }
   }
-  // 3) piso absoluto — primeiras maxLines linhas
-  doc.setFontSize(N.hardMin)
-  return { lines: doc.splitTextToSize(name, N.areaW).slice(0, N.maxLines), size: N.hardMin }
+
+  // Rede de segurança: no piso da fonte, corta no nº de linhas que ainda cabe na vertical
+  // (mínimo 1) e trunca a última com … .
+  const size = S.fontMin
+  let lines = m.quebrar(text, size, S.areaW)
+  let allowed = S.maxLinesHard
+  while (allowed > 1 && blockTop(size, allowed) < S.topLimit) allowed--
+  if (lines.length > allowed) {
+    lines = lines.slice(0, allowed)
+    lines[allowed - 1] = lines[allowed - 1].replace(/\s*\S*$/, '…')
+  }
+  return { lines, size }
 }
 
-// Nome auto-fit na PRÉVIA da tela (label6): mede o DOM e espelha o algoritmo do PDF —
-// 1 linha grande primeiro, depois 2 linhas a partir do mínimo. pt→px = ×96/72 p/ bater com o PDF.
+// ─── PRÉVIA da tela do label6 — espelho do PDF ───────────────────────────────
+// O card é desenhado em tamanho físico real (60mm × 40mm), então a prévia usa as MESMAS
+// constantes em mm/pt de LABEL_LAYOUTS.label6 e as MESMAS funções de fit — medindo pela mesma
+// régua (lib/medir-texto). O navegador não decide nada: recebe o tamanho e as linhas prontos e
+// só desenha. mm→px é o próprio CSS; pt→px = ×96/72.
 const PT_TO_PX = 96 / 72
-function AutoFitName({ text }: { text: string }) {
-  const fit = LABEL_LAYOUTS.label6.nameFit!
-  const maxPx = fit.fontMax * PT_TO_PX
-  const minPx = fit.fontMin * PT_TO_PX
-  const hardPx = fit.hardMin * PT_TO_PX
-  const ref = useRef<HTMLParagraphElement>(null)
-  const [st, setSt] = useState<{ size: number; wrap: 'nowrap' | 'normal' }>({ size: maxPx, wrap: 'nowrap' })
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const fitsW = () => el.scrollWidth <= el.clientWidth + 0.5
-    const lineCount = () => {
-      const cs = getComputedStyle(el)
-      const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.1
-      return Math.max(1, Math.round(el.scrollHeight / lh))
-    }
-    // 1) uma linha, maior que couber
-    el.style.whiteSpace = 'nowrap'
-    for (let s = maxPx; s >= minPx; s -= 1) {
-      el.style.fontSize = `${s}px`
-      if (fitsW()) { setSt({ size: s, wrap: 'nowrap' }); return }
-    }
-    // 2) quebra em até maxLines, do mínimo p/ baixo
-    el.style.whiteSpace = 'normal'
-    for (let s = minPx; s >= hardPx; s -= 1) {
-      el.style.fontSize = `${s}px`
-      if (fitsW() && lineCount() <= fit.maxLines) { setSt({ size: s, wrap: 'normal' }); return }
-    }
-    setSt({ size: hardPx, wrap: 'normal' })
-  }, [text, maxPx, minPx, hardPx, fit.maxLines])
+// Métrica da Helvetica/Arial com line-height 1, em `em`: distância do topo da caixa de linha
+// até a baseline (ascender 0.905 + meio-entrelinha −0.059). Usada no calc() para ancorar cada
+// linha pela BASELINE, como no PDF — o navegador posiciona caixas, não baselines.
+const ASCENT_EM = 0.8467
+
+// Régua compartilhada com o gerador. Carrega uma vez por sessão (import dinâmico do jsPDF);
+// até chegar, os blocos não são desenhados — melhor um tick vazio do que um tamanho errado.
+function useMedidor(): Medidor | null {
+  const [m, setM] = useState<Medidor | null>(() => medidorCarregado())
+  useEffect(() => {
+    if (m) return
+    let vivo = true
+    carregarMedidor().then(medidor => { if (vivo) setM(medidor) })
+    return () => { vivo = false }
+  }, [m])
+  return m
+}
+
+// Folga de 1px na caixa de DESENHO (não na medição). A Arial Bold real é ~1% mais larga que a
+// tabela Helvetica do jsPDF, e clientWidth/scrollWidth são arredondados para pixel inteiro; sem
+// essa folga um texto que o fit aprovou por 0.2mm pode disparar o text-overflow. O … do CSS fica
+// só para descompasso grosseiro (fonte trocada), não para ruído de métrica.
+const TOLERANCIA_DESENHO = '1px'
+
+// Uma linha do nome: fitLinhaUnica() decide fonte e texto (com … no piso); o <p> só desenha.
+function AutoFitLine({
+  medidor,
+  text,
+  fit,
+  baseline,
+  className
+}: {
+  medidor: Medidor
+  text: string
+  fit: { fontMax: number; fontMin: number; step: number; areaW: number }
+  baseline: number
+  className: string
+}) {
+  const { line, size } = fitLinhaUnica(medidor, text, fit)
   return (
-    <p ref={ref} className="label-name" style={{ fontSize: `${st.size}px`, whiteSpace: st.wrap }}>
-      {text}
+    <p
+      className={className}
+      style={{
+        fontSize: `${size * PT_TO_PX}px`,
+        width: `calc(${fit.areaW}mm + ${TOLERANCIA_DESENHO})`,
+        top: `calc(${baseline}mm - ${ASCENT_EM}em)`
+      }}
+    >
+      {line}
     </p>
+  )
+}
+
+// Stand: fitLabel6Stand() devolve as linhas já quebradas e o tamanho; cada linha vira um <p>
+// na SUA baseline (a última em `bottom`, as demais subindo de lineH) — igual ao PDF.
+function AutoFitStand({
+  medidor,
+  text,
+  fit
+}: {
+  medidor: Medidor
+  text: string
+  fit: {
+    fontMax: number; fontMin: number; step: number
+    maxLines: number; maxLinesHard: number; areaW: number; bottom: number; topLimit: number
+  }
+}) {
+  const { lines, size } = fitLabel6Stand(medidor, text, fit)
+  const lineH = size * 1.15 * PT_TO_MM
+  return (
+    <>
+      {lines.map((l, i) => (
+        <p
+          key={i}
+          className="label6-stand"
+          style={{
+            fontSize: `${size * PT_TO_PX}px`,
+            width: `calc(${fit.areaW}mm + ${TOLERANCIA_DESENHO})`,
+            top: `calc(${fit.bottom - (lines.length - 1 - i) * lineH}mm - ${ASCENT_EM}em)`
+          }}
+        >
+          {l}
+        </p>
+      ))}
+    </>
+  )
+}
+
+// Card 6×4 na tela — espelho do PDF: 3 blocos ancorados pela baseline, nas mesmas medidas em
+// mm da config, decididos pelas mesmas funções de fit. splitNome() é A MESMA do gerador.
+function Label6Card({
+  name,
+  eventName,
+  standText
+}: {
+  name: string
+  eventName: string
+  standText: string
+}) {
+  const medidor = useMedidor()
+  const L = LABEL_LAYOUTS.label6
+  const first = L.firstFit!
+  const rest = L.restFit!
+  const nome = splitNome(name)
+  return (
+    <div className="credential-card label label6">
+      <div className="label-info">
+        {medidor && (
+          <>
+            <p
+              className="label6-event"
+              style={{
+                fontSize: `${L.event.font * PT_TO_PX}px`,
+                width: `${first.areaW}mm`,
+                top: `calc(${L.event.y}mm - ${ASCENT_EM}em)`
+              }}
+            >
+              {eventName}
+            </p>
+            {/* sem sobrenome → primeiro nome desce para ySolo e o bloco do restante não existe */}
+            <AutoFitLine
+              medidor={medidor}
+              text={nome.first}
+              fit={first}
+              baseline={nome.rest ? first.y : first.ySolo}
+              className="label6-first"
+            />
+            {nome.rest ? (
+              <AutoFitLine
+                medidor={medidor}
+                text={nome.rest}
+                fit={rest}
+                baseline={rest.y}
+                className="label6-rest"
+              />
+            ) : null}
+            {standText ? (
+              <AutoFitStand medidor={medidor} text={standText} fit={L.standFit!} />
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -202,10 +424,19 @@ function CredentialCard({
     ? participant.stand.name
     : '—'
 
-  if (templateStyle === 'label' || templateStyle === 'label6') {
-    const isSix = templateStyle === 'label6' // 6×4: sem QR, nome protagonista centralizado
+  if (templateStyle === 'label6') {
     return (
-      <div className={`credential-card label${isSix ? ' label6' : ''}`}>
+      <Label6Card
+        name={participant.name}
+        eventName={eventName}
+        standText={standDisplay !== '—' ? standDisplay : (grupo !== '—' ? grupo : '')}
+      />
+    )
+  }
+
+  if (templateStyle === 'label') {
+    return (
+      <div className="credential-card label">
         {/* Left accent stripe */}
         <div className="label-stripe" />
 
@@ -213,13 +444,11 @@ function CredentialCard({
         <div className="label-info">
           <div className="label-top-row">
             <span className="label-event">{eventName}</span>
-            {!isSix && participant.credentialNumber && (
+            {participant.credentialNumber && (
               <span className="label-number">#{participant.credentialNumber}</span>
             )}
           </div>
-          {isSix
-            ? <AutoFitName text={participant.name} />
-            : <p className="label-name">{participant.name}</p>}
+          <p className="label-name">{participant.name}</p>
           {standDisplay !== '—' && (
             <p className="label-stand">{standDisplay}</p>
           )}
@@ -228,18 +457,16 @@ function CredentialCard({
           )}
         </div>
 
-        {/* QR Code + número — só no 8×4 (label6 é sem QR) */}
-        {!isSix && (
-          <div className="label-qr-block">
-            {participant.qrDataUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={participant.qrDataUrl} alt="QR" className="label-qr" />
-            )}
-            {participant.credentialNumber && (
-              <p className="label-qr-number">#{participant.credentialNumber}</p>
-            )}
-          </div>
-        )}
+        {/* QR Code + número */}
+        <div className="label-qr-block">
+          {participant.qrDataUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={participant.qrDataUrl} alt="QR" className="label-qr" />
+          )}
+          {participant.credentialNumber && (
+            <p className="label-qr-number">#{participant.credentialNumber}</p>
+          )}
+        </div>
       </div>
     )
   }
@@ -383,12 +610,26 @@ export default function CredentialsPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [participants, setParticipants] = useState<ParticipantCredential[]>([])
+  // Universo no servidor × o que veio nesta página. O endpoint tem teto de 500 por
+  // requisição e a tela não pagina: sem estes dois números ela dizia "Imprimir todos"
+  // sobre uma fatia dos mais recentes, calada.
+  const [totalNoEvento, setTotalNoEvento] = useState(0)
+  const [carregados, setCarregados] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [loadingQR, setLoadingQR] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'no-credential'>('approved')
+  // '' = Todos · 'none' = sem stand · caso contrário o id do stand. As contagens vêm do
+  // groupBy do servidor (universo inteiro), nunca da amostra carregada.
+  const [filterStandId, setFilterStandId] = useState('')
+  const [standCounts, setStandCounts] = useState<StandCount[]>([])
+  const [semStandCount, setSemStandCount] = useState(0)
+  // Progresso da geração do PDF. null = não está gerando.
+  const [progresso, setProgresso] = useState<
+    { feitas: number; total: number; parte: number; partes: number } | null
+  >(null)
   const [templateStyle, setTemplateStyle] = useState<'badge' | 'landscape' | 'label' | 'label6'>('label')
   const printAreaRef = useRef<HTMLDivElement>(null)
 
@@ -428,34 +669,51 @@ export default function CredentialsPage() {
   }, [session])
 
   // ── Load participants ─────────────────────────────────────────────────────
+  // Só Crachá e Paisagem desenham foto — as etiquetas não. Isto entra na query, então
+  // trocar de um grupo para o outro recarrega a lista; trocar dentro do grupo, não.
+  const precisaFoto = templateStyle === 'badge' || templateStyle === 'landscape'
+
   const loadParticipants = useCallback(async (event: Event) => {
     setLoading(true)
     setParticipants([])
+    setTotalNoEvento(0)
+    setCarregados(0)
     setSelectedIds(new Set())
     try {
       const params = new URLSearchParams({
         eventId: event.id,
         limit: '500',
-        includeStand: 'true'
+        // Maço de etiquetas em ordem alfabética, ordenado no servidor — ordenar aqui só
+        // ordenaria a amostra.
+        orderBy: 'name',
+        includeStandCounts: 'true'
       })
       if (filterStatus === 'approved') params.set('approvalStatus', 'approved')
+      if (filterStandId) params.set('standId', filterStandId)
+      // Foto é opt-in no endpoint: só os templates que desenham foto pedem.
+      if (precisaFoto) params.set('includePhoto', 'true')
 
       const res = await fetch(`/api/admin/eventos/${event.slug}/participantes?${params}`)
       const data = await res.json()
+      setStandCounts(Array.isArray(data.standCounts) ? data.standCounts : [])
+      setSemStandCount(typeof data.semStandCount === 'number' ? data.semStandCount : 0)
+      const recebidos: ParticipantCredential[] = data.participants || data || []
       // 'approved' já é filtrado no servidor (via approvalStatus na query). Aqui só
       // resta o caso 'no-credential', que é exclusivamente client-side (o endpoint
       // não filtra por presença de número). 'all' passa direto.
-      const list: ParticipantCredential[] = (data.participants || data || []).filter((p: ParticipantCredential) => {
+      const list = recebidos.filter((p: ParticipantCredential) => {
         if (filterStatus === 'no-credential') return !p.credentialNumber
         return true
       })
       setParticipants(list)
+      setCarregados(recebidos.length)
+      setTotalNoEvento(typeof data.total === 'number' ? data.total : recebidos.length)
     } catch {
       setMessage({ type: 'error', text: 'Erro ao carregar participantes' })
     } finally {
       setLoading(false)
     }
-  }, [filterStatus])
+  }, [filterStatus, filterStandId, precisaFoto])
 
   useEffect(() => {
     if (selectedEvent) loadParticipants(selectedEvent)
@@ -779,6 +1037,8 @@ export default function CredentialsPage() {
 
     try {
       const { jsPDF } = await import('jspdf')
+      // Mesma régua da prévia — o auto-fit tem que medir com o MESMO instrumento nos dois lados.
+      const medidor = await carregarMedidor()
 
       const evName = selectedEvent?.name || ''
 
@@ -786,108 +1046,165 @@ export default function CredentialsPage() {
       // 'label6' = 6×4 sem-QR com nome centralizado. Ver LABEL_LAYOUTS.
       const cfg = LABEL_LAYOUTS[templateStyle]
       const centered = cfg.align === 'center'
-      const centerX = cfg.stripe + (cfg.PW - cfg.stripe) / 2
+      // Centro REAL da página. (Só o 8×4 tem faixa, e ele é left-align — não usa centerX.)
+      const centerX = cfg.PW / 2
       const PW = cfg.PW
       const PH = cfg.PH
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
-      for (let i = 0; i < printTargets.length; i++) {
-        if (i > 0) doc.addPage([PW, PH], 'landscape')
+      // Teto de páginas por PDF SÓ no modo "Stand: todos" — ali o maço é a carga inteira e
+      // um PDF de 500 páginas é pesado de abrir e de conferir. Com um stand selecionado o
+      // maço é pequeno por natureza e sair em arquivo único é o que o operador quer.
+      const semFiltroDeStand = !filterStandId
+      const porArquivo = semFiltroDeStand ? Math.min(300, printTargets.length) : printTargets.length
+      const partes = Math.ceil(printTargets.length / porArquivo)
+      const carimbo = Date.now()
 
-        const p = printTargets[i]
-        const standName = p.stand?.name || ''
+      setProgresso({ feitas: 0, total: printTargets.length, parte: 1, partes })
 
-        // ── Faixa lateral (stripe × PH) ───────────────────────────────────
-        doc.setFillColor(0, 0, 0)
-        doc.rect(0, 0, cfg.stripe, PH, 'F')
+      for (let parte = 0; parte < partes; parte++) {
+        const lote = printTargets.slice(parte * porArquivo, (parte + 1) * porArquivo)
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [PW, PH] })
 
-        doc.setTextColor(0, 0, 0)
+        for (let i = 0; i < lote.length; i++) {
+          if (i > 0) doc.addPage([PW, PH], 'landscape')
 
-        // ── Linha 1: nome do evento (+ #número à direita, só no 8×4) ──────
-        doc.setFontSize(cfg.event.font)
-        doc.setFont('helvetica', 'bold')
-        const evMaxW = (!centered && p.credentialNumber) ? cfg.event.maxWWithNum : cfg.event.maxW
-        const evLine = doc.splitTextToSize(evName.toUpperCase(), evMaxW)[0]
-        if (centered) {
-          doc.text(evLine, centerX, cfg.event.y, { align: 'center' })
-        } else {
-          doc.text(evLine, cfg.textX, cfg.event.y)
-          if (p.credentialNumber) {
-            doc.text(`#${p.credentialNumber}`, cfg.event.numRightX, cfg.event.y, { align: 'right' })
+          // Devolve o fio ao navegador de tempos em tempos: sem isto o laço é síncrono, o
+          // React não repinta e a barra de progresso só apareceria no fim (ou seja, nunca).
+          if (i > 0 && i % 25 === 0) {
+            setProgresso({ feitas: parte * porArquivo + i, total: printTargets.length, parte: parte + 1, partes })
+            await new Promise(resolve => setTimeout(resolve, 0))
           }
-        }
 
-        // ── Nome do participante — auto-fit no label6, fixo no 8×4 ────────
-        doc.setFont('helvetica', 'bold')
-        let hasLine2 = false
-        if (cfg.nameFit) {
-          // label6: reduz a fonte até caber; 1 linha grande ou até maxLines
-          const fit = fitLabel6Name(doc, p.name, cfg.nameFit)
-          doc.setFontSize(fit.size)
-          hasLine2 = fit.lines.length >= 2
-          if (hasLine2) {
-            doc.text(fit.lines[0], centerX, cfg.name.y1, { align: 'center' })
-            doc.text(fit.lines[1], centerX, cfg.name.y2, { align: 'center' })
-          } else {
-            doc.text(fit.lines[0], centerX, cfg.nameFit.ySingle, { align: 'center' })
-          }
-        } else {
-          // 8×4 — comportamento fixo original (NÃO alterar)
-          doc.setFontSize(cfg.name.font)
-          const nameLines = doc.splitTextToSize(p.name, cfg.name.wrap)
-          hasLine2 = nameLines.length >= 2
-          if (centered) {
-            doc.text(nameLines[0], centerX, cfg.name.y1, { align: 'center' })
-            if (hasLine2) doc.text(nameLines[1], centerX, cfg.name.y2, { align: 'center' })
-          } else {
-            doc.text(nameLines[0], cfg.textX, cfg.name.y1)
-            if (hasLine2) doc.text(nameLines[1], cfg.textX, cfg.name.y2)
-          }
-        }
+          const p = lote[i]
+          const standName = p.stand?.name || ''
 
-        // ── Stand ─────────────────────────────────────────────────────────
-        if (standName) {
-          doc.setFontSize(cfg.stand.font)
+          // ── Faixa lateral (stripe × PH) — só quando o layout tem faixa (8×4).
+          // O setFillColor fica DENTRO do if: solto, ele vaza para o próximo preenchimento.
+          if (cfg.stripe > 0) {
+            doc.setFillColor(0, 0, 0)
+            doc.rect(0, 0, cfg.stripe, PH, 'F')
+          }
+
+          doc.setTextColor(0, 0, 0)
+
+          // ── Linha 1: nome do evento (+ #número à direita, só no 8×4) ──────
+          doc.setFontSize(cfg.event.font)
           doc.setFont('helvetica', 'bold')
-          const standLine = doc.splitTextToSize(standName, cfg.stand.wrap)[0]
-          const standY = hasLine2 ? cfg.stand.y2 : cfg.stand.y1
+          const evMaxW = (!centered && p.credentialNumber) ? cfg.event.maxWWithNum : cfg.event.maxW
+          const evLine = doc.splitTextToSize(evName.toUpperCase(), evMaxW)[0]
           if (centered) {
-            doc.text(standLine, centerX, standY, { align: 'center' })
+            doc.text(evLine, centerX, cfg.event.y, { align: 'center' })
           } else {
-            doc.text(standLine, cfg.textX, standY)
+            doc.text(evLine, cfg.textX, cfg.event.y)
+            if (p.credentialNumber) {
+              doc.text(`#${p.credentialNumber}`, cfg.event.numRightX, cfg.event.y, { align: 'right' })
+            }
+          }
+
+          // ── Nome do participante — label6: 2 blocos com baseline fixa; 8×4: fixo ──
+          doc.setFont('helvetica', 'bold')
+          let hasLine2 = false
+          if (cfg.firstFit && cfg.restFit) {
+            // label6: PRIMEIRO NOME em destaque + restante menor. Sem restante, o primeiro
+            // nome desce para ySolo — senão o bloco fica solto no alto da etiqueta.
+            const { first, rest } = splitNome(p.name)
+            const ff = fitLinhaUnica(medidor, first, cfg.firstFit)
+            doc.setFontSize(ff.size)
+            doc.text(ff.line, centerX, rest ? cfg.firstFit.y : cfg.firstFit.ySolo, { align: 'center' })
+            if (rest) {
+              const rf = fitLinhaUnica(medidor, rest, cfg.restFit)
+              doc.setFontSize(rf.size)
+              doc.text(rf.line, centerX, cfg.restFit.y, { align: 'center' })
+            }
+          } else {
+            // 8×4 — comportamento fixo original (NÃO alterar)
+            doc.setFontSize(cfg.name.font)
+            const nameLines = doc.splitTextToSize(p.name, cfg.name.wrap)
+            hasLine2 = nameLines.length >= 2
+            if (centered) {
+              doc.text(nameLines[0], centerX, cfg.name.y1, { align: 'center' })
+              if (hasLine2) doc.text(nameLines[1], centerX, cfg.name.y2, { align: 'center' })
+            } else {
+              doc.text(nameLines[0], cfg.textX, cfg.name.y1)
+              if (hasLine2) doc.text(nameLines[1], cfg.textX, cfg.name.y2)
+            }
+          }
+
+          // ── Stand ─────────────────────────────────────────────────────────
+          if (standName) {
+            doc.setFont('helvetica', 'bold')
+            if (cfg.standFit) {
+              // label6: auto-fit ancorado pela ÚLTIMA linha em `bottom`, com teto fixo em
+              // `topLimit` — o stand reduz a fonte em vez de invadir o bloco do nome.
+              const fit = fitLabel6Stand(medidor, standName, cfg.standFit)
+              doc.setFontSize(fit.size)
+              const lineH = fit.size * 1.15 * PT_TO_MM
+              let y = cfg.standFit.bottom - (fit.lines.length - 1) * lineH
+              for (const l of fit.lines) {
+                doc.text(l, centerX, y, { align: 'center' })
+                y += lineH
+              }
+            } else {
+              // 8×4 — comportamento fixo original (NÃO alterar)
+              doc.setFontSize(cfg.stand.font)
+              const standLine = doc.splitTextToSize(standName, cfg.stand.wrap)[0]
+              const standY = hasLine2 ? cfg.stand.y2 : cfg.stand.y1
+              if (centered) {
+                doc.text(standLine, centerX, standY, { align: 'center' })
+              } else {
+                doc.text(standLine, cfg.textX, standY)
+              }
+            }
+          }
+
+          // ── QR Code (só quando showQR — label6 é sem-QR) ──────────────────
+          if (cfg.showQR && cfg.qr && p.qrDataUrl) {
+            doc.addImage(p.qrDataUrl, 'PNG', cfg.qr.x, cfg.qr.y, cfg.qr.size, cfg.qr.size)
+            if (p.credentialNumber) {
+              doc.setFontSize(cfg.qr.numFont)
+              doc.setFont('helvetica', 'bold')
+              doc.text(`#${p.credentialNumber}`, cfg.qr.numX, cfg.qr.numY, { align: 'center' })
+            }
           }
         }
 
-        // ── QR Code (só quando showQR — label6 é sem-QR) ──────────────────
-        if (cfg.showQR && cfg.qr && p.qrDataUrl) {
-          doc.addImage(p.qrDataUrl, 'PNG', cfg.qr.x, cfg.qr.y, cfg.qr.size, cfg.qr.size)
-          if (p.credentialNumber) {
-            doc.setFontSize(cfg.qr.numFont)
-            doc.setFont('helvetica', 'bold')
-            doc.text(`#${p.credentialNumber}`, cfg.qr.numX, cfg.qr.numY, { align: 'center' })
-          }
-        }
+        const sufixo = partes > 1 ? `-parte${parte + 1}de${partes}` : ''
+        const blob = doc.output('blob')
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `credenciais-${carimbo}${sufixo}.pdf`
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+
+        setProgresso({
+          feitas: parte * porArquivo + lote.length,
+          total: printTargets.length,
+          parte: parte + 1,
+          partes
+        })
+        // Respiro entre downloads: navegador nenhum gosta de vários `click()` seguidos.
+        if (parte < partes - 1) await new Promise(resolve => setTimeout(resolve, 400))
       }
 
-      const blob = doc.output('blob')
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `credenciais-${Date.now()}.pdf`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
       setMessage({
         type: 'success',
-        text: `✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma → Imprimir`
+        text: partes > 1
+          ? `✅ ${printTargets.length} etiquetas em ${partes} PDFs de até ${porArquivo} (baixados como "-parte1de${partes}"…). Imprima um de cada vez: Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma`
+          : `✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma → Imprimir`
       })
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
       alert('Erro ao gerar PDF de etiquetas. Verifique o console.')
+    } finally {
+      setProgresso(null)
     }
   }
 
   const selectedParticipants = participants.filter(p => selectedIds.has(p.id))
   const printTargets = selectedParticipants.length > 0 ? selectedParticipants : participants
+  // O servidor tem mais gente do que coube nesta requisição (teto de 500).
+  const listaTruncada = totalNoEvento > carregados
 
   const filteredVehicleCredentials = vehicleCredentials.filter(v => {
     if (vehiclePrintFilter === 'unprinted') return !v.credentialPrinted
@@ -1027,26 +1344,37 @@ export default function CredentialsPage() {
         .label-qr-number { font-size: 9px; font-weight: 900; color: #000; text-align: center; margin: 1mm 0 0; letter-spacing: 0.5px; }
         .vehicle-number { font-size: 22px !important; letter-spacing: 1px; }
 
-        /* Label6 style — 60mm × 40mm — sem QR, nome PROTAGONISTA centralizado */
-        .credential-card.label6 { width: 60mm; }
+        /* Label6 — 60mm × 40mm, sem QR e sem faixa. O card é físico (1:1), então os blocos
+           são posicionados nas MESMAS coordenadas em mm do PDF; tamanho de fonte, largura útil
+           e âncora vertical vêm inline de LABEL_LAYOUTS.label6. */
+        /* Helvetica primeiro: a MEDIÇÃO vem do jsPDF (tabela Helvetica), então o desenho tem
+           que usar a mesma família quando ela existir. Arial é métricamente compatível. */
+        .credential-card.label6 { width: 60mm; font-family: 'Helvetica', 'Arial', sans-serif; }
+        .credential-card.label6 .label-stripe { display: none; }
         .credential-card.label6 .label-info {
-          align-items: center;
+          position: relative;
+          display: block;
+          padding: 0;
+          overflow: hidden;
+        }
+        /* font-weight 700 e SÓ 700: a régua mede helvetica-bold, que no Windows é desenhada
+           com a Arial Bold. Pedir 800/900 faz o Chrome subir para a Arial Black (uma face
+           real, ~10% mais larga), o texto estourar a caixa e o text-overflow cortar com …
+           um nome que o PDF imprime inteiro — a prévia mentia. */
+        .credential-card.label6 .label-info > p {
+          position: absolute;
+          left: 0; right: 0; margin: 0 auto;
           text-align: center;
-          padding: 3mm 3mm 3mm 3mm;
-          gap: 1mm;
+          line-height: 1;
+          color: #000;
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
-        .credential-card.label6 .label-top-row { justify-content: center; }
-        .credential-card.label6 .label-event { flex: 0 1 auto; font-size: 12px; letter-spacing: 0.3px; }
-        /* Tamanho da fonte e white-space vêm inline do AutoFitName (medição do DOM). */
-        .credential-card.label6 .label-name {
-          font-weight: 900; line-height: 1.1;
-          display: block; overflow: hidden; -webkit-line-clamp: none;
-          width: 100%;
-        }
-        .credential-card.label6 .label-stand {
-          font-size: 15px; font-weight: 700;
-          white-space: normal; text-overflow: clip;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        /* "> p.classe" para vencer a especificidade da regra base acima (nowrap/line-height). */
+        .credential-card.label6 .label-info > p.label6-event {
+          letter-spacing: 0.3px; text-transform: uppercase;
         }
 
         /* Print layout */
@@ -1450,6 +1778,34 @@ export default function CredentialsPage() {
             <option value="no-credential">Sem credencial</option>
           </select>
 
+          {/* Filtro por stand — mesmo padrão de select da lista de stands. As contagens são
+              do groupBy do servidor e já refletem o filtro de status acima. */}
+          {selectedEvent && (
+            <select
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 max-w-xs"
+              value={filterStandId}
+              onChange={e => setFilterStandId(e.target.value)}
+            >
+              <option value="">Stand: todos</option>
+              {standCounts.map(s => (
+                <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
+              ))}
+              {semStandCount > 0 && (
+                <option value="none">Sem stand ({semStandCount})</option>
+              )}
+            </select>
+          )}
+
+          {filterStandId && (
+            <button
+              type="button"
+              onClick={() => setFilterStandId('')}
+              className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900 underline"
+            >
+              Limpar filtro
+            </button>
+          )}
+
           <div className="flex-1" />
 
           {/* Generate numbers */}
@@ -1476,7 +1832,7 @@ export default function CredentialsPage() {
           {participants.length > 0 && (
             <>
               <button onClick={selectAll} className="border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg text-sm">
-                Selecionar todos ({participants.length})
+                {listaTruncada ? 'Selecionar carregados' : 'Selecionar todos'} ({participants.length})
               </button>
               {selectedIds.size > 0 && (
                 <button onClick={clearSelection} className="text-slate-500 hover:text-slate-700 text-sm px-2">
@@ -1490,10 +1846,14 @@ export default function CredentialsPage() {
           {participants.length > 0 && (
             <button
               onClick={handlePrint}
-              disabled={loadingQR}
+              disabled={loadingQR || progresso !== null}
               className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
             >
-              🖨️ {selectedIds.size > 0 ? `Imprimir selecionados (${selectedIds.size})` : `Imprimir todos (${participants.length})`}
+              🖨️ {progresso
+                ? 'Gerando...'
+                : selectedIds.size > 0
+                ? `Imprimir selecionados (${selectedIds.size})`
+                : `${listaTruncada ? 'Imprimir carregados' : 'Imprimir todos'} (${participants.length})`}
             </button>
           )}
         </div>
@@ -1511,6 +1871,51 @@ export default function CredentialsPage() {
               <li>Margens: <strong>Nenhuma</strong> · Desmarque cabeçalhos e rodapés</li>
             </ol>
             <p className="text-red-600 mt-2 text-xs font-medium">⚠️ Usar outro tamanho de papel (ex: 4×6, 4×4) faz a impressora avançar etiquetas em branco entre cada credencial.</p>
+          </div>
+        )}
+
+        {/* Progresso da geração — 500 páginas de jsPDF não é instantâneo e o operador
+            precisa ver que não travou */}
+        {progresso && (
+          <div className="mx-6 mt-4 p-4 bg-sky-50 border border-sky-200 rounded-lg text-sm no-print">
+            <div className="flex justify-between items-baseline mb-2">
+              <p className="font-semibold text-sky-900">
+                Gerando etiquetas… {progresso.feitas} de {progresso.total}
+                {progresso.partes > 1 && ` · PDF ${progresso.parte} de ${progresso.partes}`}
+              </p>
+              <span className="text-sky-700 text-xs tabular-nums">
+                {Math.round((progresso.feitas / Math.max(1, progresso.total)) * 100)}%
+              </span>
+            </div>
+            <div className="h-2 w-full bg-sky-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-sky-500 transition-all duration-150"
+                style={{ width: `${(progresso.feitas / Math.max(1, progresso.total)) * 100}%` }}
+              />
+            </div>
+            {progresso.partes > 1 && (
+              <p className="text-sky-800 text-xs mt-2">
+                Serão baixados {progresso.partes} arquivos, um por vez. Se o navegador pedir
+                permissão para vários downloads, autorize.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Lista truncada pelo teto do endpoint — o operador precisa saber ANTES de imprimir */}
+        {!loading && listaTruncada && (
+          <div className="mx-6 mt-4 p-4 bg-orange-50 border border-orange-300 rounded-lg text-sm no-print">
+            <p className="font-bold text-orange-900 mb-1">
+              ⚠️ Nem todos os participantes estão carregados
+            </p>
+            <p className="text-orange-800">
+              Esta tela carregou <strong>{carregados}</strong> de <strong>{totalNoEvento}</strong> participantes
+              do evento — os mais recentes. O que estiver fora não aparece na prévia nem entra no PDF.
+            </p>
+            <p className="text-orange-800 mt-1">
+              Para imprimir um conjunto completo, use o <strong>filtro por stand</strong>: cada stand cabe
+              inteiro em uma carga.
+            </p>
           </div>
         )}
 
@@ -1545,7 +1950,11 @@ export default function CredentialsPage() {
         {!loading && participants.length > 0 && (
           <div className="p-6 no-print">
             <p className="text-sm text-slate-500 mb-4">
-              {participants.length} participante(s) · {selectedIds.size > 0 ? `${selectedIds.size} selecionado(s)` : 'Clique para selecionar'}
+              {listaTruncada
+                ? `${participants.length} de ${totalNoEvento} participantes (carregados os mais recentes)`
+                : `${participants.length} participante(s)`}
+              {' · '}
+              {selectedIds.size > 0 ? `${selectedIds.size} selecionado(s)` : 'Clique para selecionar'}
             </p>
             <div className={`grid gap-4 ${templateStyle === 'badge' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : (templateStyle === 'label' || templateStyle === 'label6') ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
               {participants.map(p => (
