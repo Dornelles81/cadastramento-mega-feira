@@ -9,6 +9,7 @@
 import { prisma } from '../prisma'
 import { isEligible } from './eligibility'
 import { resolveActiveAllocation } from '../terminals/allocation'
+import { isExhausted } from './retry-policy'
 
 export interface DeviceUser {
   employeeNo: string
@@ -80,7 +81,10 @@ export async function reconcileTerminal(
   // Linhas de sync deste terminal (estado atual + detectar órfão-com-linha).
   const rows = await prisma.participantTerminalSync.findMany({
     where: { terminalId },
-    select: { id: true, participantId: true, faceState: true, cardState: true, removalState: true, faceVersion: true, participant: { select: { employeeNo: true } } }
+    // `attempts` entra no select por causa do teto (ver o bloco de update
+    // abaixo): sem ele a reconciliação não tem como respeitar a política de
+    // retry, e era exatamente assim que o teto vinha sendo contornado.
+    select: { id: true, participantId: true, faceState: true, cardState: true, removalState: true, faceVersion: true, attempts: true, participant: { select: { employeeNo: true } } }
   })
   const rowByPid = new Map(rows.map((r) => [r.participantId, r]))
   const rowByEmp = new Map(rows.filter((r) => r.participant.employeeNo).map((r) => [r.participant.employeeNo as string, r]))
@@ -99,6 +103,10 @@ export async function reconcileTerminal(
     const row = rowByPid.get(p.id)
     const hasFace = p.faceData != null || p.faceImageUrl != null
 
+    // F5: face trocada (re-captura). Calculada aqui porque decide DUAS coisas:
+    // o que re-empurrar, e se a linha ganha um contador de tentativas novo.
+    const faceTrocada = faceNeedsUpdate(p, row)
+
     let needFace = false
     let needCard = false
     if (!act) {
@@ -110,7 +118,7 @@ export async function reconcileTerminal(
       if (p.cardNumber && act.numOfCard === 0) needCard = true // card incompleto
       // F5: face trocada → re-push de face E card (o agente apaga+re-cria, então
       // o card também precisa voltar — senão deleteUser deixaria sem card).
-      if (faceNeedsUpdate(p, row)) { needFace = true; needCard = !!p.cardNumber }
+      if (faceTrocada) { needFace = true; needCard = !!p.cardNumber }
     }
     if (!needFace && !needCard) continue
 
@@ -121,10 +129,38 @@ export async function reconcileTerminal(
       pushesEnqueued++
     } else {
       const data: any = {}
+
+      // ── TETO DE TENTATIVAS ───────────────────────────────────────────────
+      // Este bloco existe por causa de um loop real: o `/work` só aplica
+      // `attempts < MAX_ATTEMPTS` às linhas `failed`, e `pending` não tem teto
+      // nenhum. Como a reconciliação devolvia a linha para `pending` a cada
+      // ciclo de 60s, o teto NUNCA mordia. Uma participante cuja foto o device
+      // recusava de forma determinística acumulou 6.687 tentativas em 6 dias
+      // (2026-08-30) — trabalho puro, e a linha oscilando entre "pendente" e
+      // "falha" também fazia a tela de saúde mentir.
+      //
+      // Regra: conteúdo NOVO ganha contador novo; conteúdo IGUAL respeita o
+      // teto. Sem a primeira metade, P1 prenderia para sempre uma linha que
+      // esgotou por causa transitória (device fora do ar) — e a reconciliação
+      // é justamente o mecanismo de recuperação desse caso.
+      if (faceTrocada) {
+        // Foto nova é uma tentativa legítima: zera o contador e o erro velho.
+        data.attempts = 0
+        data.lastError = null
+      } else if (isExhausted(row.attempts)) {
+        // Esgotada e nada mudou: retentar produziria exatamente a mesma falha.
+        // Daqui em diante é o operador que assume (botão de re-tentar na tela
+        // de saúde) ou uma foto nova. NÃO ressuscita sozinha.
+        continue
+      }
+
       if (needFace && row.faceState !== 'pending') data.faceState = 'pending'
       if (needCard && row.cardState !== 'pending') data.cardState = 'pending'
       if (row.removalState !== 'none') data.removalState = 'none' // desejado de novo → reviver
-      if (Object.keys(data).length) {
+      // `attempts`/`lastError` sozinhos não são motivo de update: sem mudança
+      // de estado não há nada novo a fazer, e gravar por gravar só produz
+      // escrita à toa a cada ciclo de reconciliação.
+      if (data.faceState || data.cardState || data.removalState) {
         await prisma.participantTerminalSync.update({ where: { id: row.id }, data })
         pushesEnqueued++
       }

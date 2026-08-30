@@ -62,7 +62,17 @@ export async function enqueueRemoval(participantId: string): Promise<void> {
 export async function enqueueFaceChange(participantId: string): Promise<void> {
   await prisma.participantTerminalSync.updateMany({
     where: { participantId, removalState: 'none' },
-    data: { faceState: 'pending', cardState: 'pending' }
+    data: {
+      faceState: 'pending',
+      cardState: 'pending',
+      // Foto NOVA é uma tentativa legítima, então ganha contador novo: sem
+      // isto, uma linha que esgotou o teto com a foto ANTIGA continuaria
+      // barrada no `/work` mesmo depois da re-captura que a consertaria — e o
+      // teto passaria a punir justamente a ação que resolve o problema.
+      // Mesma regra do `faceTrocada` em `reconcile.ts`.
+      attempts: 0,
+      lastError: null
+    }
   })
 }
 

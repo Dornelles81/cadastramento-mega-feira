@@ -86,6 +86,33 @@ function duracao(ms: number | null): string {
   return `${Math.floor(h / 24)} dias`;
 }
 
+/**
+ * Uma linha que ESGOTOU o teto de tentativas. Desde que a reconciliação passou
+ * a respeitar esse teto, ela não volta sozinha para a fila — então precisa
+ * aparecer com nome e motivo, e ter um caminho de volta.
+ */
+interface LinhaFalha {
+  syncId: string;
+  participante: string;
+  participanteId: string;
+  employeeNo: string | null;
+  terminal: string | null;
+  terminalId: string | null;
+  faceState: string;
+  cardState: string;
+  removalState: string;
+  tentativas: number;
+  ultimoErro: string | null;
+  ultimaTentativa: string | null;
+}
+
+interface Falhas {
+  maxTentativas: number;
+  total: number;
+  truncado?: boolean;
+  linhas: LinhaFalha[];
+}
+
 const AUTO_REFRESH_MS = 30_000;
 
 export default function TerminaisPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -93,6 +120,10 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
   const [dados, setDados] = useState<Saude | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [falhas, setFalhas] = useState<Falhas | null>(null);
+  // syncId em processamento (ou 'todas'); trava o botão e evita clique duplo.
+  const [reenfileirando, setReenfileirando] = useState<string | null>(null);
+  const [avisoRetry, setAvisoRetry] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -108,7 +139,39 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
     } finally {
       setCarregando(false);
     }
+    // A lista de falhas é buscada à parte e NÃO derruba a tela se falhar: a
+    // saúde dos terminais é o que não pode sumir.
+    try {
+      const rf = await fetch(`/api/admin/eventos/${slug}/sync-falhas`);
+      if (rf.ok) setFalhas(await rf.json());
+    } catch {
+      /* silencioso de propósito — ver acima */
+    }
   }, [slug]);
+
+  /** Devolve à fila: uma linha, ou todas as esgotadas do evento. */
+  const reenfileirar = useCallback(async (alvo: { syncId?: string; todos?: boolean }) => {
+    const chave = alvo.syncId ?? 'todas';
+    setReenfileirando(chave);
+    setAvisoRetry(null);
+    try {
+      const r = await fetch(`/api/admin/eventos/${slug}/sync-falhas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(alvo)
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `Falha ao re-tentar (HTTP ${r.status})`);
+      setAvisoRetry(
+        `${j.reenfileiradas} linha(s) devolvida(s) à fila. Se a causa continuar, elas esgotam de novo.`
+      );
+      await carregar();
+    } catch (e: any) {
+      setAvisoRetry(e?.message ?? 'Erro ao re-tentar');
+    } finally {
+      setReenfileirando(null);
+    }
+  }, [slug, carregar]);
 
   useEffect(() => {
     carregar();
@@ -333,9 +396,89 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
           </div>
         </div>
 
+        {/* ── Linhas esgotadas: quem travou, por quê, e o caminho de volta ──
+            A contagem por terminal (coluna "Falhas") diz que existe problema;
+            só esta lista diz o que fazer a respeito. */}
+        {falhas && falhas.total > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-red-200 mt-6">
+            <div className="px-4 py-3 border-b border-red-200 bg-red-50 flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="font-semibold text-red-800">
+                  {falhas.total} linha(s) pararam de tentar
+                </h2>
+                <p className="text-xs text-red-700 mt-0.5">
+                  Bateram o teto de {falhas.maxTentativas} tentativas. Não voltam sozinhas —
+                  resolva a causa e devolva à fila.
+                </p>
+              </div>
+              <button
+                onClick={() => reenfileirar({ todos: true })}
+                disabled={reenfileirando !== null}
+                className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reenfileirando === 'todas' ? 'Devolvendo...' : 'Re-tentar todas'}
+              </button>
+            </div>
+
+            {avisoRetry && (
+              <p className="px-4 py-2 text-sm text-gray-700 bg-amber-50 border-b border-amber-200">
+                {avisoRetry}
+              </p>
+            )}
+
+            <div className="divide-y divide-gray-100">
+              {falhas.linhas.map((l) => (
+                <div key={l.syncId} className="px-4 py-3 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900">
+                      {l.participante}
+                      {l.employeeNo && (
+                        <span className="ml-2 text-xs font-normal text-gray-400 tabular-nums">
+                          #{l.employeeNo}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {l.terminal ?? '(terminal removido)'} · {l.tentativas} tentativas ·{' '}
+                      {[
+                        l.faceState === 'failed' ? 'face' : null,
+                        l.cardState === 'failed' ? 'cartão' : null,
+                        l.removalState === 'failed' ? 'remoção' : null
+                      ].filter(Boolean).join(' + ')}
+                    </p>
+                    {/* Erro CRU do device. O subStatusCode é o que diz a causa —
+                        reescrever em linguagem amigável apagaria justamente ele. */}
+                    {l.ultimoErro && (
+                      <p className="text-xs text-gray-600 mt-1 font-mono break-all bg-gray-50 rounded px-2 py-1">
+                        {l.ultimoErro}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => reenfileirar({ syncId: l.syncId })}
+                    disabled={reenfileirando !== null}
+                    className="shrink-0 px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {reenfileirando === l.syncId ? '...' : 'Re-tentar'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {falhas.truncado && (
+              <p className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+                Mostrando {falhas.linhas.length} de {falhas.total}. &quot;Re-tentar todas&quot;
+                alcança todas, inclusive as não listadas.
+              </p>
+            )}
+          </div>
+        )}
+
         <p className="text-xs text-gray-400 mt-4">
           &quot;Falhas&quot; = linhas que bateram o teto de {dados?.maxTentativas} tentativas e não são
-          mais servidas ao agente. Heartbeat é destacado a partir de{' '}
+          mais servidas ao agente, nem pela reconciliação — ela respeita o mesmo teto, senão a
+          linha voltaria à fila a cada ciclo e tentaria para sempre. Foto nova devolve a linha à
+          fila sozinha; fora isso, é o botão acima. Heartbeat é destacado a partir de{' '}
           {Math.round((dados?.limiteHeartbeatMs ?? 0) / 60000)} min sem sinal.
         </p>
         <p className="text-xs text-gray-400 mt-2">
