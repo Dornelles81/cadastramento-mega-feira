@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma'
 import Joi from 'joi'
 import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
+import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
@@ -274,6 +275,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const faceDataUrl = faceImage.includes(',')
         ? faceImage
         : `data:image/jpeg;base64,${faceImage}`
+      // BARREIRA DE TAMANHO — ver lib/face/size-limit. Segunda camada: o
+      // cliente recomprime em degraus, mas o servidor não pode confiar nisso.
+      const tamanho = checkFaceSize(faceDataUrl)
+      if (!tamanho.ok) {
+        return res.status(413).json({
+          error: 'Face image too large',
+          message: FACE_TOO_LARGE_MESSAGE,
+          bytes: tamanho.bytes,
+          limit: tamanho.limite
+        })
+      }
       encryptedFaceData = encryptString(faceDataUrl)
       faceVersion = faceVersionOf(faceDataUrl)
       faceImageUrl = null // imagem só é servida decriptada via /api/participant-image (autenticado)

@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback, memo, type RefObject } from '
 import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, isDetectorExhausted, resetDetectorRecovery, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
 import { decideCapture, DEFAULT_FRAMING_THRESHOLDS, type CaptureReason } from '../lib/face/gate'
+import { compressCanvasToLimit, FACE_TOO_LARGE_MESSAGE } from '../lib/face/size-limit'
 
 interface EnhancedFaceCaptureProps {
   onCapture: (imageData: string, faceData?: any) => void
@@ -648,7 +649,17 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           return
         }
 
-        const processedImage = canvas.toDataURL('image/jpeg', 0.6)
+        // Teto de TAMANHO (fonte única em lib/face/size-limit): recomprime em
+        // degraus até caber. O 0.6 fixo que estava aqui não bastava — este
+        // mesmo caminho produziu 201 KB no celular, e o device recusa.
+        const comprimido = compressCanvasToLimit(canvas)
+        if (!comprimido.ok) {
+          setError('❌ ' + FACE_TOO_LARGE_MESSAGE)
+          if (typeof window !== 'undefined') window.scrollTo(0, 0)
+          input.value = ''
+          return
+        }
+        const processedImage = comprimido.dataUrl
         const faceData = {
           faceInterocularPx: ip, // medição real (≤800px), p/ a Fatia 5
           faceDetected: true,
@@ -735,7 +746,15 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       }
     }
 
-    const imageData = frame.toDataURL('image/jpeg', 0.7)
+    // Teto de TAMANHO — mesmo helper do caminho de upload (fonte única).
+    const comprimido = compressCanvasToLimit(frame)
+    if (!comprimido.ok) {
+      setError('❌ ' + FACE_TOO_LARGE_MESSAGE)
+      setIsCapturing(false)
+      startDetectionLoop()
+      return
+    }
+    const imageData = comprimido.dataUrl
     setCapturedImage(imageData)
     stopCamera()
     const faceData = {
@@ -772,7 +791,15 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       setShowUploadOption(true)
       return
     }
-    const imageData = frame.toDataURL('image/jpeg', 0.7)
+    // Teto de TAMANHO também aqui: este caminho pula o gate de rosto, mas o
+    // device recusa por peso do mesmo jeito. Deixar passar só adiaria a falha
+    // para o sync, longe de quem poderia tirar outra foto.
+    const comprimido = compressCanvasToLimit(frame)
+    if (!comprimido.ok) {
+      setError('❌ ' + FACE_TOO_LARGE_MESSAGE)
+      return
+    }
+    const imageData = comprimido.dataUrl
     setCapturedImage(imageData)
     stopCamera()
     const faceData = {

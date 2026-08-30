@@ -3,6 +3,7 @@ import Joi from 'joi'
 import { prisma } from '../../lib/prisma'
 import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
+import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
@@ -135,6 +136,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const dataUrl = faceImage.includes(',')
         ? faceImage
         : `data:image/jpeg;base64,${faceImage}`
+      // BARREIRA DE TAMANHO (o cliente já recomprime em degraus; isto é a
+      // segunda camada, para cliente antigo em cache, requisição fora do app
+      // ou compressão que não coube). Foto grande demais é aceita pelo cadastro
+      // e RECUSADA pelo terminal dias depois — falhar aqui, na cara de quem
+      // pode tirar outra foto, é o único momento barato.
+      const tamanho = checkFaceSize(dataUrl)
+      if (!tamanho.ok) {
+        return res.status(413).json({
+          error: 'Face image too large',
+          message: FACE_TOO_LARGE_MESSAGE,
+          bytes: tamanho.bytes,
+          limit: tamanho.limite
+        })
+      }
       encryptedFaceData = encryptString(dataUrl)
       faceVersion = faceVersionOf(dataUrl)
     }

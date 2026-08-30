@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { encryptString } from '../../../lib/crypto'
 import { faceVersionOf } from '../../../lib/face/version'
+import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../../lib/face/size-limit'
 import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
 import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
 import { enqueueFaceChange } from '../../../lib/agent/sync-enqueue'
@@ -56,6 +57,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const faceDataUrl = faceImage.includes(',')
         ? faceImage
         : `data:image/jpeg;base64,${faceImage}`
+      // BARREIRA DE TAMANHO — ver lib/face/size-limit. Vale igualmente na
+      // EDIÇÃO: uma re-captura grande demais substituiria uma foto que hoje
+      // funciona por uma que o terminal recusa, e o `faceVersion` novo ainda
+      // mandaria o agente apagar e recriar o usuário no device.
+      const tamanho = checkFaceSize(faceDataUrl)
+      if (!tamanho.ok) {
+        return res.status(413).json({
+          error: 'Face image too large',
+          message: FACE_TOO_LARGE_MESSAGE,
+          bytes: tamanho.bytes,
+          limit: tamanho.limite
+        })
+      }
       updateData.faceData = encryptString(faceDataUrl)
       updateData.faceImageUrl = null
       updateData.faceVersion = faceVersionOf(faceDataUrl) // F5: nova versão
