@@ -278,8 +278,11 @@ export default function EventAdminPage() {
     }
   }, [status, session, eventSlug])
 
-  // Load participants from database with filters
-  const loadParticipants = async (search?: string) => {
+  // Load participants from database with filters.
+  // NÃO recebe termo de busca: a busca é client-side (ver `filteredParticipants`) e o
+  // endpoint não filtra por ela. O filtro que existia aqui era redundante com aquele e
+  // ainda corrompia o estado — ver o comentário abaixo, onde ele foi removido.
+  const loadParticipants = async () => {
     setLoading(true)
     try {
       // Use eventId if available and valid (more reliable), otherwise fall back to eventCode
@@ -303,15 +306,13 @@ export default function EventAdminPage() {
       )
       if (response.ok) {
         const data = await response.json()
-        let participants = data.participants || []
-
-        // Apply search filters locally
-        if (search) {
-          participants = participants.filter((p: Participant) =>
-            p.name.toLowerCase().includes(search.toLowerCase()) ||
-            p.cpf.includes(search)
-          )
-        }
+        // `participants` guarda a lista COMPLETA do evento, sem recorte de busca.
+        // Antes havia aqui um filtro por nome/CPF que era redundante com o de
+        // `filteredParticipants` (que já filtra por nome, CPF, e-mail, telefone e stand)
+        // e corrompia o estado: depois de uma busca, `participants` passava a conter só
+        // os resultados, e o dropdown de stands, as contagens por stand e o "Total de
+        // registros" eram calculados sobre esse subconjunto.
+        const participants = data.participants || []
 
         setParticipants(participants)
         
@@ -350,24 +351,30 @@ export default function EventAdminPage() {
     }
   }
 
+  // ── Carregamento da lista — UM efeito só ────────────────────────────────
+  // Antes eram dois, e ambos dependiam de `event`, o OBJETO: um disparava na hora e o
+  // outro 500ms depois, na mesma transição, resultando em duas chamadas por carga. Pior,
+  // o efeito que popula `event` (acima) chama setEvent com um literal novo a cada
+  // execução e depende de `session`, cuja identidade muda em re-render — cada troca
+  // dessas refazia o par inteiro, sem bail-out do React.
+  //
+  // A dependência agora é `event?.id`, uma STRING: identidade instável de objeto deixa de
+  // importar. `temEvento` é separado do id porque o fallback de SUPER_ADMIN (quando a API
+  // do evento falha) grava um evento com id vazio, e nesse caso a lista ainda carrega —
+  // por eventCode. Gatilhar em `eventId` truthy quebraria esse caminho.
+  //
+  // `searchTerm` NÃO é gatilho: a busca é client-side (`filteredParticipants`) e o
+  // endpoint não a recebe. Mantê-la aqui — como estava — fazia cada tecla digitada
+  // rebaixar-se a um novo download da lista inteira, sem alterar em nada o que voltava.
+  // `showRemoved` continua, esse sim muda a query (includeRemoved).
+  const eventId = event?.id ?? null
+  const temEvento = !!event
+
   useEffect(() => {
-    if (hasAccess && event) {
-      loadParticipants()
-    }
-  }, [hasAccess, event])
-
-  // Auto-reload when filters change with debounce
-  useEffect(() => {
-    if (!hasAccess || !event) return
-
-    const timeoutId = setTimeout(() => {
-      loadParticipants(searchTerm)
-    }, 500) // 500ms debounce
-
-    return () => clearTimeout(timeoutId)
-    // showRemoved entra aqui porque muda a QUERY no servidor (includeRemoved),
-    // não só a exibição — ligar o toggle precisa recarregar a lista
-  }, [searchTerm, showRemoved, hasAccess, event])
+    if (!hasAccess || !temEvento) return
+    loadParticipants()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAccess, temEvento, eventId, showRemoved])
 
   // Show loading while checking authentication
   if (status === 'loading') {
@@ -1255,7 +1262,7 @@ export default function EventAdminPage() {
                 </>
               )}
               <button
-                onClick={() => loadParticipants(searchTerm)}
+                onClick={() => loadParticipants()}
                 className="text-xs sm:text-sm bg-mega-500 text-white px-3 py-2 rounded hover:bg-mega-600 whitespace-nowrap"
                 disabled={loading}
               >
