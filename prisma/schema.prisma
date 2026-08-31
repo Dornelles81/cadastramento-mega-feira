@@ -240,6 +240,20 @@ model Participant {
   //   0    = medido, sem rosto detectável
   //   >0   = distância interocular em px na imagem submetida (gate ≥50px)
   faceInterocularPx Int?
+  // Métricas BRUTAS do detector no instante da captura, ao lado da interocular.
+  //
+  // Por que existem: sem elas é IMPOSSÍVEL avaliar o gate retroativamente. Em
+  // 2026-08-31 a pergunta "quantos cadastros o poseGate teria rejeitado?" não
+  // pôde ser respondida — `decideCapture` precisa de bbox/frame/pose, o
+  // detector calculava os três e nada era gravado. Com estes campos a mesma
+  // pergunta vira uma consulta, hoje e a cada recalibração de limiar.
+  //
+  // Json e não colunas: são payloads do detector, lidos em bloco e nunca
+  // filtrados no banco. null = captura que não mediu (legado ou captureAnyway).
+  faceBbox   Json? // { x, y, w, h } em px do frame medido
+  facePose   Json? // { yaw, pitch, roll } (yaw/pitch = razões; roll = graus)
+  faceFrameW Int?  // largura do frame medido (≤800)
+  faceFrameH Int?  // altura do frame medido
   // F5: hash (sha256) do CONTEÚDO da face em claro — muda quando a foto é
   // re-capturada. A reconciliação compara com ParticipantTerminalSync.faceVersion
   // p/ detectar "face trocada" e re-empurrar. null = legado/sem face.

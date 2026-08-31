@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
 import SyncResumo from '../../../../components/admin/SyncResumo'
 import { textoRemocao } from '../../../../lib/participants/removal-label'
+import { riscoDeFace, tituloRiscoDeFace } from '../../../../lib/participants/face-risk'
 
 interface Participant {
   id: string
@@ -535,6 +536,28 @@ export default function EventAdminPage() {
   }
 
   const handleApprove = async (participant: Participant) => {
+    // ── CONFIRMAÇÃO PARA FOTO NÃO VALIDADA ────────────────────────────────
+    // Aprovar dispara o fan-out: a foto vai para TODOS os terminais alocados,
+    // e a pessoa passa a ter acesso físico. Para quem caiu no `captureAnyway`
+    // isso acontece sem que rosto nenhum tenha sido medido — foi assim que
+    // uma foto de parede chegou à fila de aprovação.
+    //
+    // Atrito PROPORCIONAL, não muro: só o caso sem medição alguma pede
+    // confirmação. Bloquear de vez empurraria o operador a aprovar por outro
+    // caminho, e aí o sinal se perde. Rosto medido e pequeno recebe aviso
+    // visual, não diálogo — seria atrito diário sem ganho.
+    if (riscoDeFace(participant) === 'nao-validada') {
+      const ok = window.confirm(
+        `ATENÇÃO — a foto de ${participant.name} NÃO passou pela validação de rosto.\n\n` +
+        'A captura foi feita com o detector fora do ar, então ninguém verificou se há ' +
+        'um rosto na imagem, nem se está enquadrado.\n\n' +
+        'Ao aprovar, esta foto vai para TODOS os terminais do evento e passa a valer ' +
+        'como credencial de acesso.\n\n' +
+        'Confira a foto antes de continuar. Deseja aprovar mesmo assim?'
+      )
+      if (!ok) return
+    }
+
     try {
       const response = await fetch('/api/admin/participant-approval', {
         method: 'POST',
@@ -1365,8 +1388,26 @@ export default function EventAdminPage() {
                       </div>
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{participant.name}</span>
+                        {/* Risco de face JUNTO AO NOME, de propósito: o badge detalhado
+                            vive na coluna "Face", que é `hidden lg:table-cell` — em
+                            tablet e celular ela some, mas o botão Aprovar continua lá.
+                            Quem aprova numa tela pequena não via aviso nenhum. */}
+                        {riscoDeFace(participant) && (
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${
+                              riscoDeFace(participant) === 'nao-validada'
+                                ? 'bg-red-100 text-red-700 border-red-200'
+                                : 'bg-amber-100 text-amber-800 border-amber-200'
+                            }`}
+                            title={tituloRiscoDeFace(participant)}
+                          >
+                            {riscoDeFace(participant) === 'nao-validada'
+                              ? '⚠ Foto não validada'
+                              : `⚠ ${participant.faceInterocularPx}px`}
+                          </span>
+                        )}
                         {participant.credentialPrinted && (
                           <span
                             className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 border border-green-200 whitespace-nowrap"

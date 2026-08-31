@@ -4,6 +4,7 @@ import Joi from 'joi'
 import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
+import { faceMetricsForPrisma } from '../../lib/face/metrics'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
@@ -336,6 +337,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         faceImageUrl: faceImageUrl, // Store complete face image
         faceData: encryptedFaceData,
         faceInterocularPx: faceInterocularPx,
+        ...faceMetricsForPrisma(faceData),
         faceVersion: faceVersion,
         consentAccepted: consent,
         consentIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown',

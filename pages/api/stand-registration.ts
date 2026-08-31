@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma'
 import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
+import { faceMetricsForPrisma } from '../../lib/face/metrics'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
@@ -200,6 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       faceImageUrl: null,
       faceData: encryptedFaceData,
       faceInterocularPx,
+      ...faceMetricsForPrisma(faceData),
       faceVersion,
       consentAccepted: consent,
       consentIp: ip,

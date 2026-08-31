@@ -582,11 +582,15 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         const reads: number[] = []
         const counts: number[] = [] // [UP-min] faceCount por leitura (critério "um rosto")
         let poseKps: { x: number; y: number }[] | null = null
+        // bbox da última leitura COM rosto: é gravado junto da medição para que o
+        // gate possa ser reavaliado depois sem re-detectar a imagem.
+        let upBbox: { x: number; y: number; w: number; h: number } | null = null
         for (let i = 0; i < 3; i++) {
           const m = await mpDetectFace(canvas)
           counts.push(m.faceCount)
           reads.push(m.faceCount > 0 ? m.interocularPx : 0)
           if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
+          if (m.faceCount > 0 && m.bbox) upBbox = m.bbox
         }
         const v = decideFromReads(reads)
         const ip = v.interocularPx
@@ -663,6 +667,13 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
         const faceData = {
           faceInterocularPx: ip, // medição real (≤800px), p/ a Fatia 5
           faceDetected: true,
+          // Métricas brutas do detector, gravadas ao lado da interocular: são o
+          // que `decideCapture` consome. Sem elas, avaliar o gate depois exige
+          // re-detectar todas as fotos.
+          faceBbox: upBbox,
+          facePose: computePose(poseKps),
+          faceFrameW: width,
+          faceFrameH: height,
           resolution: `${width}x${height}`,
           uploadedFile: true,
           timestamp: new Date().toISOString()
@@ -760,6 +771,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     const faceData = {
       faceInterocularPx: ip, // medição real p/ a Fatia 5
       faceDetected: true,
+      // Idem ao caminho de upload: bbox/pose/frame do INSTANTE da captura.
+      // `captureBbox` já era coletado aqui para o gate; agora também é gravado.
+      faceBbox: captureBbox ?? null,
+      facePose: computePose(poseKps),
+      faceFrameW: frame.width,
+      faceFrameH: frame.height,
       resolution: `${frame.width}x${frame.height}`,
       timestamp: new Date().toISOString()
     }
@@ -806,6 +823,13 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       faceInterocularPx: null, // nunca medido (detector morto) — sentinela honesto
       faceDetected: false,     // → servidor marca __faceUnvalidated (conferência)
       unvalidated: true,
+      // null nos três, e não zero/vazio: aqui o detector NÃO rodou. Gravar
+      // qualquer número seria inventar medição que nunca houve — é a mesma
+      // razão de `faceInterocularPx` ser null e não 0 neste caminho.
+      faceBbox: null,
+      facePose: null,
+      faceFrameW: frame.width,   // o frame existe; só a detecção que não
+      faceFrameH: frame.height,
       resolution: `${frame.width}x${frame.height}`,
       timestamp: new Date().toISOString()
     }

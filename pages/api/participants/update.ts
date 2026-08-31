@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma'
 import { encryptString } from '../../../lib/crypto'
 import { faceVersionOf } from '../../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../../lib/face/size-limit'
+import { faceMetricsForPrisma } from '../../../lib/face/metrics'
 import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
 import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
 import { enqueueFaceChange, onBecameEligible } from '../../../lib/agent/sync-enqueue'
@@ -77,6 +78,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     if (faceData && typeof faceData.faceInterocularPx === 'number') {
       updateData.faceInterocularPx = faceData.faceInterocularPx
+    }
+    // Métricas do detector: só quando a FOTO mudou. Elas descrevem uma captura
+    // específica — gravá-las num update que só mexeu no telefone deixaria bbox
+    // e pose descrevendo uma imagem que não é mais a que está guardada.
+    // Sobrescreve inclusive com null: foto nova sem medição (captureAnyway) tem
+    // de APAGAR as métricas da foto anterior, senão a antiga fica valendo para
+    // a imagem nova.
+    if (faceChanged) {
+      Object.assign(updateData, faceMetricsForPrisma(faceData))
     }
     if (customData) {
       updateData.customData = { ...((existing.customData as any) || {}), ...customData }
