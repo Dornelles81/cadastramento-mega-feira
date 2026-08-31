@@ -56,6 +56,9 @@ export async function validateEditToken(rawToken: string): Promise<ValidEditAcce
           eventId: true,
           eventCode: true,
           customData: true,
+          // Para a trava de remoção abaixo.
+          status: true,
+          isDeleted: true,
           event: { select: { id: true, name: true, code: true, slug: true, endDate: true } },
           stand: { select: { code: true } }
         }
@@ -73,6 +76,22 @@ export async function validateEditToken(rawToken: string): Promise<ValidEditAcce
   if (tokenRow.expiresAt && tokenRow.expiresAt < new Date()) return null
 
   const p = tokenRow.participant
+
+  // ── PARTICIPANTE REMOVIDO ────────────────────────────────────────────────
+  // A remoção NÃO revoga os tokens de edição (`stand-removal` só troca o
+  // `status`), então o link antigo continuava abrindo o cadastro de quem já
+  // saiu: dava para editar nome, telefone e trocar a foto. Com a foto nova o
+  // fan-out ainda tentava devolver a pessoa aos terminais — acesso físico
+  // ressuscitado por um link que ninguém lembrava que existia.
+  //
+  // A checagem é sobre o ESTADO ATUAL, de propósito, e não uma revogação: se o
+  // participante for reativado algum dia, o MESMO link volta a funcionar
+  // sozinho, sem precisar gerar outro. Revogar na remoção seria irreversível.
+  //
+  // Olha só remoção — status e isDeleted — e NÃO elegibilidade completa. Usar
+  // `isEligible` aqui quebraria o fluxo principal do link: ele existe
+  // justamente para quem ainda NÃO tem foto ou ainda NÃO foi aprovado.
+  if (p.status !== 'active' || p.isDeleted) return null
   return {
     tokenId: tokenRow.id,
     participant: {

@@ -5,7 +5,7 @@ import { faceVersionOf } from '../../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../../lib/face/size-limit'
 import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
 import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
-import { enqueueFaceChange } from '../../../lib/agent/sync-enqueue'
+import { enqueueFaceChange, onBecameEligible } from '../../../lib/agent/sync-enqueue'
 import { encryptDocuments } from '../../../lib/documents'
 
 /**
@@ -95,7 +95,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     // F5: re-captura → re-empurra a face nova p/ os terminais (imediato).
+    //
+    // As DUAS chamadas, nesta ordem, porque cobrem casos diferentes:
+    //
+    //   onBecameEligible  → PRIMEIRA foto. Quem foi aprovado ANTES de ter foto
+    //     não tinha `employeeNo` (a identidade só é atribuída a quem é
+    //     elegível, e sem face ninguém é), e não tinha linha de sync utilizável.
+    //     Agora a foto chegou: a pessoa virou elegível NESTE instante, e é aqui
+    //     que a identidade é atribuída e o fan-out acontece. Sem isto, ela
+    //     ficava ativa, aprovada, com biometria — e invisível nos terminais,
+    //     sem erro em lugar nenhum: o `/work` pula linha sem `employeeNo` e a
+    //     reconciliação nem olha (filtra `employeeNo: { not: null }`).
+    //
+    //   enqueueFaceChange → TROCA de foto de quem já estava sincronizado. É um
+    //     `updateMany`, que devolve face e card a `pending` nas linhas que já
+    //     existem. Não cria linha nenhuma, então não substitui a de cima.
+    //
+    // Não é preciso checar elegibilidade aqui: `onBecameEligible` já não
+    // atribui identidade a inelegível, e `enqueueForContext` recusa por conta
+    // própria — inclusive o revival de quem está em remoção.
     if (faceChanged) {
+      try {
+        await onBecameEligible(existing.eventId, participantId)
+      } catch (e) { console.error('onBecameEligible falhou:', e) }
       try { await enqueueFaceChange(participantId) } catch (e) { console.error('enqueueFaceChange falhou:', e) }
     }
 

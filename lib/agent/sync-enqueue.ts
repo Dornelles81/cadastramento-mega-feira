@@ -20,6 +20,34 @@ import { listAllocatedTerminalIds, resolveActiveAllocation } from '../terminals/
  * atribuída — senão o `/work` pula a linha de qualquer forma.
  */
 export async function enqueueForContext(contextId: string, participantId: string): Promise<void> {
+  // ── ELEGIBILIDADE: a trava mora AQUI, não em cada chamador ────────────────
+  // Esta função CRIA linha de push e REVIVE linha em remoção. As duas coisas
+  // significam "esta pessoa deve estar no terminal" — afirmação que só pode ser
+  // feita sobre quem é elegível AGORA.
+  //
+  // Antes, a checagem ficava a cargo de quem chamava, e bastava um caminho
+  // esquecer para um removido voltar a ter acesso físico. Concretamente: o
+  // `updateMany` de `enqueueFaceChange` filtra `removalState: 'none'`, então
+  // para um removido ele conta 0 linhas; qualquer fallback do tipo "não achou
+  // linha, então cria" cairia no revival abaixo e devolveria a pessoa aos
+  // terminais. Somado ao token de edição, que não olhava status, isso era
+  // ressuscitar sozinho com um link antigo.
+  //
+  // Checar aqui fecha a CLASSE inteira em vez de um caso: nenhum chamador,
+  // presente ou futuro, consegue enfileirar ou reviver quem não é elegível.
+  // `backfillTerminal` já fazia isso no próprio loop — aqui a regra vira única.
+  const p = await prisma.participant.findUnique({
+    where: { id: participantId },
+    select: {
+      status: true, isDeleted: true, approvalStatus: true,
+      faceData: true, faceImageUrl: true,
+      event: { select: { requiresApprovalForAccess: true } }
+    }
+  })
+  if (!p) return
+  const requiresApproval = p.event?.requiresApprovalForAccess ?? true
+  if (!isEligible(p, { requiresApproval })) return
+
   // ESCOPO por ALOCAÇÃO VIGENTE (não mais `Terminal.eventId`): só terminais que
   // atendem este evento AGORA. Fora do período, lista vazia → não enfileira.
   const terminalIds = await listAllocatedTerminalIds(contextId)
