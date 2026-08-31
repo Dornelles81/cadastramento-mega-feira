@@ -10,6 +10,9 @@ import {
 } from '../../../lib/stand-access/validate'
 import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
+import FotoCredenciado from '../../../components/stand/FotoCredenciado'
+import { riscoDeFace } from '../../../lib/participants/face-risk'
+import { deriveFaceStatus } from '../../../lib/face/status'
 import {
   lastDayReset,
   nextDayReset,
@@ -106,7 +109,12 @@ export default async function StandPanelPage({
         cpf: true,
         createdAt: true,
         faceImageUrl: true,
-        faceData: true
+        faceData: true,
+        // Qualidade da foto: sem estes dois o painel mostra a miniatura e não
+        // diz nada sobre ela. É o gestor quem tem contato com a equipe — ele
+        // precisa conseguir identificar sozinho o que exige recaptura.
+        faceInterocularPx: true,
+        customData: true
       },
       orderBy: { createdAt: 'desc' }
     }),
@@ -157,8 +165,18 @@ export default async function StandPanelPage({
     name: p.name,
     cpf: p.cpf,
     createdAt: p.createdAt,
-    photo: tryGetFaceImageDataUrl(p, { participantId: p.id, where: 'app/stand/[token]' })
+    photo: tryGetFaceImageDataUrl(p, { participantId: p.id, where: 'app/stand/[token]' }),
+    // Mesmo critério do painel do admin (lib/participants/face-risk): fonte
+    // única, para gestor e organização não verem classificações diferentes da
+    // mesma foto.
+    risco: riscoDeFace({
+      faceInterocularPx: p.faceInterocularPx,
+      faceStatus: deriveFaceStatus(p.faceInterocularPx),
+      faceUnvalidated: !!(p.customData as any)?.__faceUnvalidated
+    })
   }))
+
+  const precisamRecaptura = withPhotos.filter((p) => p.risco !== null).length
 
   const count = participants.length
   const lockedCount = lockedSlots.length
@@ -265,6 +283,24 @@ export default async function StandPanelPage({
             Credenciados ({count})
           </h2>
 
+          {/* Resumo no topo: com equipes grandes, exigir que o gestor percorra a
+              lista inteira para descobrir SE há problema é o mesmo que não
+              avisar. O número aparece antes da rolagem. */}
+          {precisamRecaptura > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <p className="font-semibold text-amber-900">
+                {precisamRecaptura === 1
+                  ? '1 foto precisa ser refeita'
+                  : `${precisamRecaptura} fotos precisam ser refeitas`}
+              </p>
+              <p className="text-sm text-amber-800 mt-1">
+                As marcadas abaixo podem não ser reconhecidas na entrada do evento.
+                Toque na foto para vê-la inteira e conferir. Para trocar, peça à pessoa
+                uma nova captura ou fale com a organização.
+              </p>
+            </div>
+          )}
+
           {count === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <p className="font-medium">Nenhum credenciado cadastrado ainda.</p>
@@ -276,23 +312,22 @@ export default async function StandPanelPage({
             <ul className="divide-y divide-gray-100">
               {withPhotos.map((p) => (
                 <li key={p.id} className="py-3 flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
-                    {p.photo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={p.photo}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xl">
-                        &#128100;
-                      </div>
-                    )}
-                  </div>
+                  <FotoCredenciado src={p.photo} nome={p.name} risco={p.risco} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 truncate">{p.name}</p>
                     <p className="text-sm text-gray-500">{maskDocument(p.cpf)}</p>
+                    {/* O motivo em português de gente, não o rótulo técnico: quem
+                        lê isto vai pedir a foto nova à pessoa, não depurar o gate. */}
+                    {p.risco === 'nao-validada' && (
+                      <p className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                        ⚠ Precisa de foto nova — rosto não confirmado
+                      </p>
+                    )}
+                    {p.risco === 'medida-baixa' && (
+                      <p className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                        ⚠ Foto fraca — rosto ficou pequeno
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-xs text-gray-400 whitespace-nowrap">
