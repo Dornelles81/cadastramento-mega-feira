@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback, memo, type RefObject } from 'react'
-import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, isDetectorExhausted, resetDetectorRecovery, type FaceReason } from '../lib/face/detector'
+import { detectFace as mpDetectFace, decideFromReads, nextGateState, GATE_ENTER_PX, GATE_BIG_EXIT_PX, INTEROCULAR_MAX, isDetectorExhausted, resetDetectorRecovery, type FaceReason } from '../lib/face/detector'
 import { computePose, type Pose } from '../lib/face/pose'
 import { decideCapture, DEFAULT_FRAMING_THRESHOLDS, type CaptureReason } from '../lib/face/gate'
 import { compressCanvasToLimit, FACE_TOO_LARGE_MESSAGE } from '../lib/face/size-limit'
@@ -164,6 +164,17 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
   const [captureCountdown, setCaptureCountdown] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
+  /**
+   * [UP-conf] Foto de UPLOAD aguardando o "usar esta" / "tirar outra".
+   *
+   * Só o upload passa por aqui. No vídeo ao vivo a pessoa já viu o próprio
+   * rosto no oval, com retorno a cada frame e o botão travado até o gate abrir
+   * — pedir confirmação depois disso seria um clique a mais sem informação
+   * nova. No upload ela não viu nada: a foto foi tirada em outro aplicativo.
+   */
+  const [pendenteConfirmacao, setPendenteConfirmacao] = useState<
+    { image: string; faceData: any; interocular: number } | null
+  >(null)
   const [gateState, setGateState] = useState<FaceReason>('noFace')
   const streamRef = useRef<MediaStream | null>(null)
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval>>()
@@ -592,7 +603,12 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           if (m.faceCount > 0 && m.keypoints) poseKps = m.keypoints
           if (m.faceCount > 0 && m.bbox) upBbox = m.bbox
         }
-        const v = decideFromReads(reads)
+        // [UP-65] MESMO limiar do vídeo (GATE_ENTER_PX = 65), não o piso de 60.
+        // O upload é o caminho com MENOS informação — nenhum oval, nenhum retorno
+        // durante o enquadramento — e era o MAIS permissivo dos dois. Isso está
+        // invertido: as duas únicas fotos da base na faixa 60–64 só podiam ter
+        // vindo daqui, porque no vídeo o botão nem habilita abaixo de 65.
+        const v = decideFromReads(reads, GATE_ENTER_PX)
         const ip = v.interocularPx
 
         // [Fase B] Debug de pose no UPLOAD (mesmo flag ?debugPose=1): calcula e EXIBE
@@ -674,12 +690,21 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           facePose: computePose(poseKps),
           faceFrameW: width,
           faceFrameH: height,
+          // [ORIGEM] De qual dos três caminhos veio esta foto. Sem isto, "de onde
+          // vêm as fotos ruins?" não tem resposta — e são caminhos com garantias
+          // MUITO diferentes: 'live' passa por gate contínuo, 'upload' só é
+          // validado depois do envio, 'anyway' não é validado.
+          faceCaptureMode: 'upload' as const,
           resolution: `${width}x${height}`,
           uploadedFile: true,
           timestamp: new Date().toISOString()
         }
+        // [UP-conf] NÃO avança sozinho: mostra a foto com o veredito e deixa a
+        // pessoa decidir. Ela está com o celular na mão — refazer agora custa
+        // dez segundos. Descobrir depois custa um e-mail ao gestor do stand e
+        // uma conversa, e é assim que se acumula fila de recaptura.
         setCapturedImage(processedImage)
-        setTimeout(() => { onCapture(processedImage, faceData) }, 500)
+        setPendenteConfirmacao({ image: processedImage, faceData, interocular: ip })
       }
       img.src = imageData
     }
@@ -777,6 +802,8 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       facePose: computePose(poseKps),
       faceFrameW: frame.width,
       faceFrameH: frame.height,
+      // [ORIGEM] Caminho com gate contínuo: o botão só habilitou com o gate ok.
+      faceCaptureMode: 'live' as const,
       resolution: `${frame.width}x${frame.height}`,
       timestamp: new Date().toISOString()
     }
@@ -788,6 +815,7 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
     setIsCapturing(false)
     setError(null)
     setPoseOnly(false)
+    setPendenteConfirmacao(null) // some com os botões de confirmação junto
     startCamera()
   }
 
@@ -830,6 +858,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
       facePose: null,
       faceFrameW: frame.width,   // o frame existe; só a detecção que não
       faceFrameH: frame.height,
+      // [ORIGEM] Caminho SEM validação nenhuma. É o que produziu os 24 casos de
+      // "rosto não confirmado" — 7% da base caindo no fallback do detector
+      // morto. Marcar aqui é o que permite medir se isso se concentra num
+      // navegador ou num webview específico.
+      faceCaptureMode: 'anyway' as const,
       resolution: `${frame.width}x${frame.height}`,
       timestamp: new Date().toISOString()
     }
@@ -931,15 +964,62 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
                 <div>roll: {poseDebug.roll.toFixed(1)}°</div>
               </div>
             )}
-            <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-              <div className="bg-white rounded-lg p-4 text-center">
-                <div className="text-4xl mb-2">{poseOnly ? '📐' : '✅'}</div>
-                <p className="text-lg font-semibold text-gray-800">{poseOnly ? 'Pose medida (nada salvo)' : 'Foto capturada!'}</p>
+            {/* [UP-conf] Aguardando decisão: o overlay de "capturada!" cobriria a
+                foto justamente quando ela precisa ser olhada. */}
+            {!pendenteConfirmacao && (
+              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+                <div className="bg-white rounded-lg p-4 text-center">
+                  <div className="text-4xl mb-2">{poseOnly ? '📐' : '✅'}</div>
+                  <p className="text-lg font-semibold text-gray-800">{poseOnly ? 'Pose medida (nada salvo)' : 'Foto capturada!'}</p>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
+
+      {/* [UP-conf] Confirmação da foto ENVIADA: a pessoa vê o que mandou, com o
+          resultado da checagem, e decide. Em fluxo (não sobrepondo a imagem),
+          porque a decisão depende de olhar a foto. */}
+      {pendenteConfirmacao && (
+        <div className="space-y-3">
+          <div className="bg-verde-agua/10 border border-verde-agua/30 p-3 rounded-xl">
+            <p className="text-sm text-white/90 font-semibold">
+              ✅ Rosto reconhecido nesta foto
+            </p>
+            <p className="text-xs text-white/70 mt-1">
+              Confira acima: o rosto precisa estar <strong>inteiro</strong>, de frente e bem
+              iluminado. Esta é a foto que vai abrir a entrada do evento.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const p = pendenteConfirmacao
+              setPendenteConfirmacao(null)
+              onCapture(p.image, p.faceData)
+            }}
+            className="w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-md active:scale-95"
+          >
+            ✅ Usar esta foto
+          </button>
+          <button
+            onClick={() => {
+              // Volta ao estado anterior ao envio e reabre o seletor: sem isto a
+              // pessoa teria de achar de novo o botão de enviar foto.
+              setPendenteConfirmacao(null)
+              setCapturedImage(null)
+              setError(null)
+              if (fileInputRef.current) {
+                fileInputRef.current.value = ''
+                fileInputRef.current.click()
+              }
+            }}
+            className="w-full py-3 bg-white/10 text-white rounded-xl font-medium text-base hover:bg-white/20 transition-all duration-200"
+          >
+            🔄 Tirar outra
+          </button>
+        </div>
+      )}
 
       {/* [assim-mesmo/layout] MediaPipe morto + vídeo VIVO: controles EM FLUXO abaixo do
           vídeo (rolam se não couberem, NUNCA sobrepõem). Vídeo fica limpo no topo com
@@ -1024,7 +1104,11 @@ export default function EnhancedFaceCapture({ onCapture, onBack }: EnhancedFaceC
           viewport (o conteúdo acima tem pb-44 p/ não ficar escondido atrás).
           [assim-mesmo] Suprimida SÓ no fallbackLive (controles no fluxo acima, sem sobrepor
           o vídeo). Normal/oval-verde e câmera-preta (!isStreaming) mantêm a barra IDÊNTICA. */}
-      {!fallbackLive && (
+      {/* `!pendenteConfirmacao`: durante a confirmação do upload, os botões em
+          fluxo (usar esta / tirar outra) são a única ação — a barra fixa
+          apareceria por cima deles com "Nova foto/Confirmar" e daria DUAS
+          respostas diferentes para a mesma pergunta. */}
+      {!fallbackLive && !pendenteConfirmacao && (
       <div className="fixed inset-x-0 bottom-0 z-40 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-azul-marinho via-azul-marinho/95 to-transparent">
         <div className="max-w-md mx-auto space-y-3">
         {!capturedImage ? (

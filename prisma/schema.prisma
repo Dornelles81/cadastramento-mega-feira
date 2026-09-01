@@ -254,6 +254,15 @@ model Participant {
   facePose   Json? // { yaw, pitch, roll } (yaw/pitch = razões; roll = graus)
   faceFrameW Int?  // largura do frame medido (≤800)
   faceFrameH Int?  // altura do frame medido
+  // De QUAL caminho de captura veio a foto. Os três têm garantias muito
+  // diferentes, e sem este campo "de onde vêm as fotos ruins?" não tem resposta:
+  //   'live'   — câmera ao vivo, oval-guia e gate contínuo; o botão só habilita
+  //              com o gate ok. É o caminho com garantia.
+  //   'upload' — foto tirada em OUTRO aplicativo e enviada. Nenhum guia durante
+  //              o enquadramento; a validação só acontece depois do envio.
+  //   'anyway' — "tirar foto mesmo assim" (detector morto). SEM validação.
+  // null = cadastro anterior a este campo.
+  faceCaptureMode String?
   // F5: hash (sha256) do CONTEÚDO da face em claro — muda quando a foto é
   // re-capturada. A reconciliação compara com ParticipantTerminalSync.faceVersion
   // p/ detectar "face trocada" e re-empurrar. null = legado/sem face.

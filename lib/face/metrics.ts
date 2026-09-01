@@ -14,11 +14,16 @@
 
 import { Prisma } from '@prisma/client'
 
+/** Caminhos de captura. Ver `Participant.faceCaptureMode` no schema. */
+export const CAPTURE_MODES = ['live', 'upload', 'anyway'] as const
+export type CaptureMode = (typeof CAPTURE_MODES)[number]
+
 export interface FaceMetrics {
   faceBbox: { x: number; y: number; w: number; h: number } | null
   facePose: { yaw: number; pitch: number; roll: number } | null
   faceFrameW: number | null
   faceFrameH: number | null
+  faceCaptureMode: CaptureMode | null
 }
 
 const num = (v: unknown): number | null =>
@@ -31,7 +36,9 @@ const inteiroPositivo = (v: unknown): number | null => {
 
 /** Extrai bbox/pose/frame do `faceData` do cliente. Tudo opcional. */
 export function extractFaceMetrics(faceData: any): FaceMetrics {
-  const vazio: FaceMetrics = { faceBbox: null, facePose: null, faceFrameW: null, faceFrameH: null }
+  const vazio: FaceMetrics = {
+    faceBbox: null, facePose: null, faceFrameW: null, faceFrameH: null, faceCaptureMode: null
+  }
   if (!faceData || typeof faceData !== 'object') return vazio
 
   // bbox: só grava se os QUATRO números vierem. Meio bbox não serve para
@@ -55,11 +62,18 @@ export function extractFaceMetrics(faceData: any): FaceMetrics {
     }
   }
 
+  // Lista fechada: string arbitrária do cliente viraria categoria nova e
+  // silenciosa numa consulta que espera três valores.
+  const modo = CAPTURE_MODES.includes(faceData.faceCaptureMode)
+    ? (faceData.faceCaptureMode as CaptureMode)
+    : null
+
   return {
     faceBbox,
     facePose,
     faceFrameW: inteiroPositivo(faceData.faceFrameW),
-    faceFrameH: inteiroPositivo(faceData.faceFrameH)
+    faceFrameH: inteiroPositivo(faceData.faceFrameH),
+    faceCaptureMode: modo
   }
 }
 
@@ -80,6 +94,8 @@ export function faceMetricsForPrisma(faceData: any) {
     faceBbox: m.faceBbox ?? Prisma.DbNull,
     facePose: m.facePose ?? Prisma.DbNull,
     faceFrameW: m.faceFrameW,
-    faceFrameH: m.faceFrameH
+    faceFrameH: m.faceFrameH,
+    // String comum: `null` literal vale aqui (só Json? é que não aceita).
+    faceCaptureMode: m.faceCaptureMode
   }
 }

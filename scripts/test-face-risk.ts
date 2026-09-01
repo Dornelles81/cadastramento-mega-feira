@@ -64,8 +64,11 @@ check('pose preservada', JSON.stringify(completo.facePose) === JSON.stringify({ 
 check('frame lido', completo.faceFrameW === 600 && completo.faceFrameH === 800)
 
 // Entrada NAO confiavel: vem do navegador.
+// Compara CAMPO A CAMPO em vez de JSON.stringify do objeto inteiro: assim
+// acrescentar uma métrica nova não quebra este check por motivo errado.
+const semNada = extractFaceMetrics(undefined)
 check('faceData ausente -> tudo null',
-  JSON.stringify(extractFaceMetrics(undefined)) === JSON.stringify({ faceBbox: null, facePose: null, faceFrameW: null, faceFrameH: null }))
+  Object.values(semNada).every((v) => v === null), semNada)
 check('bbox pela METADE -> null (meio bbox nao avalia enquadramento)',
   extractFaceMetrics({ faceBbox: { x: 1, y: 2 } }).faceBbox === null)
 check('pose com um eixo faltando -> null',
@@ -81,6 +84,18 @@ check('lixo hostil nao quebra', extractFaceMetrics({ faceBbox: 'DROP TABLE', fac
 const anyway = extractFaceMetrics({ faceBbox: null, facePose: null, faceFrameW: 600, faceFrameH: 800 })
 check('captureAnyway: frame sim, bbox/pose nao',
   anyway.faceBbox === null && anyway.facePose === null && anyway.faceFrameW === 600)
+
+console.log('\n=== faceCaptureMode (origem da captura) ===')
+for (const m of ['live', 'upload', 'anyway']) {
+  check(`'${m}' aceito`, extractFaceMetrics({ faceCaptureMode: m }).faceCaptureMode === m)
+}
+// Lista FECHADA: valor fora dela viraria categoria nova e silenciosa numa
+// consulta que espera tres.
+check('valor fora da lista -> null',
+  extractFaceMetrics({ faceCaptureMode: 'sei-la' }).faceCaptureMode === null)
+check('numero -> null', extractFaceMetrics({ faceCaptureMode: 3 as any }).faceCaptureMode === null)
+check('ausente -> null (cadastro anterior ao campo)',
+  extractFaceMetrics({ faceFrameW: 600 }).faceCaptureMode === null)
 
 console.log(`\n=== RESULTADO: ${falhas === 0 ? 'TODOS PASSARAM ✓' : falhas + ' FALHA(S) ✗'} ===`)
 process.exit(falhas === 0 ? 0 : 1)
