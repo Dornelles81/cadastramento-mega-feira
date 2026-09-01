@@ -5,6 +5,7 @@ import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
 import { faceMetricsForPrisma } from '../../lib/face/metrics'
+import { respostaCpfDuplicado } from '../../lib/participants/cpf-duplicado'
 import { rateLimitOrReject, getClientIp } from '../../lib/rate-limit'
 import { validateStandToken } from '../../lib/stand-access/validate'
 import { occupiedSlotsWhere, formatRelease } from '../../lib/stand-access/occupancy'
@@ -120,8 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
     if (existing) {
       return res.status(409).json({
-        error: 'CPF already registered',
-        message: 'Este CPF já está cadastrado neste evento'
+        ...respostaCpfDuplicado()
       })
     }
 
@@ -318,8 +318,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     if (error.code === 'P2002') {
       return res.status(409).json({
-        error: 'CPF already registered',
-        message: 'Este CPF já está cadastrado neste evento'
+        ...respostaCpfDuplicado()
       })
     }
     // Contenção de conexão/transação: transitório. Devolve 503 (não 500) para o

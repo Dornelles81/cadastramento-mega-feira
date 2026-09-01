@@ -11,6 +11,7 @@ import {
 import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
 import FotoCredenciado from '../../../components/stand/FotoCredenciado'
+import ReativarCredenciadoButton from '../../../components/stand/ReativarCredenciadoButton'
 import { riscoDeFace } from '../../../lib/participants/face-risk'
 import { deriveFaceStatus } from '../../../lib/face/status'
 import {
@@ -96,7 +97,7 @@ export default async function StandPanelPage({
     : null
   const dayResetHour = eventConfig?.dayResetHour ?? 4
 
-  const [participants, lockedSlots, standQuota] = await Promise.all([
+  const [participants, lockedSlots, removidos, standQuota] = await Promise.all([
     prisma.participant.findMany({
       where: {
         standId: access.stand.id,
@@ -128,6 +129,18 @@ export default async function StandPanelPage({
       },
       select: { slotLockedUntil: true },
       orderBy: { slotLockedUntil: 'asc' }
+    }),
+    // REMOVIDOS deste stand. Até 2026-09-01 o painel os escondia por completo —
+    // e era essa invisibilidade que transformava o CPF bloqueado em mistério:
+    // a pessoa tomava "CPF já cadastrado" no balcão e o gestor não via ninguém
+    // com aquele nome na lista.
+    prisma.participant.findMany({
+      where: { standId: access.stand.id, status: 'removed', isDeleted: false },
+      select: {
+        id: true, name: true, cpf: true, removedAt: true,
+        slotLockedUntil: true, faceData: true, faceImageUrl: true
+      },
+      orderBy: { removedAt: 'desc' }
     }),
     prisma.stand.findUnique({
       where: { id: access.stand.id },
@@ -350,6 +363,63 @@ export default async function StandPanelPage({
             </ul>
           )}
         </section>
+
+        {/* ── Removidos ────────────────────────────────────────────────────
+            Aparecem porque a linha removida é o que BLOQUEIA o CPF de voltar:
+            escondê-la fazia a pessoa tomar "CPF já possui cadastro" no balcão
+            sem que ninguém conseguisse ver a causa. */}
+        {removidos.length > 0 && (
+          <section className="bg-white rounded-2xl shadow p-6 mt-6">
+            <h2 className="text-lg font-bold text-gray-900">
+              Removidos ({removidos.length})
+            </h2>
+            <p className="text-sm text-gray-500 mt-1 mb-4">
+              Estas pessoas saíram da equipe. O CPF delas continua reservado
+              neste evento — se alguma precisar voltar, use “Trazer de volta”.
+            </p>
+            <ul className="divide-y divide-gray-100">
+              {removidos.map((p) => {
+                const travado = !!p.slotLockedUntil && p.slotLockedUntil > now
+                return (
+                  <li key={p.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-700 truncate">{p.name}</p>
+                      <p className="text-sm text-gray-400">{maskDocument(p.cpf)}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Saiu em{' '}
+                        {p.removedAt
+                          ? new Intl.DateTimeFormat('pt-BR', {
+                              dateStyle: 'short',
+                              timeZone: 'America/Sao_Paulo'
+                            }).format(p.removedAt)
+                          : '—'}
+                        {' · '}
+                        {p.faceData || p.faceImageUrl
+                          ? 'foto mantida'
+                          : 'precisará de foto nova'}
+                      </p>
+                    </div>
+                    {travado ? (
+                      // A regra anti-rotatividade vale também aqui: quem usou a
+                      // credencial hoje não volta hoje. Dizer POR QUE evita o
+                      // "o botão não funciona".
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-right max-w-[14rem]">
+                        Usou a credencial hoje. Liberado a partir de{' '}
+                        {formatRelease(p.slotLockedUntil!)}.
+                      </p>
+                    ) : (
+                      <ReativarCredenciadoButton
+                        token={token}
+                        participantId={p.id}
+                        participantName={p.name}
+                      />
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
 
         <p className="text-xs text-gray-400 text-center pb-6">
           Este painel é exclusivo do seu stand. Em caso de dúvidas, contate a

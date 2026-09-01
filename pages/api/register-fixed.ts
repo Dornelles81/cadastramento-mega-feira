@@ -5,6 +5,7 @@ import { encryptString } from '../../lib/crypto'
 import { faceVersionOf } from '../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
 import { faceMetricsForPrisma } from '../../lib/face/metrics'
+import { respostaCpfDuplicado } from '../../lib/participants/cpf-duplicado'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
@@ -194,8 +195,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (existingUser) {
       console.log('❌ CPF already exists in this event')
       return res.status(409).json({
-        error: 'CPF already registered',
-        message: 'Este CPF já está cadastrado neste evento'
+        ...respostaCpfDuplicado()
       })
     }
 
@@ -388,8 +388,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Handle Prisma errors
     if (error.code === 'P2002') {
       return res.status(409).json({
-        error: 'Duplicate entry',
-        message: 'Este CPF já está cadastrado'
+        ...respostaCpfDuplicado()
       })
     }
     

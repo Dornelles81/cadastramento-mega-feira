@@ -617,6 +617,47 @@ export default function EventAdminPage() {
     }
   }
 
+  /**
+   * Escape da organização: devolve à equipe alguém que o gestor removeu.
+   * Existe porque durante a feira o responsável do stand estará inacessível em
+   * algum momento, e a pessoa não pode ficar presa no balcão.
+   *
+   * Não burla regra: o mesmo núcleo do painel do gestor decide, então
+   * `slotLockedUntil` e lotação continuam valendo. O que muda é só quem aciona.
+   */
+  const handleReativar = async (participant: Participant) => {
+    const ok = window.confirm(
+      `Trazer ${participant.name} de volta para a equipe?\n\n` +
+      'Isso ocupa uma vaga do stand.\n\n' +
+      'A foto foi apagada na exclusão — a pessoa vai precisar tirar uma foto nova ' +
+      'antes de conseguir entrar no evento.'
+    )
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/admin/participants/${participant.id}/reactivate`, {
+        method: 'POST'
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.message || data.error || 'Não foi possível reativar.')
+        return
+      }
+      // O link de edição vem quando falta foto: é o caminho para a pessoa
+      // resolver na hora, sem uma segunda ida ao balcão.
+      if (data.linkEdicao) {
+        try { await navigator.clipboard.writeText(data.linkEdicao) } catch {}
+        alert(
+          `${data.message}\n\nO link para ela tirar a foto foi copiado:\n${data.linkEdicao}`
+        )
+      } else {
+        alert(data.message ?? 'Reativado.')
+      }
+      loadParticipants()
+    } catch (e: any) {
+      alert(`Erro ao reativar: ${e.message}`)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este registro? Esta ação será registrada nos logs.')) {
       try {
@@ -1482,7 +1523,20 @@ export default function EventAdminPage() {
                     </td>
                     <td className="px-2 md:px-4 py-3">
                       <div className="flex items-center justify-start gap-1 md:gap-2 flex-wrap">
-                        {participant.approvalStatus !== 'approved' && (
+                        {/* Removido: a única ação que faz sentido é trazer de
+                            volta. Aprovar/rejeitar quem saiu não significa nada,
+                            e é o CPF dele que bloqueia o recadastro. */}
+                        {participant.status === 'removed' && (
+                          <button
+                            onClick={() => handleReativar(participant)}
+                            className="px-2 md:px-3 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
+                            title="Trazer de volta para a equipe (ocupa uma vaga; a pessoa precisará de foto nova)"
+                          >
+                            <span className="sm:hidden">↩</span>
+                            <span className="hidden sm:inline">↩ Trazer de volta</span>
+                          </button>
+                        )}
+                        {participant.status !== 'removed' && participant.approvalStatus !== 'approved' && (
                           <button
                             onClick={() => handleApprove(participant)}
                             className="px-2 md:px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
@@ -1492,7 +1546,7 @@ export default function EventAdminPage() {
                             <span className="hidden sm:inline">✅ Aprovar</span>
                           </button>
                         )}
-                        {participant.approvalStatus !== 'rejected' && (
+                        {participant.status !== 'removed' && participant.approvalStatus !== 'rejected' && (
                           <button
                             onClick={() => handleReject(participant)}
                             className="px-2 md:px-3 py-1 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
