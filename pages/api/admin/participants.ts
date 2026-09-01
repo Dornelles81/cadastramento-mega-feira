@@ -2,11 +2,12 @@ import { prisma } from '../../../lib/prisma'
 import { enqueueDeviceRemovalBeforeDelete } from '../../../lib/agent/device-removal'
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
+import { aplicarAprovacao, atorDaSessao } from '../../../lib/participants/approval'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 import { encryptDocuments, decryptDocuments } from '../../../lib/documents'
 
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse, session: any) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -136,7 +137,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         });
       }
 
-      // Update participant in database
+      // Campos comuns. `approvalStatus` NÃO entra aqui: mudar aprovação é a
+      // transição que dá acesso físico (identidade + biometria em todos os
+      // terminais), e fazê-la por dentro de um update genérico foi o que
+      // produzia aprovação sem fan-out e com ator 'admin' fixo. Vai abaixo,
+      // pelo núcleo único.
       const updatedParticipant = await prisma.participant.update({
         where: { id },
         data: {
@@ -145,14 +150,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           email: updateData.email,
           phone: updateData.phone,
           eventCode: updateData.eventCode,
-          approvalStatus: updateData.approvalStatus,
-          approvedBy: updateData.approvalStatus === 'approved' ? 'admin' : undefined,
-          approvedAt: updateData.approvalStatus === 'approved' ? new Date() : undefined,
-          rejectionReason: updateData.rejectionReason,
           customData: updateData.customData,
           documents: encryptDocuments(updateData.documents) // re-cifra (cliente envia em claro)
         }
       });
+
+      // Mudança de aprovação vinda neste PUT: delega, para ganhar fan-out,
+      // ator real e os dois logs — em vez de gravar o campo na mão.
+      if (updateData.approvalStatus === 'approved' || updateData.approvalStatus === 'rejected') {
+        await aplicarAprovacao({
+          participantId: id,
+          acao: updateData.approvalStatus === 'approved' ? 'approve' : 'reject',
+          ator: atorDaSessao(session),
+          motivo: updateData.rejectionReason ?? null,
+          ip: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
+        });
+      }
 
       // Create audit log
       await prisma.auditLog.create({
@@ -160,7 +173,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           action: 'UPDATE',
           entityType: 'participant',
           entityId: id,
-          adminUser: 'admin',
+          adminUser: atorDaSessao(session).email,
           adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
           newData: updateData,
           description: `Participante ${updatedParticipant.name} atualizado`
@@ -235,7 +248,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           action: 'DELETE',
           entityType: 'participant',
           entityId: id,
-          adminUser: 'admin',
+          adminUser: atorDaSessao(session).email,
           adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
           previousData: auditSnapshot,
           description: `Participante ${participantToDelete.name} excluído`
@@ -261,36 +274,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         });
       }
 
-      const updateData: any = {};
-      
-      if (action === 'approve') {
-        updateData.approvalStatus = 'approved';
-        updateData.approvedAt = new Date();
-        updateData.approvedBy = 'admin';
-        updateData.rejectionReason = null;
-      } else if (action === 'reject') {
-        updateData.approvalStatus = 'rejected';
-        updateData.rejectionReason = reason || 'Rejeitado pelo administrador';
-        updateData.approvedAt = null;
-        updateData.approvedBy = null;
+      if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({ success: false, message: 'Ação inválida' });
       }
 
-      const updatedParticipant = await prisma.participant.update({
-        where: { id: participantId },
-        data: updateData
+      // ATENÇÃO — este caminho gravava `approvalStatus` DIRETO, sem disparar o
+      // fan-out. Quem fosse aprovado por aqui ficaria aprovado e SEM
+      // `employeeNo`, sem linha de sync, invisível nos terminais — e a
+      // reconciliação não socorre, porque filtra `employeeNo NOT NULL`. Não
+      // houve vítima (verificado em 2026-09-01: 135 aprovados, zero sem
+      // identidade), porque a UI usa `participant-approval`. Mas o endpoint é
+      // autenticado e estava a um POST de distância.
+      //
+      // Passar pelo núcleo único conserta os dois defeitos de uma vez: o fan-out
+      // acontece, e o ator vai registrado no lugar do 'admin' fixo.
+      const resultado = await aplicarAprovacao({
+        participantId,
+        acao: action as 'approve' | 'reject',
+        ator: atorDaSessao(session),
+        motivo: action === 'reject' ? (reason || 'Rejeitado pelo administrador') : null,
+        ip: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
       });
+      if (!resultado) {
+        return res.status(404).json({ success: false, message: 'Participante não encontrado' });
+      }
 
-      // Create audit log
-      await prisma.auditLog.create({
-        data: {
-          action: 'UPDATE',
-          entityType: 'participant',
-          entityId: participantId,
-          adminUser: 'admin',
-          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || '',
-          newData: updateData,
-          description: `Participante ${updatedParticipant.name} ${action === 'approve' ? 'aprovado' : 'rejeitado'}`
-        }
+      const updatedParticipant = await prisma.participant.findUnique({
+        where: { id: participantId }
       });
 
       res.status(200).json({

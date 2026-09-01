@@ -2,10 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client';
 import { prisma } from '../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
-import { onBecameEligible, enqueueRemoval } from '../../../lib/agent/sync-enqueue'
+import { aplicarAprovacao, atorDaSessao } from '../../../lib/participants/approval'
 
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse, session: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -30,48 +30,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(404).json({ error: 'Participant not found' });
     }
 
-    // Update approval status
-    const updateData: any = {
-      approvalStatus: action === 'approve' ? 'approved' : 'rejected',
-      approvedBy: 'admin',
-      approvedAt: action === 'approve' ? new Date() : null,
-      rejectionReason: action === 'reject' ? rejectionReason : null
-    };
-
-    // Sincronização biométrica com os terminais é feita pelo agente local
-    // (ParticipantTerminalSync), não mais inline aqui — ver device-integration-plan.
-
-    // Update participant
-    const updatedParticipant = await prisma.participant.update({
-      where: { id: participantId },
-      data: updateData
-    });
-
-    // Transição de elegibilidade → fan-out do sync. Aprovar: atribui identidade
-    // (employeeNo + cardNumber) e enfileira push em cada terminal ativo. Rejeitar:
-    // enfileira remoção (caso já estivesse sincronizado). Idempotente e não-fatal.
-    try {
-      if (action === 'approve') {
-        await onBecameEligible(participant.eventId, participantId)
-      } else {
-        await enqueueRemoval(participantId)
-      }
-    } catch (syncErr) {
-      console.error(`fan-out/remoção do sync falhou na ${action}:`, syncErr)
+    // Estado + fan-out + logs no núcleo único (lib/participants/approval), com o
+    // ator vindo da SESSÃO. Antes: `approvedBy: 'admin'` e `adminUser: 'admin'`
+    // fixos — e a sessão nem era declarada no handler, embora `withApiAuth` a
+    // passe como terceiro argumento desde sempre.
+    const resultado = await aplicarAprovacao({
+      participantId,
+      acao: action,
+      ator: atorDaSessao(session),
+      motivo: action === 'reject' ? (rejectionReason ?? null) : null,
+      ip: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || null
+    })
+    if (!resultado) {
+      return res.status(404).json({ error: 'Participant not found' })
     }
-
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        action: 'UPDATE',
-        entityType: 'participant',
-        entityId: participantId,
-        adminUser: 'admin',
-        adminIp: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress,
-        previousData: { approvalStatus: participant.approvalStatus },
-        newData: { approvalStatus: updateData.approvalStatus },
-        description: `Participant ${action}ed${action === 'reject' ? ` with reason: ${rejectionReason}` : ''}`
-      }
+    const updatedParticipant = await prisma.participant.findUnique({
+      where: { id: participantId }
     });
 
     // Send WhatsApp notification on approval

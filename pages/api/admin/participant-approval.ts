@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client'
 import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
-import { onBecameEligible, enqueueRemoval } from '../../../lib/agent/sync-enqueue'
+import { aplicarAprovacao, atorDaSessao } from '../../../lib/participants/approval'
 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -36,70 +36,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Participant not found' })
     }
 
-    const previousStatus = participant.approvalStatus || 'pending'
-    const newStatus = action === 'approve' ? 'approved' : 'rejected'
-    const now = new Date()
-
-    // Update participant
-    const updatedParticipant = await prisma.participant.update({
-      where: { id: participantId },
-      data: {
-        approvalStatus: newStatus,
-        approvedAt: action === 'approve' ? now : null,
-        approvedBy: action === 'approve' ? 'admin' : null,
-        rejectionReason: action === 'reject' ? reason : null
-      }
+    // Estado + fan-out + logs num lugar só (lib/participants/approval). O ator
+    // sai da SESSÃO — antes esta linha gravava a string 'admin' fixa, com a
+    // sessão já em mãos logo acima.
+    const resultado = await aplicarAprovacao({
+      participantId,
+      acao: action,
+      ator: atorDaSessao(session),
+      motivo: reason ?? null,
+      notas: notes ?? null,
+      ip: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
+    })
+    if (!resultado) {
+      return res.status(404).json({ error: 'Participant not found' })
+    }
+    const previousStatus = resultado.statusAnterior
+    const newStatus = resultado.statusNovo
+    const updatedParticipant = await prisma.participant.findUnique({
+      where: { id: participantId }
     })
 
-    // Transição de elegibilidade → fan-out do sync (este é o endpoint que a UI do
-    // admin usa de fato). Aprovar: identidade + enqueue por terminal ativo.
-    // Rejeitar: enfileira remoção. Idempotente e não-fatal.
-    try {
-      if (action === 'approve') {
-        await onBecameEligible(participant.eventId, participantId)
-      } else {
-        await enqueueRemoval(participantId)
-      }
-    } catch (syncErr) {
-      console.error(`fan-out/remoção do sync falhou na ${action} (participant-approval):`, syncErr)
-    }
-
-    // Create approval log (non-blocking — table may not exist in all environments)
-    try {
-      await prisma.approvalLog.create({
-        data: {
-          participantId,
-          action: newStatus,
-          previousStatus,
-          newStatus,
-          reason,
-          notes,
-          adminUser: 'admin',
-          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
-        }
-      })
-    } catch (logErr: any) {
-      console.warn('approvalLog.create skipped:', logErr?.message)
-    }
-
-    // Create audit log (non-blocking)
-    try {
-      await prisma.auditLog.create({
-        data: {
-          action: action.toUpperCase(),
-          entityType: 'participant',
-          entityId: participantId,
-          adminUser: 'admin',
-          adminIp: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null,
-          previousData: { approvalStatus: previousStatus },
-          newData: { approvalStatus: newStatus },
-          description: `Participant ${participant.name} (${participant.cpf}) was ${newStatus}`,
-          metadata: { reason, notes }
-        }
-      })
-    } catch (auditErr: any) {
-      console.warn('auditLog.create skipped:', auditErr?.message)
-    }
+    // approvalLog e auditLog são gravados por `aplicarAprovacao`, com o ator
+    // real — não repetir aqui, senão cada aprovação produz dois registros e a
+    // correção do ator valeria só para metade deles.
 
     // Send WhatsApp notification on approval
     let whatsappSent = false
