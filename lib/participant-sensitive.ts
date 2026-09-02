@@ -20,6 +20,18 @@ import path from 'path'
 export const SENSITIVE_PARTICIPANT_CLEAR = {
   faceData: null,
   faceImageUrl: null,
+  // faceVersion sai JUNTO com a face. Ele é o hash do conteúdo da foto, e
+  // sozinho não é dado sensível — o motivo de limpá-lo é outro: sobrevivendo à
+  // remoção, o campo passa a AFIRMAR "tenho a foto versão X" sobre um registro
+  // que não tem foto nenhuma, e a reconciliação decide re-empurrar face
+  // exatamente comparando este campo (`faceNeedsUpdate`, lib/agent/reconcile.ts).
+  // O caminho real: quem tinha a face V1 no device, tirou uma V2, foi removido
+  // (face apagada, faceVersion=V2 preservado) e depois REATIVADO passa a ter
+  // participant.faceVersion=V2 contra row.faceVersion=V1 — "face trocada" para
+  // alguém sem face. O `/work` não chega a servir isso (a elegibilidade barra
+  // em `getFaceImageDataUrl`), mas a linha fica `pending` para sempre: conta
+  // como pendência na tela de saúde e, passadas 24h, acende "fila travada".
+  faceVersion: null,
   faceInterocularPx: null,
   deviceInfo: null,
   captureLocation: null,
