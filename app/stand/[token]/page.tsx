@@ -12,6 +12,7 @@ import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
 import FotoCredenciado from '../../../components/stand/FotoCredenciado'
 import ReativarCredenciadoButton from '../../../components/stand/ReativarCredenciadoButton'
+import AprovarCredenciadoButton from '../../../components/stand/AprovarCredenciadoButton'
 import { riscoDeFace } from '../../../lib/participants/face-risk'
 import { deriveFaceStatus } from '../../../lib/face/status'
 import {
@@ -91,7 +92,8 @@ export default async function StandPanelPage({
           dayResetHour: true,
           startDate: true,
           substitutionQuotaEnabled: true,
-          substitutionsPerSlot: true
+          substitutionsPerSlot: true,
+          eventConfigs: { select: { standApprovalEnabled: true } }
         }
       })
     : null
@@ -109,6 +111,7 @@ export default async function StandPanelPage({
         name: true,
         cpf: true,
         createdAt: true,
+        approvalStatus: true,
         faceImageUrl: true,
         faceData: true,
         // Qualidade da foto: sem estes dois o painel mostra a miniatura e não
@@ -171,6 +174,11 @@ export default async function StandPanelPage({
   const quotaUsed = standQuota?.substitutionsUsed ?? 0
   const quotaExhausted = quotaEnabled && quotaUsed >= quotaLimit
 
+  // Aprovação delegada: interruptor POR EVENTO, default desligado. Quem decide
+  // é a organização — a funcionalidade existir não basta para valer em todo
+  // evento, porque aprovar é o que dá acesso físico.
+  const aprovacaoPeloGestor = eventConfig?.eventConfigs?.standApprovalEnabled === true
+
   // Miniatura: decripta a biometria server-side (formato novo) ou usa o
   // data URL legado — nunca expõe o payload criptografado ao client
   const withPhotos = participants.map((p) => ({
@@ -178,6 +186,7 @@ export default async function StandPanelPage({
     name: p.name,
     cpf: p.cpf,
     createdAt: p.createdAt,
+    approvalStatus: (p.approvalStatus ?? 'pending') as 'pending' | 'approved' | 'rejected',
     photo: tryGetFaceImageDataUrl(p, { participantId: p.id, where: 'app/stand/[token]' }),
     // Mesmo critério do painel do admin (lib/participants/face-risk): fonte
     // única, para gestor e organização não verem classificações diferentes da
@@ -273,20 +282,24 @@ export default async function StandPanelPage({
             </p>
           )}
 
-          <div className="mt-4">
-            {isFull ? (
-              <span className="inline-block w-full sm:w-auto text-center px-6 py-3 rounded-xl bg-gray-200 text-gray-500 font-semibold cursor-not-allowed">
-                Cadastrar credenciado
-              </span>
-            ) : (
-              <Link
-                href={`/stand/${token}/cadastro`}
-                style={{ backgroundColor: TEAL, color: NAVY }}
-                className="inline-block w-full sm:w-auto text-center px-6 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity"
-              >
-                Cadastrar credenciado
-              </Link>
-            )}
+          {/* O botão "Cadastrar credenciado" saiu daqui em 2026-09-02.
+              Ele apontava para /stand/[token]/cadastro com o MESMO token de
+              gestão, e era isso que fazia o link de gestão funcionar como link
+              de cadastro: repassá-lo à equipe dava certo, todo mundo se
+              inscrevia — e cada pessoa ficava também com a lista completa do
+              stand (foto e CPF de todos) e com o botão de excluir.
+              Quem cadastra agora é só o link de cadastro, distribuído pela
+              organização. Manter o botão aqui seria um beco sem saída: a página
+              de cadastro recusa token de gestão. */}
+          <div className="mt-4 rounded-xl bg-gray-50 border border-gray-200 p-4">
+            <p className="text-sm text-gray-700">
+              <strong>Para cadastrar sua equipe</strong>, use o <em>link de cadastro</em> do stand,
+              fornecido pela organização. Ele pode ser repassado a todos que precisam de credencial.
+            </p>
+            <p className="text-xs text-gray-500 mt-1.5">
+              Este link, o de gestão, é só seu: acompanha quem já se credenciou e permite excluir.
+              Não o compartilhe com a equipe.
+            </p>
           </div>
         </section>
 
@@ -318,7 +331,8 @@ export default async function StandPanelPage({
             <div className="text-center py-8 text-gray-500">
               <p className="font-medium">Nenhum credenciado cadastrado ainda.</p>
               <p className="text-sm mt-1">
-                Compartilhe este link com sua equipe ou use o botão acima para cadastrar.
+                Compartilhe o <strong>link de cadastro</strong> do stand com sua equipe — não este,
+                que é o seu link de gestão.
               </p>
             </div>
           ) : (
@@ -341,6 +355,19 @@ export default async function StandPanelPage({
                         ⚠ Foto fraca — rosto ficou pequeno
                       </p>
                     )}
+                    {/* Status de aprovação: visível SEMPRE, mesmo com a delegação
+                        desligada. Sem isto o gestor não sabe se a pessoa está
+                        liberada para entrar, e a primeira notícia seria a catraca
+                        fechada no dia. */}
+                    <p className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                      p.approvalStatus === 'approved' ? 'bg-green-100 text-green-800'
+                      : p.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700'
+                      : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {p.approvalStatus === 'approved' ? 'Aprovado'
+                        : p.approvalStatus === 'rejected' ? 'Rejeitado — não entra no evento'
+                        : 'Aguardando aprovação'}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-xs text-gray-400 whitespace-nowrap">
@@ -349,6 +376,14 @@ export default async function StandPanelPage({
                         timeZone: 'America/Sao_Paulo'
                       }).format(p.createdAt)}
                     </p>
+                    {aprovacaoPeloGestor && (
+                      <AprovarCredenciadoButton
+                        token={token}
+                        participantId={p.id}
+                        participantName={p.name}
+                        status={p.approvalStatus}
+                      />
+                    )}
                     <RemoveCredenciadoButton
                       token={token}
                       participantId={p.id}

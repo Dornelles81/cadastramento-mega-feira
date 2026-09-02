@@ -1,0 +1,12 @@
+-- Interruptor POR EVENTO da aprovação delegada ao responsável do stand.
+--
+-- Aprovar é a transição que dá ACESSO FÍSICO: atribui identidade, empurra a
+-- biometria para os terminais e é o que o operador lê no dia. Delegar isso ao
+-- gestor do stand é decisão de quem organiza o evento, não consequência de a
+-- funcionalidade existir — por isso o default é FALSE, e cada evento liga
+-- explicitamente.
+--
+-- Ligado, o painel do gestor ganha aprovar/rejeitar; a decisão passa pelo MESMO
+-- núcleo que a organização usa (lib/participants/approval), gravando
+-- actorType='stand_responsible' e o e-mail do responsável no audit.
+ALTER TABLE "event_configs" ADD COLUMN "standApprovalEnabled" BOOLEAN NOT NULL DEFAULT false;

@@ -818,6 +818,14 @@ model EventConfig {
   requireDocuments Boolean @default(false)
   autoApprove      Boolean @default(false)
 
+  /// O responsável do stand pode APROVAR/REJEITAR a própria equipe pelo painel?
+  /// Default FALSE: aprovar é a transição que dá acesso físico, e delegá-la é
+  /// decisão de quem organiza o evento — não pode valer para todo mundo só
+  /// porque foi construída. Ligado, o painel do gestor mostra os botões; a
+  /// decisão passa pelo MESMO núcleo (`aplicarAprovacao`) que a organização usa,
+  /// com `actorType='stand_responsible'` no log.
+  standApprovalEnabled Boolean @default(false)
+
   // Messages
   welcomeMessage String?
   successMessage String?
