@@ -105,6 +105,43 @@ export async function enqueueFaceChange(participantId: string): Promise<void> {
 }
 
 /**
+ * ESVAZIAR um terminal: marca remoção pendente em TODAS as linhas dele. É a
+ * simétrica de `backfillTerminal` — até existir, o sistema sabia encher um
+ * terminal numa chamada e não sabia esvaziar.
+ *
+ * ── Por que precisa ser explícita, e não automática ────────────────────────
+ * `reconcileTerminal` recusa reconciliar sem alocação vigente exatamente para
+ * que um terminal cuja feira acabou NÃO se esvazie sozinho (uma feira que
+ * estende um dia esvaziaria a catraca na virada). Essa trava está certa e
+ * continua de pé: esta função não é chamada por nenhuma varredura, só pelo
+ * endpoint de admin, com confirmação por nome e registro em auditoria.
+ *
+ * ── Escopo das linhas ──────────────────────────────────────────────────────
+ * TODAS as linhas do terminal que ainda não estão `removed`, inclusive as que
+ * nunca chegaram a ser empurradas. Parece exagero e não é: `applyRemoval` trata
+ * "usuário não existe no device" como SUCESSO (agent/apply.ts), então drenar
+ * uma linha nunca sincronizada custa uma chamada e devolve `removed` — que é a
+ * afirmação correta ("esta pessoa não está neste terminal"). O contrário, filtrar
+ * por `faceState='synced'`, deixaria de fora exatamente as linhas cujo estado
+ * real no device é duvidoso, que são as que mais interessam numa limpeza LGPD.
+ *
+ * `attempts`/`lastError` são zerados porque a remoção é uma operação NOVA e
+ * diferente do push que porventura falhou antes: uma linha que esgotou o teto
+ * tentando gravar a face não pode carregar esse contador para a remoção, senão
+ * a limpeza nasce barrada pelo teto do `/work`.
+ *
+ * Devolve quantas linhas foram marcadas — o número vai para o audit log, e é
+ * ele que permite conferir depois se a limpeza fechou.
+ */
+export async function drainTerminal(terminalId: string): Promise<number> {
+  const r = await prisma.participantTerminalSync.updateMany({
+    where: { terminalId, removalState: { not: 'removed' } },
+    data: { removalState: 'pending', attempts: 0, lastError: null }
+  })
+  return r.count
+}
+
+/**
  * Backfill ao cadastrar/ativar um terminal: cria linha de push para todo o
  * roster ELEGÍVEL do contexto que ainda não tem linha nesse terminal. Não
  * duplica (upsert). No-op se o terminal estiver inativo.
