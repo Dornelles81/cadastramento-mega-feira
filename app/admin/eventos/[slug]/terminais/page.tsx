@@ -26,7 +26,7 @@ interface Terminal {
   ativo: boolean;
   alocacao: { inicio: string; fim: string; vigente: boolean; diasParaVencer: number };
   /** Limpeza pós-feira (LGPD): ver AVISO_LIMPEZA_DIAS na API. */
-  limpeza: { aVencer: boolean; perdida: boolean; pessoas: number };
+  limpeza: { aVencer: boolean; perdida: boolean; pessoas: number; drenaveis: number };
   heartbeat: { ultimo: string | null; idadeMs: number | null; atrasado: boolean };
   ultimoErro: string | null;
   ocupacao: {
@@ -430,10 +430,10 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
                             alocação vencida com {t.limpeza.pessoas} pessoa(s)
                           </span>
                         )}
-                        {/* Aparece havendo QUALQUER linha viva — não só sincronizadas:
-                            um terminal a meio sync tem biometria a caminho, e é
-                            exatamente ele que precisa ser drenado antes de sair. */}
-                        {(t.sincronizados > 0 || t.pendentes > 0 || t.falhas > 0) && (
+                        {/* Aparece quando há o que drenar — mesmo critério do
+                            servidor (`removalState <> 'removed'`), não uma soma
+                            aproximada de colunas da tela. */}
+                        {t.limpeza.drenaveis > 0 && (
                           <button
                             type="button"
                             onClick={() => {
@@ -617,13 +617,26 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
               <div className="px-6 py-4 space-y-3">
                 <div className="rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm text-red-900">
                   <p className="font-semibold">
-                    Isto marca {esvaziarAlvo.sincronizados} pessoa(s) para remoção neste terminal.
+                    Isto marca {esvaziarAlvo.limpeza.drenaveis}{' '}
+                    {esvaziarAlvo.limpeza.drenaveis === 1 ? 'pessoa' : 'pessoas'} para remoção neste
+                    terminal.
                   </p>
                   <p className="mt-1">
                     O agente vai apagar a biometria delas do equipamento nos próximos ciclos. Não
                     afeta o cadastro no sistema, nem os outros terminais — mas quem for removido
                     deixa de abrir esta catraca até ser re-sincronizado.
                   </p>
+                  {/* O número acima é TODAS as linhas vivas, não só as sincronizadas —
+                      inclui quem está a meio sync e quem falhou. Sem esta linha, quem
+                      lê "Sincronizados: 3" na tabela e vê outro número aqui pensaria
+                      que a tela está errada. */}
+                  {esvaziarAlvo.limpeza.drenaveis !== esvaziarAlvo.sincronizados && (
+                    <p className="mt-1 text-red-800">
+                      Inclui {esvaziarAlvo.sincronizados} já sincronizada(s) e{' '}
+                      {esvaziarAlvo.limpeza.drenaveis - esvaziarAlvo.sincronizados} que ainda estão
+                      a caminho ou em falha — a limpeza alcança as duas coisas.
+                    </p>
+                  )}
                 </div>
 
                 {!esvaziarAlvo.alocacao.vigente && (

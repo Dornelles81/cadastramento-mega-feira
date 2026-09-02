@@ -80,6 +80,7 @@ interface LinhaAgregada {
   sincronizados: bigint
   pendentes: bigint
   falhas: bigint
+  drenaveis: bigint
   mais_antigo_pendente: Date | null
 }
 
@@ -142,6 +143,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
         -- já aparece na coluna de pendentes, que é onde ela deve ser cobrada.
         count(*) FILTER (WHERE "faceState"    = 'synced'
                           AND "removalState" = 'none')            AS sincronizados,
+        -- "drenaveis" = o que o ESVAZIAR marcaria, com EXATAMENTE o critério de
+        -- drainTerminal (removalState <> 'removed'). Existe para que o número
+        -- anunciado na confirmação seja o número executado: numa ação
+        -- irreversível, anunciar "3 pessoas" e marcar 5 corrói a confiança no
+        -- botão. Não dá para derivar das outras colunas: uma linha em 'failed'
+        -- abaixo do teto não entra em nenhuma delas, e uma 'synced' já marcada
+        -- para remoção entra em "pendentes" e não em "sincronizados".
+        -- (Sem crase neste comentário: ele vive dentro de um template literal.)
+        count(*) FILTER (WHERE "removalState" <> 'removed')        AS drenaveis,
         count(*) FILTER (WHERE "faceState"    = 'pending'
                             OR "cardState"    = 'pending'
                             OR "removalState" = 'pending')        AS pendentes,
@@ -193,7 +203,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
         perdida: limpezaPerdida,
         // Quantas pessoas o sistema acredita que estão NESTE aparelho agora —
         // é o que a limpeza tem de zerar.
-        pessoas: sincronizadosAqui
+        pessoas: sincronizadosAqui,
+        // Quantas linhas o "Esvaziar" marcaria AGORA. É este o número que a
+        // confirmação mostra: o anunciado tem de ser o executado.
+        drenaveis: Number(ag?.drenaveis ?? 0)
       },
       heartbeat: {
         ultimo: ultimoHeartbeat ? ultimoHeartbeat.toISOString() : null,
