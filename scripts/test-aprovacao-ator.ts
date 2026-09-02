@@ -87,8 +87,9 @@ async function main() {
       ip: '10.0.0.1'
     })
     check('retornou resultado', r1 !== null)
-    check('statusAnterior=pending', r1?.statusAnterior === 'pending', r1?.statusAnterior)
-    check('sincronizado', r1?.sincronizado === true)
+    check('aprovacao APLICADA (ok)', r1?.ok === true)
+    check('statusAnterior=pending', r1?.ok === true && r1.statusAnterior === 'pending', r1?.ok === true ? r1.statusAnterior : r1?.falha)
+    check('sincronizado', r1?.ok === true && r1.sincronizado === true)
 
     const dep1 = await prisma.participant.findUnique({
       where: { id: p1.id },
@@ -147,6 +148,66 @@ async function main() {
     check('rejeitado', dep3?.approvalStatus === 'rejected')
     check('approvedBy nulo ao rejeitar', dep3?.approvedBy === null, dep3?.approvedBy)
     check('motivo gravado', dep3?.rejectionReason === 'documento ilegivel')
+
+    console.log('\n=== RECUSA: aprovar sem biometria ===')
+    // O caso real: removido (a remoção apaga a face) e depois reativado. Volta
+    // sem foto, e aprovar produziria um "Aprovado" que a catraca desmente.
+    const semFace = await prisma.participant.create({
+      data: {
+        eventId: ev.id, name: `SEMFACE-${SUF}`.slice(0, 40),
+        cpf: `${Date.now()}90`.slice(-11),
+        status: 'active', isDeleted: false, approvalStatus: 'pending',
+        faceData: null, faceImageUrl: null
+      }
+    })
+    created.participants.push(semFace.id)
+    const rSem = await aplicarAprovacao({
+      participantId: semFace.id, acao: 'approve',
+      ator: { tipo: 'admin', email: 'fulano@org.com' }
+    })
+    check('recusou (ok=false)', rSem?.ok === false)
+    check('motivo sem-biometria', rSem?.ok === false && rSem.falha === 'sem-biometria')
+    const depSem = await prisma.participant.findUnique({
+      where: { id: semFace.id },
+      select: { approvalStatus: true, approvedBy: true, employeeNo: true, _count: { select: { terminalSyncs: true } } }
+    })
+    check('status INTACTO em pending', depSem?.approvalStatus === 'pending', depSem?.approvalStatus)
+    check('nao ganhou employeeNo', depSem?.employeeNo === null, depSem?.employeeNo)
+    check('nao enfileirou sync', depSem?._count.terminalSyncs === 0, depSem?._count.terminalSyncs)
+    const logSem = await prisma.approvalLog.findFirst({ where: { participantId: semFace.id } })
+    check('nao gravou approvalLog da recusa', !logSem)
+
+    console.log('\n=== REJEITAR sem foto continua permitido ===')
+    const rRej = await aplicarAprovacao({
+      participantId: semFace.id, acao: 'reject',
+      ator: { tipo: 'admin', email: 'fulano@org.com' }, motivo: 'sem foto'
+    })
+    check('rejeicao passa', rRej?.ok === true && rRej.statusNovo === 'rejected')
+
+    console.log('\n=== evento com requireFace=false NAO e bloqueado ===')
+    const evSemFace = await prisma.event.create({
+      data: {
+        name: 'SEM FACE', slug: `sf-${SUF}`, code: `SF-${SUF}`.slice(0, 20),
+        startDate: now, endDate: new Date(now.getTime() + 86400000),
+        requiresApprovalForAccess: true
+      }
+    })
+    created.events.push(evSemFace.id)
+    await prisma.eventConfig.create({ data: { eventId: evSemFace.id, requireFace: false } })
+    const pLivre = await prisma.participant.create({
+      data: {
+        eventId: evSemFace.id, name: `LIVRE-${SUF}`.slice(0, 40),
+        cpf: `${Date.now()}91`.slice(-11),
+        status: 'active', isDeleted: false, approvalStatus: 'pending'
+      }
+    })
+    created.participants.push(pLivre.id)
+    const rLivre = await aplicarAprovacao({
+      participantId: pLivre.id, acao: 'approve',
+      ator: { tipo: 'admin', email: 'fulano@org.com' }
+    })
+    check('aprovou sem foto (evento dispensa)', rLivre?.ok === true && rLivre.statusNovo === 'approved',
+      rLivre?.ok === false ? rLivre.falha : undefined)
 
     console.log('\n=== participante inexistente ===')
     check('devolve null (nao explode)',

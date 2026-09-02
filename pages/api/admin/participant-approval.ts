@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client'
 import { prisma } from '../../../lib/prisma'
 import { getSession } from '../../../lib/auth'
-import { aplicarAprovacao, atorDaSessao } from '../../../lib/participants/approval'
+import { aplicarAprovacao, atorDaSessao, MENSAGEM_FALHA } from '../../../lib/participants/approval'
 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -49,6 +49,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
     if (!resultado) {
       return res.status(404).json({ error: 'Participant not found' })
+    }
+    if (!resultado.ok) {
+      // Recusa por regra (ex.: sem biometria): nada foi gravado.
+      return res.status(422).json({ error: MENSAGEM_FALHA[resultado.falha], falha: resultado.falha })
     }
     const previousStatus = resultado.statusAnterior
     const newStatus = resultado.statusNovo

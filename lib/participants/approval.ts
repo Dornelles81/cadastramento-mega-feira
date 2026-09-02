@@ -47,12 +47,51 @@ export interface AplicarAprovacaoInput {
   ip?: string | null
 }
 
-export interface ResultadoAprovacao {
+export interface AprovacaoAplicada {
+  ok: true
   participantId: string
   statusAnterior: string
   statusNovo: 'approved' | 'rejected'
   /** false = o fan-out falhou; a aprovação vale, mas o sync precisa de atenção. */
   sincronizado: boolean
+}
+
+/** Motivos de RECUSA — nada foi gravado, o estado anterior permanece. */
+export type FalhaAprovacao = 'sem-biometria'
+
+export interface AprovacaoRecusada {
+  ok: false
+  participantId: string
+  falha: FalhaAprovacao
+}
+
+export type ResultadoAprovacao = AprovacaoAplicada | AprovacaoRecusada
+
+/**
+ * Texto para o operador, um por motivo. Mora aqui para que os quatro caminhos
+ * de aprovação digam a MESMA coisa — a mensagem é a única parte disto que o
+ * operador vê, e três versões dela é o mesmo problema que o núcleo único veio
+ * resolver.
+ */
+export const MENSAGEM_FALHA: Record<FalhaAprovacao, string> = {
+  'sem-biometria':
+    'Não dá para aprovar sem foto: este cadastro não tem biometria, então a ' +
+    'credencial não abriria a catraca. Peça uma foto nova pelo link de edição ' +
+    'e aprove depois.'
+}
+
+/**
+ * A foto é obrigatória neste evento? Espelha a leitura que o cadastro já faz
+ * (`eventConfig?.requireFace !== false`): só um `false` EXPLÍCITO dispensa a
+ * biometria. Config ausente, ou participante sem evento (legado), caem no
+ * comportamento padrão do sistema, que é exigir.
+ */
+async function faceObrigatoria(eventId: string | null): Promise<boolean> {
+  if (!eventId) return true
+  const cfg = await prisma.eventConfig
+    .findUnique({ where: { eventId }, select: { requireFace: true } })
+    .catch(() => null)
+  return cfg?.requireFace !== false
 }
 
 /** Identificador legível do ator, para os campos de texto livre. */
@@ -67,9 +106,37 @@ export async function aplicarAprovacao(
 
   const participante = await prisma.participant.findUnique({
     where: { id: participantId },
-    select: { id: true, name: true, cpf: true, eventId: true, approvalStatus: true }
+    select: {
+      id: true, name: true, cpf: true, eventId: true, approvalStatus: true,
+      faceData: true, faceImageUrl: true
+    }
   })
   if (!participante) return null
+
+  // ── RECUSA: aprovar sem biometria ──────────────────────────────────────────
+  // Aprovar é a transição que dá ACESSO FÍSICO. Sem foto, o participante é
+  // inelegível (`lib/agent/eligibility.ts`), nunca é servido ao agente e nunca
+  // chega a terminal nenhum — mas fica com um "Aprovado" verde no painel, que é
+  // justamente o que o operador lê no dia. Um bloqueio explicado é melhor que
+  // uma promessa que a catraca vai desmentir.
+  //
+  // O caso que motivou isto: remoção apaga a face (LGPD) e reativar NÃO
+  // devolve — o cadastro volta sem biometria de propósito. Aprovar em seguida
+  // apagava o único sinal que restava.
+  //
+  // Presença de campo, não decriptação: `getFaceImageDataUrl` pode lançar com
+  // MASTER_KEY errada, e falha de configuração não pode virar "recusado por
+  // falta de foto". Aqui basta saber se HÁ biometria guardada.
+  //
+  // Só vale onde a foto é obrigatória: evento com `requireFace: false` cadastra
+  // sem foto por decisão de quem o configurou, e recusar ali quebraria o evento
+  // inteiro.
+  if (acao === 'approve') {
+    const temBiometria = participante.faceData != null || participante.faceImageUrl != null
+    if (!temBiometria && (await faceObrigatoria(participante.eventId))) {
+      return { ok: false, participantId, falha: 'sem-biometria' }
+    }
+  }
 
   const statusAnterior = participante.approvalStatus ?? 'pending'
   const statusNovo = acao === 'approve' ? 'approved' : 'rejected'
@@ -165,7 +232,7 @@ export async function aplicarAprovacao(
     console.warn('[aprovacao] auditLog falhou:', e?.message)
   }
 
-  return { participantId, statusAnterior, statusNovo, sincronizado }
+  return { ok: true, participantId, statusAnterior, statusNovo, sincronizado }
 }
 
 /** Monta o ator a partir da sessão de admin do NextAuth. */

@@ -2,7 +2,7 @@ import { prisma } from '../../../lib/prisma'
 import { enqueueDeviceRemovalBeforeDelete } from '../../../lib/agent/device-removal'
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
-import { aplicarAprovacao, atorDaSessao } from '../../../lib/participants/approval'
+import { aplicarAprovacao, atorDaSessao, MENSAGEM_FALHA } from '../../../lib/participants/approval'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 import { encryptDocuments, decryptDocuments } from '../../../lib/documents'
 
@@ -158,13 +158,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: any) 
       // Mudança de aprovação vinda neste PUT: delega, para ganhar fan-out,
       // ator real e os dois logs — em vez de gravar o campo na mão.
       if (updateData.approvalStatus === 'approved' || updateData.approvalStatus === 'rejected') {
-        await aplicarAprovacao({
+        const resultadoAprovacao = await aplicarAprovacao({
           participantId: id,
           acao: updateData.approvalStatus === 'approved' ? 'approve' : 'reject',
           ator: atorDaSessao(session),
           motivo: updateData.rejectionReason ?? null,
           ip: req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress || null
         });
+        // A recusa PRECISA sair daqui. Este PUT edita vários campos de uma vez;
+        // engolir o resultado devolveria 200 com o resto salvo e o operador
+        // acreditando que aprovou. Os outros campos já foram gravados acima —
+        // o 422 diz exatamente o que NÃO passou.
+        if (resultadoAprovacao && !resultadoAprovacao.ok) {
+          return res.status(422).json({
+            success: false,
+            error: MENSAGEM_FALHA[resultadoAprovacao.falha],
+            falha: resultadoAprovacao.falha,
+            message: 'Os demais campos foram salvos; a aprovação não foi aplicada.'
+          });
+        }
       }
 
       // Create audit log
@@ -297,6 +309,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: any) 
       });
       if (!resultado) {
         return res.status(404).json({ success: false, message: 'Participante não encontrado' });
+      }
+      if (!resultado.ok) {
+        // Recusa por regra (ex.: sem biometria): nada foi gravado.
+        return res.status(422).json({
+          success: false,
+          error: MENSAGEM_FALHA[resultado.falha],
+          falha: resultado.falha
+        });
       }
 
       const updatedParticipant = await prisma.participant.findUnique({
