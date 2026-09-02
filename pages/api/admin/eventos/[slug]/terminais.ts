@@ -31,6 +31,24 @@ import { MAX_ATTEMPTS } from '../../../../../lib/agent/retry-policy'
 export const HEARTBEAT_STALE_MS = 60 * 60 * 1000 // 1 hora
 
 /**
+ * Antecedência do aviso de limpeza: a alocação vence dentro deste prazo e o
+ * terminal ainda tem gente sincronizada.
+ *
+ * O aviso é PRÉVIO de propósito. Marcar depois do vencimento — que é o que
+ * `markExpiredAllocations` faz — avisaria sobre uma situação que já não dá para
+ * consertar pelo sistema: sem alocação vigente, `/api/agent/work` devolve lista
+ * vazia e `reconcileTerminal` vira no-op, então a biometria fica no aparelho e
+ * só sai pelo painel dele. O alerta tem de chegar enquanto o agente ainda
+ * alcança o terminal.
+ *
+ * Calculado na leitura, sem cron e sem campo novo: o aviso serve durante a
+ * feira, quando esta tela está aberta. (O registro histórico do que venceu é a
+ * peça separada, com `expiredAt`/`pendingCleanup`.)
+ */
+export const AVISO_LIMPEZA_DIAS = 7
+const AVISO_LIMPEZA_MS = AVISO_LIMPEZA_DIAS * 24 * 60 * 60 * 1000
+
+/**
  * Ocupação do device a partir da qual a tela avisa.
  *
  * O terminal tem limite físico de faces (`capacityLimit`, default 5000). Cheio,
@@ -146,6 +164,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     const t = a.terminal
     const ag = porTerminal.get(t.id)
     const vigente = a.startDate <= agora && a.endDate >= agora
+    const restanteMs = a.endDate.getTime() - agora.getTime()
+    const sincronizadosAqui = Number(ag?.sincronizados ?? 0)
+    // Ainda dá para limpar pelo sistema (alocação de pé) e há o que limpar.
+    const limpezaAVencer = vigente && restanteMs <= AVISO_LIMPEZA_MS && sincronizadosAqui > 0
+    // Já venceu com gente dentro: o agente não alcança mais — só o painel do
+    // aparelho resolve. É o estado que o aviso prévio existe para evitar.
+    const limpezaPerdida = !vigente && a.endDate < agora && sincronizadosAqui > 0
     const ultimoHeartbeat = t.lastSeenAt
     const heartbeatIdadeMs = ultimoHeartbeat ? agora.getTime() - ultimoHeartbeat.getTime() : null
     const maisAntigo = ag?.mais_antigo_pendente ?? null
@@ -159,7 +184,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       alocacao: {
         inicio: a.startDate.toISOString(),
         fim: a.endDate.toISOString(),
-        vigente
+        vigente,
+        // Dias inteiros que faltam (0 = vence ainda hoje); negativo = já venceu.
+        diasParaVencer: Math.floor(restanteMs / (24 * 60 * 60 * 1000))
+      },
+      limpeza: {
+        aVencer: limpezaAVencer,
+        perdida: limpezaPerdida,
+        // Quantas pessoas o sistema acredita que estão NESTE aparelho agora —
+        // é o que a limpeza tem de zerar.
+        pessoas: sincronizadosAqui
       },
       heartbeat: {
         ultimo: ultimoHeartbeat ? ultimoHeartbeat.toISOString() : null,
@@ -219,6 +253,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     maxTentativas: MAX_ATTEMPTS,
     ocupacaoAtencao: OCUPACAO_ATENCAO,
     ocupacaoCritica: OCUPACAO_CRITICA,
+    avisoLimpezaDias: AVISO_LIMPEZA_DIAS,
     terminais,
     resumo: {
       totalTerminais: terminais.length,
@@ -235,7 +270,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       // O indicador que mais denuncia problema: um item esperando há 2 dias não
       // é fila cheia, é coisa quebrada.
       maisAntigoPendenteMs: idades.length ? Math.max(...idades) : null,
-      semNenhumHeartbeat: terminais.length > 0 && !algumHeartbeatRecente
+      semNenhumHeartbeat: terminais.length > 0 && !algumHeartbeatRecente,
+      // Limpeza pós-feira (LGPD): a alocação está para vencer e ainda há gente
+      // no aparelho. Enquanto este número for > 0 e a alocação estiver de pé, a
+      // limpeza ainda pode ser feita pelo sistema.
+      terminaisAguardandoLimpeza: terminais.filter((t) => t.limpeza.aVencer).length,
+      // Já venceu com gente dentro: o agente não alcança mais.
+      terminaisLimpezaPerdida: terminais.filter((t) => t.limpeza.perdida).length,
+      pessoasAguardandoLimpeza: terminais
+        .filter((t) => t.limpeza.aVencer || t.limpeza.perdida)
+        .reduce((s, t) => s + t.limpeza.pessoas, 0)
     }
   })
 }

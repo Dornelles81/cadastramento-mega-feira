@@ -24,7 +24,9 @@ interface Terminal {
   ip: string;
   modelo: string | null;
   ativo: boolean;
-  alocacao: { inicio: string; fim: string; vigente: boolean };
+  alocacao: { inicio: string; fim: string; vigente: boolean; diasParaVencer: number };
+  /** Limpeza pós-feira (LGPD): ver AVISO_LIMPEZA_DIAS na API. */
+  limpeza: { aVencer: boolean; perdida: boolean; pessoas: number };
   heartbeat: { ultimo: string | null; idadeMs: number | null; atrasado: boolean };
   ultimoErro: string | null;
   ocupacao: {
@@ -48,6 +50,7 @@ interface Saude {
   maxTentativas: number;
   ocupacaoAtencao: number;
   ocupacaoCritica: number;
+  avisoLimpezaDias: number;
   terminais: Terminal[];
   resumo: {
     totalTerminais: number;
@@ -60,6 +63,9 @@ interface Saude {
     totalFalhas: number;
     maisAntigoPendenteMs: number | null;
     semNenhumHeartbeat: boolean;
+    terminaisAguardandoLimpeza: number;
+    terminaisLimpezaPerdida: number;
+    pessoasAguardandoLimpeza: number;
   };
 }
 
@@ -124,6 +130,12 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
   // syncId em processamento (ou 'todas'); trava o botão e evita clique duplo.
   const [reenfileirando, setReenfileirando] = useState<string | null>(null);
   const [avisoRetry, setAvisoRetry] = useState<string | null>(null);
+  // Esvaziar terminal: o terminal escolhido, o nome digitado e o estado do envio.
+  const [esvaziarAlvo, setEsvaziarAlvo] = useState<Terminal | null>(null);
+  const [nomeDigitado, setNomeDigitado] = useState('');
+  const [esvaziando, setEsvaziando] = useState(false);
+  const [erroEsvaziar, setErroEsvaziar] = useState<string | null>(null);
+  const [avisoEsvaziar, setAvisoEsvaziar] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -172,6 +184,35 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
       setReenfileirando(null);
     }
   }, [slug, carregar]);
+
+  /**
+   * Esvaziar o terminal. A confirmação por NOME DIGITADO é a trava: o servidor
+   * revalida o nome, então isto não é enfeite de tela — sem ele o POST é
+   * recusado. Fecha o modal só no sucesso; no erro mantém aberto com a mensagem,
+   * para a pessoa corrigir o que digitou sem recomeçar.
+   */
+  const esvaziarTerminal = useCallback(async () => {
+    if (!esvaziarAlvo) return;
+    setEsvaziando(true);
+    setErroEsvaziar(null);
+    try {
+      const r = await fetch(`/api/admin/eventos/${slug}/esvaziar-terminal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terminalId: esvaziarAlvo.id, confirmacaoNome: nomeDigitado })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `Falha ao esvaziar (HTTP ${r.status})`);
+      setAvisoEsvaziar(j.mensagem ?? `${j.linhasMarcadas} linha(s) marcada(s).`);
+      setEsvaziarAlvo(null);
+      setNomeDigitado('');
+      await carregar();
+    } catch (e: any) {
+      setErroEsvaziar(e?.message ?? 'Erro ao esvaziar');
+    } finally {
+      setEsvaziando(false);
+    }
+  }, [slug, esvaziarAlvo, nomeDigitado, carregar]);
 
   useEffect(() => {
     carregar();
@@ -247,6 +288,49 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
               com o token revogado — enquanto isso, nada é sincronizado. Silêncio aqui NÃO é
               funcionamento normal.
             </p>
+          </div>
+        )}
+        {/* LIMPEZA PÓS-FEIRA (LGPD) — aviso PRÉVIO: enquanto a alocação estiver
+            de pé, o botão "Esvaziar" resolve. Depois que ela vence, o agente
+            não alcança mais o aparelho e sobra o painel de cada terminal. */}
+        {(r?.terminaisAguardandoLimpeza ?? 0) > 0 && (
+          <div className="bg-amber-500 text-white rounded-lg p-5 mb-4 shadow">
+            <p className="text-lg font-bold">
+              🧹 Limpeza pendente: {r?.terminaisAguardandoLimpeza}{' '}
+              {r?.terminaisAguardandoLimpeza === 1 ? 'terminal' : 'terminais'} com alocação vencendo
+            </p>
+            <p className="text-sm mt-1 text-amber-50">
+              Há {r?.pessoasAguardandoLimpeza} pessoa(s) com biometria nos aparelhos e a alocação
+              vence em até {dados?.avisoLimpezaDias} dias. Use &quot;Esvaziar&quot; em cada terminal
+              ANTES do vencimento: passada a data, o agente perde o escopo e a remoção só pode ser
+              feita no painel de cada equipamento, sem registro nenhum.
+            </p>
+          </div>
+        )}
+        {(r?.terminaisLimpezaPerdida ?? 0) > 0 && (
+          <div className="bg-red-700 text-white rounded-lg p-5 mb-4 shadow">
+            <p className="text-lg font-bold">
+              ⛔ {r?.terminaisLimpezaPerdida}{' '}
+              {r?.terminaisLimpezaPerdida === 1 ? 'terminal' : 'terminais'} com biometria e alocação
+              VENCIDA
+            </p>
+            <p className="text-sm mt-1 text-red-50">
+              O agente não alcança mais estes aparelhos: marcar a remoção aqui deixa as linhas
+              esperando e nada sai do equipamento. Para limpar de fato, estenda a alocação (e então
+              use &quot;Esvaziar&quot;) ou apague pelo painel de cada terminal.
+            </p>
+          </div>
+        )}
+        {avisoEsvaziar && (
+          <div className="bg-white border border-amber-300 text-amber-900 rounded-lg p-4 mb-4 flex items-start justify-between gap-4">
+            <span className="text-sm">{avisoEsvaziar}</span>
+            <button
+              type="button"
+              onClick={() => setAvisoEsvaziar(null)}
+              className="text-amber-700 hover:text-amber-900 text-sm shrink-0"
+            >
+              fechar
+            </button>
           </div>
         )}
         {filaTravada && (
@@ -335,6 +419,32 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
                           <span className="inline-block mt-1 ml-1 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">
                             inativo
                           </span>
+                        )}
+                        {t.limpeza.aVencer && (
+                          <span className="block mt-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 w-fit">
+                            limpar em {t.alocacao.diasParaVencer}d
+                          </span>
+                        )}
+                        {t.limpeza.perdida && (
+                          <span className="block mt-1 text-xs px-2 py-0.5 rounded bg-red-100 text-red-800 w-fit">
+                            alocação vencida com {t.limpeza.pessoas} pessoa(s)
+                          </span>
+                        )}
+                        {/* Aparece havendo QUALQUER linha viva — não só sincronizadas:
+                            um terminal a meio sync tem biometria a caminho, e é
+                            exatamente ele que precisa ser drenado antes de sair. */}
+                        {(t.sincronizados > 0 || t.pendentes > 0 || t.falhas > 0) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEsvaziarAlvo(t);
+                              setNomeDigitado('');
+                              setErroEsvaziar(null);
+                            }}
+                            className="block mt-1.5 text-xs font-medium text-red-700 hover:text-red-900 underline"
+                          >
+                            Esvaziar terminal
+                          </button>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -494,6 +604,77 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
             <code>mega-agente.exe</code> anteriores a 23/08/2026 não enviam esse dado.</>
           )}
         </p>
+
+        {/* ===== Esvaziar terminal: confirmação por NOME DIGITADO ===== */}
+        {esvaziarAlvo && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+              <div className="px-6 py-4 border-b">
+                <h2 className="text-lg font-bold text-red-800">Esvaziar {esvaziarAlvo.nome}</h2>
+                <p className="text-sm text-gray-600 mt-0.5">{esvaziarAlvo.ip}</p>
+              </div>
+
+              <div className="px-6 py-4 space-y-3">
+                <div className="rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm text-red-900">
+                  <p className="font-semibold">
+                    Isto marca {esvaziarAlvo.sincronizados} pessoa(s) para remoção neste terminal.
+                  </p>
+                  <p className="mt-1">
+                    O agente vai apagar a biometria delas do equipamento nos próximos ciclos. Não
+                    afeta o cadastro no sistema, nem os outros terminais — mas quem for removido
+                    deixa de abrir esta catraca até ser re-sincronizado.
+                  </p>
+                </div>
+
+                {!esvaziarAlvo.alocacao.vigente && (
+                  <div className="rounded-md bg-amber-50 border border-amber-300 px-4 py-3 text-sm text-amber-900">
+                    A alocação deste terminal não está vigente: as linhas ficam marcadas, mas o
+                    agente não vai executá-las e a biometria continua no aparelho.
+                  </div>
+                )}
+
+                <label className="block text-sm text-gray-700">
+                  Para confirmar, digite o nome do terminal:
+                  <input
+                    autoFocus
+                    value={nomeDigitado}
+                    onChange={(e) => setNomeDigitado(e.target.value)}
+                    placeholder={esvaziarAlvo.nome}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  />
+                </label>
+                <p className="text-xs text-gray-500">
+                  Maiúsculas, espaços e o tipo de traço não importam — o resto tem que bater.
+                </p>
+
+                {erroEsvaziar && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    {erroEsvaziar}
+                  </p>
+                )}
+              </div>
+
+              <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setEsvaziarAlvo(null); setNomeDigitado(''); setErroEsvaziar(null); }}
+                  disabled={esvaziando}
+                  className="px-5 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={esvaziarTerminal}
+                  disabled={esvaziando || nomeDigitado.trim() === ''}
+                  className="px-5 py-2 rounded-lg bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {esvaziando ? 'Esvaziando...' : 'Esvaziar terminal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
