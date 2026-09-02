@@ -22,11 +22,31 @@ export const metadata = {
 }
 
 export default async function StandCadastroPage({
-  params
+  params,
+  searchParams
 }: {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ [k: string]: string | string[] | undefined }>
 }) {
   const { token } = await params
+
+  // ── MODO BALCÃO ───────────────────────────────────────────────────────────
+  // `?balcao=1` na URL habilita o botão "Cadastrar outra pessoa" na tela final.
+  // NÃO é barreira de segurança e não pretende ser: o link de cadastro já
+  // permite N inscrições por natureza, e quem descobrir o parâmetro não ganha
+  // capacidade nenhuma que já não tivesse. O que ele remove é o CONVITE.
+  //
+  // No celular do participante, aquele botão pede que UMA pessoa cadastre
+  // OUTRAS do próprio aparelho — e aí o consentimento passa a ser marcado por
+  // quem não é o titular, com `consentIp`/`consentText` gravados em nome de
+  // alguém que nunca viu a tela. Isso é problema de LGPD, não só de higiene de
+  // link.
+  //
+  // Parâmetro, e não terceiro tipo de link, de propósito: é o MESMO link, num
+  // modo visível na própria URL. Um terceiro token traria geração, revogação,
+  // validade e mais uma coisa para confundir com as duas que já existem.
+  const sp = await searchParams
+  const modoBalcao = (Array.isArray(sp?.balcao) ? sp.balcao[0] : sp?.balcao) === '1'
 
   const hdrs = await headers()
   const ip = (hdrs.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown'
@@ -78,7 +98,7 @@ export default async function StandCadastroPage({
   const now = new Date()
   // Ocupação canônica (Fase 7): ativos + slots travados por exclusão com
   // check-in no dia contam como ocupados até a virada
-  const [occupiedCount, nextLocked, eventConfig] = await Promise.all([
+  const [occupiedCount, nextLocked, eventConfig, eventoAprovacao] = await Promise.all([
     prisma.participant.count({ where: occupiedSlotsWhere(access.stand.id, now) }),
     prisma.participant.findFirst({
       where: {
@@ -93,7 +113,20 @@ export default async function StandCadastroPage({
     access.event.id
       ? prisma.eventConfig.findUnique({
           where: { eventId: access.event.id },
-          select: { requireFace: true, logoUrl: true, consentTermVersion: true }
+          select: {
+            requireFace: true, logoUrl: true, consentTermVersion: true,
+            // Quem aprova neste evento decide o texto da tela final.
+            standApprovalEnabled: true
+          }
+        })
+      : Promise.resolve(null),
+    // Este evento exige aprovação para o acesso valer? É o mesmo campo que a
+    // elegibilidade do sync consulta — o texto da tela final não pode prometer
+    // uma coisa e o portão fazer outra.
+    access.event.id
+      ? prisma.event.findUnique({
+          where: { id: access.event.id },
+          select: { requiresApprovalForAccess: true }
         })
       : Promise.resolve(null)
   ])
@@ -138,6 +171,14 @@ export default async function StandCadastroPage({
       requireFace={eventConfig?.requireFace !== false}
       consentTermVersion={activeTermVersion}
       consentTerm={consentTerm}
+      modoBalcao={modoBalcao}
+      aprovacao={{
+        // Default TRUE quando o evento não diz nada, igual à elegibilidade
+        // (`requiresApproval ?? true`): prometer acesso imediato e o portão
+        // recusar seria o pior dos dois erros.
+        necessaria: eventoAprovacao?.requiresApprovalForAccess !== false,
+        porGestor: eventConfig?.standApprovalEnabled === true
+      }}
     />
   )
 }

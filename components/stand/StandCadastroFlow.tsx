@@ -34,6 +34,15 @@ interface StandCadastroFlowProps {
   consentTermVersion?: string | null
   /** Termo já renderizado (corpo do repo + variáveis do evento). */
   consentTerm?: string | null
+  /**
+   * Modo balcão (`?balcao=1`): mostra "Cadastrar outra pessoa" na tela final.
+   * Fora dele o botão NÃO existe — no aparelho do participante ele convida uma
+   * pessoa a cadastrar outras, e aí o consentimento acaba marcado por quem não
+   * é o titular. Não é trava de segurança; é remoção do convite.
+   */
+  modoBalcao?: boolean
+  /** Quem ainda precisa aprovar para o acesso valer no dia. */
+  aprovacao?: { necessaria: boolean; porGestor: boolean }
 }
 
 interface RegistrationData {
@@ -45,7 +54,11 @@ interface RegistrationData {
   customData?: any
 }
 
-export default function StandCadastroFlow({ token, stand, event, requireFace, consentTermVersion, consentTerm }: StandCadastroFlowProps) {
+export default function StandCadastroFlow({
+  token, stand, event, requireFace, consentTermVersion, consentTerm,
+  modoBalcao = false,
+  aprovacao = { necessaria: true, porGestor: false }
+}: StandCadastroFlowProps) {
   const isFull = stand.activeCount >= stand.maxRegistrations
 
   const [step, setStep] = useState<'consent' | 'personal' | 'capture' | 'success'>('consent')
@@ -341,12 +354,48 @@ export default function StandCadastroFlow({ token, stand, event, requireFace, co
             concluído.
           </p>
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-lg glow-verde-agua active:scale-95"
-        >
-          Cadastrar outra pessoa
-        </button>
+        {/* FALTA UM PASSO, e ele não é do participante.
+            Sem esta linha a tela diz "concluído" e a pessoa vai embora achando
+            que está liberada — a primeira notícia do contrário seria a catraca
+            fechada no dia do evento. Quem aprova depende do evento, então o
+            texto também depende: prometer "o responsável do stand aprova" onde
+            quem aprova é a organização seria trocar um mal-entendido por outro. */}
+        {aprovacao.necessaria && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20 mb-6 text-left">
+            <p className="text-sm text-white font-semibold mb-1">Falta um passo</p>
+            <p className="text-sm text-white/80">
+              {aprovacao.porGestor ? (
+                <>
+                  O <strong className="text-white">responsável do seu stand</strong> ainda precisa
+                  aprovar o seu cadastro para o acesso valer no dia do evento.
+                </>
+              ) : (
+                <>
+                  A <strong className="text-white">organização</strong> ainda precisa aprovar o seu
+                  cadastro para o acesso valer no dia do evento.
+                </>
+              )}
+            </p>
+            <p className="text-xs text-white/60 mt-2">
+              Você não precisa fazer mais nada agora.
+            </p>
+          </div>
+        )}
+
+        {/* Só no modo balcão: ver o botão no próprio celular convida a pessoa a
+            cadastrar colegas dali mesmo — e o consentimento passaria a ser
+            marcado por quem não é o titular. */}
+        {modoBalcao && (
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-4 bg-verde-agua text-white rounded-xl font-semibold text-base hover:bg-verde-agua-dark transition-all duration-200 shadow-lg glow-verde-agua active:scale-95"
+          >
+            Cadastrar outra pessoa
+          </button>
+        )}
+        {modoBalcao && (
+          <p className="text-xs text-white/50 mt-3">Modo balcão — operado pela organização</p>
+        )}
       </div>
     </div>
   )
