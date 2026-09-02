@@ -10,6 +10,10 @@ import { renderConsent, buildConsentVars, isConsentVersionValid } from '../../..
 // Cadastro de credenciado via link do stand (SPEC seção 2.3).
 // O stand vem exclusivamente do token validado no servidor.
 
+// Mesmas cores do painel do stand (app/stand/[token]/page.tsx).
+const NAVY = '#1E3A5F'
+const TEAL = '#2DD4BF'
+
 export const dynamic = 'force-dynamic'
 
 export const metadata = {
@@ -39,6 +43,37 @@ export default async function StandCadastroPage({
 
   const access = await validateStandToken(token)
   if (!access) notFound()
+
+  // ── SÓ O LINK DE CADASTRO CHEGA AO FORMULÁRIO ─────────────────────────────
+  // A trava real é a de `/api/stand-registration`; esta existe para ela não
+  // virar um beco sem saída. Sem este bloco, quem abrisse o formulário com o
+  // link de gestão preencheria os dados, tiraria a foto e só descobriria no
+  // envio — depois de todo o trabalho. Recusar antes explica na hora e diz o
+  // que fazer.
+  if (access.scope !== 'register') {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow p-8 max-w-md text-center">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Este link não faz cadastro</h1>
+          <p className="text-gray-600">
+            Você está com o <strong>link de gestão</strong> do stand {access.stand.name}, usado
+            para acompanhar a equipe já credenciada.
+          </p>
+          <p className="text-gray-600 mt-3">
+            Para se cadastrar, peça à organização o <strong>link de cadastro</strong> — é ele que
+            deve ser compartilhado com quem vai se credenciar.
+          </p>
+          <a
+            href={`/stand/${token}`}
+            className="inline-block mt-5 px-5 py-2.5 rounded-xl font-semibold"
+            style={{ backgroundColor: TEAL, color: NAVY }}
+          >
+            Voltar ao painel do stand
+          </a>
+        </div>
+      </main>
+    )
+  }
 
   const now = new Date()
   // Ocupação canônica (Fase 7): ativos + slots travados por exclusão com

@@ -81,12 +81,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Erro genérico para token inválido: não revelar se o stand existe
     const access = await validateStandToken(token)
+
     if (!access) {
       return res.status(404).json({
         error: 'Invalid link',
         message: 'Link inválido ou expirado. Contate a organização.'
       })
     }
+
+    // ── SÓ O LINK DE CADASTRO CADASTRA ────────────────────────────────────────
+    // Até 2026-09-02 este endpoint aceitava QUALQUER token válido, inclusive o
+    // de gestão — e o painel do responsável tinha um botão "Cadastrar
+    // credenciado" apontando para o mesmo token. O efeito colateral era o
+    // problema: repassar o link de gestão para a equipe FUNCIONAVA, todo mundo
+    // se cadastrava, nada dava erro — e cada uma dessas pessoas ficava também
+    // com acesso à lista completa do stand (foto e CPF de todos) e ao botão de
+    // excluir. Foi o que aconteceu em CASA-SUECOS: 37 cadastros por um link de
+    // gestão aberto de 36 pontos de acesso distintos.
+    //
+    // A trava vive TAMBÉM em /stand/[token]/cadastro, que recusa a página antes
+    // do formulário. Só aqui, a pessoa preencheria tudo, tiraria a foto e
+    // tomaria 403 no envio — trocar uma falha silenciosa por um beco sem saída
+    // no fim do fluxo seria piorar.
+    //
+    // Não afeta quem JÁ se cadastrou: os cadastros existentes seguem intactos, e
+    // o gestor continua podendo excluí-los (stand-removal exige `manage`).
+    if (access.scope !== 'register') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message:
+          'Este é o link de gestão do stand, que não cadastra. Peça à organização o link de ' +
+          'cadastro da equipe — é ele que deve ser compartilhado com quem vai se credenciar.'
+      })
+    }
+
     const standId = access.stand.id
 
     const event = access.event.id
