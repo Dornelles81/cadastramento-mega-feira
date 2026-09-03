@@ -39,6 +39,8 @@ interface Terminal {
   sincronizados: number;
   pendentes: number;
   falhas: number;
+  /** Linhas neste terminal com cartão sincronizado e face não sincronizada. */
+  semBiometria: number;
   maisAntigoPendente: string | null;
   maisAntigoPendenteMs: number | null;
 }
@@ -63,6 +65,8 @@ interface Saude {
     totalFalhas: number;
     maisAntigoPendenteMs: number | null;
     semNenhumHeartbeat: boolean;
+    /** No terminal COM cartão e SEM rosto: passam o crachá e não são reconhecidas. */
+    pessoasSemBiometria: { id: string; nome: string; employeeNo: string | null; stand: string | null }[];
     terminaisAguardandoLimpeza: number;
     terminaisLimpezaPerdida: number;
     pessoasAguardandoLimpeza: number;
@@ -290,6 +294,36 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
             </p>
           </div>
         )}
+        {/* NO TERMINAL SEM ROSTO — o alerta que evita alguém descobrir na fila.
+            Estas pessoas têm cartão no equipamento e não têm biometria: passam o
+            crachá e NÃO são reconhecidas. Antes isso só existia como a diferença
+            entre "No device" e "Sincronizados", que exige interpretar uma
+            subtração — e três pessoas reais do Expofest ficaram assim sem que
+            ninguém notasse. Os NOMES vêm junto: sem eles o alerta diz que há um
+            problema e não diz com quem, que é o que permite agir. */}
+        {(r?.pessoasSemBiometria?.length ?? 0) > 0 && (
+          <div className="bg-red-600 text-white rounded-lg p-5 mb-4 shadow">
+            <p className="text-lg font-bold">
+              🚫 {r!.pessoasSemBiometria.length}{' '}
+              {r!.pessoasSemBiometria.length === 1 ? 'pessoa está' : 'pessoas estão'} no terminal
+              sem biometria
+            </p>
+            <p className="text-sm mt-1 text-red-50">
+              Elas foram cadastradas no equipamento e ficaram <strong>sem rosto</strong>: no dia,
+              a catraca não vai reconhecê-las. A saída é foto nova — o envio automático já falhou
+              e repetir não resolve.
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white">
+              {r!.pessoasSemBiometria.map((p) => (
+                <li key={p.id}>
+                  <span className="font-semibold">{p.nome}</span>
+                  {p.stand && <span className="text-red-100"> · {p.stand}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* LIMPEZA PÓS-FEIRA (LGPD) — aviso PRÉVIO: enquanto a alocação estiver
             de pé, o botão "Esvaziar" resolve. Depois que ela vence, o agente
             não alcança mais o aparelho e sobra o painel de cada terminal. */}
@@ -491,6 +525,14 @@ export default function TerminaisPage({ params }: { params: Promise<{ slug: stri
                         {t.sincronizados}
                         {atrasadoNoTotal && (
                           <span className="ml-1 text-xs font-normal">(−{lider - t.sincronizados})</span>
+                        )}
+                        {/* Por terminal, para distinguir "é em todos" (imagem) de
+                            "é só neste" (equipamento) — a primeira pergunta que
+                            se faz ao investigar. */}
+                        {t.semBiometria > 0 && (
+                          <span className="block text-xs font-normal text-red-700">
+                            +{t.semBiometria} sem rosto
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-700">{t.pendentes}</td>

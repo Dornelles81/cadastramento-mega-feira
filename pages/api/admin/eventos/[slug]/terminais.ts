@@ -25,7 +25,7 @@ import type { Session } from 'next-auth'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../lib/api-auth'
-import { MAX_ATTEMPTS } from '../../../../../lib/agent/retry-policy'
+import { MAX_ATTEMPTS, sqlEsgotada } from '../../../../../lib/agent/retry-policy'
 
 /** Heartbeat mais velho que isto acende alerta no terminal. */
 export const HEARTBEAT_STALE_MS = 60 * 60 * 1000 // 1 hora
@@ -81,6 +81,7 @@ interface LinhaAgregada {
   pendentes: bigint
   falhas: bigint
   drenaveis: bigint
+  sem_biometria: bigint
   mais_antigo_pendente: Date | null
 }
 
@@ -155,10 +156,34 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
         count(*) FILTER (WHERE "faceState"    = 'pending'
                             OR "cardState"    = 'pending'
                             OR "removalState" = 'pending')        AS pendentes,
-        count(*) FILTER (WHERE attempts >= ${MAX_ATTEMPTS}
+        -- "falhas" = o que o /work NAO serve mais. A condicao de esgotamento vem
+        -- de lib/agent/retry-policy (sqlEsgotada), e nao de um numero escrito
+        -- aqui: o teto passou a depender da CLASSE do erro, e uma linha
+        -- permanente esgota com UMA tentativa. Repetir a regra aqui faria a tela
+        -- exigir 12 de todo mundo e esconder do operador justamente as linhas
+        -- que morreram na primeira.
+        count(*) FILTER (WHERE ${Prisma.raw(sqlEsgotada())}
                           AND ("faceState"    = 'failed'
                             OR "cardState"    = 'failed'
                             OR "removalState" = 'failed'))        AS falhas,
+        -- "sem_biometria" = ESTA NO TERMINAL, COM CARTAO, SEM ROSTO.
+        --
+        -- E a situacao que produz gente parada na catraca: o addUser e o
+        -- registerCard funcionaram, o uploadFace nao. A pessoa existe no
+        -- equipamento, passa o cartao e NAO e reconhecida pelo rosto.
+        --
+        -- cardState = 'synced' e a prova de que o usuario foi criado no device:
+        -- o registerCard so acontece depois do addUser. Sem esse recorte, a
+        -- conta incluiria quem ainda nem chegou ao terminal.
+        -- (Sem crase neste comentario: ele vive dentro de um template literal.)
+        --
+        -- Ate 2026-09-02 isso so aparecia como uma DIFERENCA entre "No device"
+        -- e "Sincronizados" (319 contra 316), que exige o operador interpretar
+        -- uma subtracao. Tres pessoas reais do Expofest estavam assim, e a
+        -- primeira noticia seria a catraca fechada no dia.
+        count(*) FILTER (WHERE "cardState"    = 'synced'
+                          AND "faceState"    <> 'synced'
+                          AND "removalState"  = 'none')            AS sem_biometria,
         min("createdAt") FILTER (WHERE "faceState"    = 'pending'
                                     OR "cardState"    = 'pending'
                                     OR "removalState" = 'pending') AS mais_antigo_pendente
@@ -168,6 +193,35 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     `
   }
   const porTerminal = new Map(agregado.map((r) => [r.terminalId, r]))
+
+  // ---------------------------------------------------------------- consulta 3
+  // QUEM está no terminal sem rosto — por PESSOA, não por linha.
+  //
+  // O agregado acima conta linhas: 3 pessoas em 4 terminais dão 12. O operador
+  // precisa do número de PESSOAS e, principalmente, dos NOMES — sem eles o
+  // alerta diz "há um problema" e não diz com quem, que é justamente o que
+  // permite agir (pedir foto nova àquelas pessoas).
+  //
+  // `distinct` no participantId: uma linha por pessoa, a de qualquer terminal.
+  const pessoasSemBiometria =
+    terminalIds.length > 0
+      ? await prisma.participantTerminalSync.findMany({
+          where: {
+            terminalId: { in: terminalIds },
+            cardState: 'synced',
+            faceState: { not: 'synced' },
+            removalState: 'none'
+          },
+          distinct: ['participantId'],
+          select: {
+            participantId: true,
+            participant: {
+              select: { name: true, employeeNo: true, stand: { select: { code: true } } }
+            }
+          },
+          take: 50 // teto de segurança: o alerta é para agir, não para paginar
+        })
+      : []
 
   // ------------------------------------------------------------------ montagem
   const terminais = alocacoes.map((a) => {
@@ -235,6 +289,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       sincronizados: Number(ag?.sincronizados ?? 0),
       pendentes: Number(ag?.pendentes ?? 0),
       falhas: Number(ag?.falhas ?? 0),
+      // Está no terminal, com cartão, sem rosto — ver o comentário do agregado.
+      semBiometria: Number(ag?.sem_biometria ?? 0),
       maisAntigoPendente: maisAntigo ? maisAntigo.toISOString() : null,
       maisAntigoPendenteMs: maisAntigo ? agora.getTime() - maisAntigo.getTime() : null
     }
@@ -287,6 +343,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       // Limpeza pós-feira (LGPD): a alocação está para vencer e ainda há gente
       // no aparelho. Enquanto este número for > 0 e a alocação estiver de pé, a
       // limpeza ainda pode ser feita pelo sistema.
+      // Pessoas que estão nos terminais COM cartão e SEM rosto: vão passar o
+      // crachá e não ser reconhecidas. É o alerta que evita alguém descobrir
+      // isso na fila, no dia.
+      pessoasSemBiometria: pessoasSemBiometria.map((l) => ({
+        id: l.participantId,
+        nome: l.participant?.name ?? '(sem nome)',
+        employeeNo: l.participant?.employeeNo ?? null,
+        stand: l.participant?.stand?.code ?? null
+      })),
       terminaisAguardandoLimpeza: terminais.filter((t) => t.limpeza.aVencer).length,
       // Já venceu com gente dentro: o agente não alcança mais.
       terminaisLimpezaPerdida: terminais.filter((t) => t.limpeza.perdida).length,
