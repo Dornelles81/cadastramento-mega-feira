@@ -24,7 +24,7 @@ import { listAllocatedTerminalIds, hadAllocationToEvent } from '../../../lib/ter
 // RETRY_BACKOFF_MS e enquanto attempts < MAX_ATTEMPTS — daí a reconciliação/
 // operador assume. Constantes compartilhadas com a tela de saúde do sync, que
 // precisa contar como "falha" exatamente o que aqui deixa de ser servido.
-import { RETRY_BACKOFF_MS, MAX_ATTEMPTS } from '../../../lib/agent/retry-policy'
+import { isExhausted, MAX_ATTEMPTS } from '../../../lib/agent/retry-policy'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -60,8 +60,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
 
   // Serve linhas pendentes E linhas `failed` que já passaram do backoff (retry
   // coerente por kind), com teto de tentativas.
-  const retryCutoff = new Date(Date.now() - RETRY_BACKOFF_MS)
-  const retriable = { attempts: { lt: MAX_ATTEMPTS }, lastAttemptAt: { lt: retryCutoff } }
+  // ── QUEM PODE VOLTAR À FILA ───────────────────────────────────────────────
+  // Antes: teto único de 8 e espera FIXA de 60s, o que esgotava uma linha em
+  // oito minutos — e abandonava erro intermitente (`SubpicAnalysisModelingError`)
+  // que teria passado alguns minutos depois. Ver lib/agent/retry-policy.
+  //
+  // Agora quem decide QUANDO é o `/ack`, que grava `nextAttemptAt` com o
+  // backoff da classe do erro; aqui só se compara com o relógio. E quem decide
+  // SE ainda cabe tentativa é o teto por classe, aplicado abaixo por
+  // `isExhausted` — não dá para expressar "teto que depende do texto do erro"
+  // num `where` do Prisma sem duplicar a classificação, e duplicar é
+  // exatamente o que este módulo existe para impedir.
+  //
+  // `nextAttemptAt: null` entra: é linha que nunca falhou (ou que acabou de
+  // ser devolvida à fila pelo botão de re-tentar, que zera o agendamento).
+  const agora = new Date()
+  const retriable = {
+    OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: agora } }]
+  }
   const rows = semEscopoVigente ? [] : await prisma.participantTerminalSync.findMany({
     where: {
       terminalId: terminalId ? terminalId : { in: allocatedIds },
@@ -127,6 +143,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
   }
 
   for (const row of rows) {
+    // TETO POR CLASSE: o erro decide quantas tentativas a linha ainda tem.
+    // Uma linha `failed` que esgotou não é servida — nem pelo /work, nem pela
+    // reconciliação, que usa o MESMO `isExhausted`.
+    if (
+      (row.faceState === 'failed' || row.cardState === 'failed' || row.removalState === 'failed') &&
+      isExhausted(row.attempts, row.lastError)
+    ) {
+      continue
+    }
+
     const p = row.participant
     const employeeNo = p.employeeNo // Fase 1: sequencial global, fonte da verdade
 

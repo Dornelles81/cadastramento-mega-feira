@@ -64,7 +64,11 @@ export async function enqueueForContext(contextId: string, participantId: string
   // 2) revive linhas que estavam em remoção (subject elegível de novo)
   await prisma.participantTerminalSync.updateMany({
     where: { participantId, terminalId: { in: terminalIds }, removalState: { not: 'none' } },
-    data: { faceState: 'pending', cardState: 'pending', removalState: 'none', attempts: 0, lastError: null }
+    // `nextAttemptAt: null` acompanha o reset de `attempts` em todo lugar que
+    // devolve uma linha à fila: o contador zerado sem o agendamento zerado
+    // deixaria a linha elegível pelo teto e barrada pelo relógio, esperando um
+    // backoff de até 128 min que já não faz sentido.
+    data: { faceState: 'pending', cardState: 'pending', removalState: 'none', attempts: 0, lastError: null, nextAttemptAt: null }
   })
 }
 
@@ -99,7 +103,11 @@ export async function enqueueFaceChange(participantId: string): Promise<void> {
       // teto passaria a punir justamente a ação que resolve o problema.
       // Mesma regra do `faceTrocada` em `reconcile.ts`.
       attempts: 0,
-      lastError: null
+      lastError: null,
+      // Foto NOVA também descarta o backoff: a espera foi calculada para a
+      // imagem antiga, e fazer a re-captura aguardar 128 min puniria de novo a
+      // ação que resolve o problema.
+      nextAttemptAt: null
     }
   })
 }
@@ -136,7 +144,7 @@ export async function enqueueFaceChange(participantId: string): Promise<void> {
 export async function drainTerminal(terminalId: string): Promise<number> {
   const r = await prisma.participantTerminalSync.updateMany({
     where: { terminalId, removalState: { not: 'removed' } },
-    data: { removalState: 'pending', attempts: 0, lastError: null }
+    data: { removalState: 'pending', attempts: 0, lastError: null, nextAttemptAt: null }
   })
   return r.count
 }

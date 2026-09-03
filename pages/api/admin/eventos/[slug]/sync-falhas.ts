@@ -28,7 +28,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import type { Session } from 'next-auth'
 import { prisma } from '../../../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../lib/api-auth'
-import { MAX_ATTEMPTS } from '../../../../../lib/agent/retry-policy'
+import { MAX_ATTEMPTS, whereEsgotada } from '../../../../../lib/agent/retry-policy'
 
 /** Teto de linhas devolvidas no GET: a tela é para agir, não para paginar. */
 const LIMITE_LISTA = 100
@@ -53,13 +53,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
   // Uma linha "esgotada" é a MESMA definição da tela de saúde: bateu o teto E
   // está em algum estado de falha. Os dois critérios juntos, sempre — só
   // `attempts` alto não basta (uma linha pode ter falhado e depois sincronizado).
+  // O critério de "esgotada" vem do MÓDULO (`whereEsgotada`), não de um número
+  // repetido aqui: o teto passou a depender da CLASSE do erro, e uma linha
+  // permanente (`badJsonContent`/`faceURL`) esgota com UMA tentativa. Com
+  // `attempts >= 12` fixo, essas linhas nunca apareceriam nesta tela — que é a
+  // única saída manual delas.
+  //
+  // Os dois critérios entram como AND porque cada um traz o seu próprio OR:
+  // no mesmo objeto, o segundo sobrescreveria o primeiro em silêncio.
   const whereEsgotadas = {
-    terminalId: { in: terminalIds },
-    attempts: { gte: MAX_ATTEMPTS },
-    OR: [
-      { faceState: 'failed' },
-      { cardState: 'failed' },
-      { removalState: 'failed' }
+    AND: [
+      { terminalId: { in: terminalIds } },
+      whereEsgotada(),
+      {
+        OR: [
+          { faceState: 'failed' },
+          { cardState: 'failed' },
+          { removalState: 'failed' }
+        ]
+      }
     ]
   }
 
@@ -154,7 +166,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
           // O reset do contador é o ponto do botão: sem ele o `/work` continua
           // barrando a linha e o clique não faria nada visível.
           attempts: 0,
-          lastError: null
+          lastError: null,
+          // `nextAttemptAt` TEM que ir junto. Uma linha esgotada tem agendamento
+          // no passado ou nulo, mas uma linha no meio do backoff (ex.: 9ª
+          // tentativa, esperando 128 min) tem agendamento no FUTURO — zerar só
+          // o contador deixaria o clique sem efeito visível por duas horas,
+          // que é exatamente o sintoma que este botão existe para não ter.
+          nextAttemptAt: null
         }
       })
       reenfileiradas++

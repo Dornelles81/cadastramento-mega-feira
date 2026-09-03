@@ -631,8 +631,18 @@ model ParticipantTerminalSync {
   syncedAt      DateTime?
   removedAt     DateTime?
   attempts      Int       @default(0)
-  lastAttemptAt DateTime? // p/ backoff
+  lastAttemptAt DateTime? // quando foi a última tentativa
   lastError     String?
+
+  /// Quando esta linha pode ser servida ao agente de novo (backoff progressivo).
+  /// Gravada pelo `/ack` a cada falha, a partir de `lib/agent/retry-policy`.
+  ///   futuro = esperando o backoff
+  ///   passado/null = elegível agora
+  /// Uma linha que ESGOTOU o teto fica com `faceState/cardState = failed` e
+  /// `attempts >= teto`; é `isExhausted` que a barra, não este campo.
+  /// O valor também é o que a tela mostra como "volta a tentar às HH:MM" —
+  /// informação que não existia e que o operador precisa no dia do evento.
+  nextAttemptAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -646,6 +656,7 @@ model ParticipantTerminalSync {
   @@index([terminalId, removalState]) // fila de remoção
   @@index([terminalId, faceState]) // fila de inclusão
   @@index([terminalId, cardState]) // fila de card — completa o OR do /work
+  @@index([terminalId, nextAttemptAt]) // backoff: quem já pode voltar à fila
   @@map("participant_terminal_sync")
 }
 

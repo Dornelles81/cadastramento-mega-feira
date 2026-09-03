@@ -14,6 +14,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import { withAgentAuth, AgentContext } from '../../../lib/agent/auth'
+import { proximaTentativa } from '../../../lib/agent/retry-policy'
 import { hadAllocationToEvent } from '../../../lib/terminals/allocation'
 
 type Kind = 'face' | 'card' | 'removal'
@@ -83,7 +84,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     // para o evento do token. Ver `hadAllocationToEvent`.
     const row = await prisma.participantTerminalSync.findFirst({
       where: { id: syncId },
-      select: { id: true, terminalId: true }
+      select: { id: true, terminalId: true, attempts: true }
     })
     if (!row || !(await hadAllocationToEvent(row.terminalId, agent.eventId))) {
       results.push({ syncId, kind, ok: false, reason: 'fora do escopo do token' })
@@ -91,10 +92,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
     }
 
     const success = status === 'success'
+    const textoErro = typeof error === 'string' ? error.slice(0, 1000) : 'erro não informado'
     const data: any = {
       attempts: { increment: 1 },
       lastAttemptAt: now,
-      lastError: success ? null : (typeof error === 'string' ? error.slice(0, 1000) : 'erro não informado')
+      lastError: success ? null : textoErro
+    }
+
+    // ── BACKOFF PROGRESSIVO, decidido AQUI ────────────────────────────────
+    // Este é o único ponto que conhece o erro no instante em que ele acontece,
+    // então é aqui que a próxima tentativa é agendada. O `/work` só compara
+    // `nextAttemptAt` com o relógio — não reclassifica nada, e por isso não tem
+    // como divergir desta decisão.
+    //
+    // `attempts + 1` porque o incremento acima ainda não foi aplicado: a conta
+    // é sobre quantas tentativas EXISTIRÃO depois deste ack.
+    // `null` = esgotou o teto da classe do erro e não volta mais sozinha.
+    if (success) {
+      data.nextAttemptAt = null
+    } else {
+      data.nextAttemptAt = proximaTentativa(row.attempts + 1, textoErro, now)
     }
 
     if ((kind as Kind) === 'face') {

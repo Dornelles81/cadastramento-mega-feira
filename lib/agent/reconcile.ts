@@ -84,7 +84,11 @@ export async function reconcileTerminal(
     // `attempts` entra no select por causa do teto (ver o bloco de update
     // abaixo): sem ele a reconciliação não tem como respeitar a política de
     // retry, e era exatamente assim que o teto vinha sendo contornado.
-    select: { id: true, participantId: true, faceState: true, cardState: true, removalState: true, faceVersion: true, attempts: true, participant: { select: { employeeNo: true } } }
+    // `lastError` entra porque o teto agora depende da CLASSE do erro
+    // (lib/agent/retry-policy): sem ele, `isExhausted` trataria uma linha
+    // permanente como transitória e a reconciliação a devolveria à fila para
+    // falhar mais 11 vezes.
+    select: { id: true, participantId: true, faceState: true, cardState: true, removalState: true, faceVersion: true, attempts: true, lastError: true, participant: { select: { employeeNo: true } } }
   })
   const rowByPid = new Map(rows.map((r) => [r.participantId, r]))
   const rowByEmp = new Map(rows.filter((r) => r.participant.employeeNo).map((r) => [r.participant.employeeNo as string, r]))
@@ -147,7 +151,9 @@ export async function reconcileTerminal(
         // Foto nova é uma tentativa legítima: zera o contador e o erro velho.
         data.attempts = 0
         data.lastError = null
-      } else if (isExhausted(row.attempts)) {
+        // E o backoff junto — ele foi calculado para a imagem anterior.
+        data.nextAttemptAt = null
+      } else if (isExhausted(row.attempts, row.lastError)) {
         // Esgotada e nada mudou: retentar produziria exatamente a mesma falha.
         // Daqui em diante é o operador que assume (botão de re-tentar na tela
         // de saúde) ou uma foto nova. NÃO ressuscita sozinha.
