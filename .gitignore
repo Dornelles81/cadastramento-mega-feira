@@ -78,3 +78,9 @@ Thumbs.db
 # produção sobrevive ao próximo deploy — se um logo precisar existir no ar,
 # a solução é storage externo, não versionar a pasta.
 /public/uploads/
+
+# Inventário de exposição de autorização: nomes de contas, e-mails reais e o
+# caminho exato de falhas ainda abertas. Este repositório é PÚBLICO — versionar
+# isso publicaria o mapa das brechas antes de elas estarem fechadas. Fica só na
+# máquina de quem opera.
+/LEVANTAMENTO-autorizacao.md

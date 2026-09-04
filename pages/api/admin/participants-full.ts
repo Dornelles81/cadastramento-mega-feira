@@ -1,19 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import type { Session } from 'next-auth'
 import { prisma } from '../../../lib/prisma'
-import { getSession } from '../../../lib/auth'
+import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../lib/api-auth'
 import { visibleParticipantsRelationWhere } from '../../../lib/participants/visibility'
 import { buscarRemocoes, montarRemocao } from '../../../lib/participants/removal-badge'
 import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
 import { decryptDocuments } from '../../../lib/documents'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Check authentication
-  const session = await getSession(req, res)
-  if (!session || !session.user) {
-    return res.status(401).json({ error: 'Não autenticado' })
-  }
-
+async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   // CORS headers (restricted to same origin for authenticated endpoint)
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -34,8 +29,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // ========================================================================
-    // EVENT FILTER: Support optional eventCode or eventId query parameter
+    // EVENT FILTER + AUTORIZAÇÃO POR EVENTO
     // ========================================================================
+    // Até 04/09/2026 este endpoint exigia APENAS sessão (`getSession`, sem role):
+    // qualquer conta autenticada — inclusive o OPERATOR da portaria — lia nome,
+    // CPF, telefone, os documentos DECIFRADOS e a BIOMETRIA de todos os
+    // participantes de TODOS os eventos, bastando omitir o filtro. É o endpoint
+    // que o painel realmente usa (app/admin/eventos/[slug]/page.tsx), então o
+    // furo estava no caminho quente.
+    //
+    // Duas travas agora: ADMIN_ROLES no wrapper (o OPERATOR sai — o caminho dele
+    // para conferir rosto na portaria é /api/participant-image, que já tem a sua
+    // própria régua) e, dentro dela, vínculo de evento com `canView`.
     const { eventCode, eventId, includeRemoved } = req.query
 
     let whereClause: any = {}
@@ -43,14 +48,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (eventCode && typeof eventCode === 'string') {
       // Filter by event code
       whereClause.eventCode = eventCode
-      console.log('🔍 Filtering by eventCode:', eventCode)
     } else if (eventId && typeof eventId === 'string') {
       // Filter by event ID
       whereClause.eventId = eventId
-      console.log('🔍 Filtering by eventId:', eventId)
-    } else {
-      // No filter - return all (for backward compatibility)
-      console.log('⚠️  No event filter - returning all participants')
+    }
+
+    if (whereClause.eventCode || whereClause.eventId) {
+      // Recorte pedido: resolve o evento e exige canView NELE.
+      //
+      // A resolução aceita `code` OU `slug` porque os dois formatos circulam: o
+      // painel manda `eventId` quando o tem e cai em `eventCode=SLUG.toUpperCase()`
+      // quando não tem. Isso casa com EXPOFEST-2026, mas o evento
+      // `treinamento-credenciamento` tem code "Treinamento Credenciamento" — só
+      // por `code` esse fallback viraria 404 onde antes trazia dados.
+      const alvo = await prisma.event.findFirst({
+        where: whereClause.eventId
+          ? { id: whereClause.eventId }
+          : {
+              OR: [
+                { code: whereClause.eventCode },
+                { slug: (whereClause.eventCode as string).toLowerCase() }
+              ]
+            },
+        select: { id: true, slug: true }
+      })
+
+      if (!alvo) {
+        return res.status(404).json({ error: 'Evento não encontrado' })
+      }
+
+      // hasEventPermission casa por id OU slug e já devolve true para SUPER_ADMIN.
+      const podeVer =
+        hasEventPermission(session, alvo.id, 'canView') ||
+        (!!alvo.slug && hasEventPermission(session, alvo.slug, 'canView'))
+
+      if (!podeVer) {
+        return res.status(403).json({
+          error: 'Sem permissão para ver os participantes deste evento'
+        })
+      }
+    } else if ((session.user as any)?.role !== 'SUPER_ADMIN') {
+      // SEM recorte era o furo: devolvia todos os eventos. Em vez de recusar
+      // (quebraria chamador legado que não manda filtro), restringe aos eventos
+      // onde a conta tem canView. Sem nenhum, a lista sai vazia — falha fechado.
+      const permitidos = (((session.user as any)?.events ?? []) as any[])
+        .filter((e) => e?.permissions?.canView)
+        .map((e) => e?.id)
+        .filter(Boolean)
+      whereClause.eventId = { in: permitidos }
     }
 
     // DEFAULT: esconde excluídos-pelo-dono (status='removed') e purgados LGPD
@@ -188,3 +233,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+// 401 sem sessão, 403 fora de ADMIN_ROLES (SUPER_ADMIN, ADMIN, EVENT_ADMIN).
+export default withApiAuth(handler, { roles: ADMIN_ROLES })
