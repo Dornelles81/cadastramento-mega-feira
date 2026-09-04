@@ -84,3 +84,15 @@ Thumbs.db
 # isso publicaria o mapa das brechas antes de elas estarem fechadas. Fica só na
 # máquina de quem opera.
 /LEVANTAMENTO-autorizacao.md
+
+# Dossie de remocoes: nomes e CPFs parciais de pessoas reais. Repo PUBLICO.
+/DOSSIE-remocoes-expofest.md
+
+# Fila de pendencias: cita conta, pessoa e falha ainda aberta. Repo PUBLICO.
+/FILA-pendencias.md
+
+# Lista de responsaveis com nome e contato real. Repo PUBLICO.
+/EMAILS-responsaveis-a-preencher.md
+
+# Relatorio diario de recadastros: nome e CPF parcial. Repo PUBLICO.
+/RELATORIO-recadastros.md
