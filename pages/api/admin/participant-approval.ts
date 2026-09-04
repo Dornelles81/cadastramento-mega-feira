@@ -1,17 +1,27 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import type { Session } from 'next-auth'
 import EvolutionClient, { formatApprovalMessage } from '../../../lib/whatsapp/evolution-client'
 import { prisma } from '../../../lib/prisma'
-import { getSession } from '../../../lib/auth'
+import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../lib/api-auth'
 import { aplicarAprovacao, atorDaSessao, MENSAGEM_FALHA } from '../../../lib/participants/approval'
 
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Check authentication via NextAuth session
-  const session = await getSession(req, res)
-  if (!session || !session.user) {
-    return res.status(401).json({ error: 'Não autenticado' })
-  }
-
+/**
+ * Aprovar/rejeitar um participante. É ESTE o endpoint que o painel usa
+ * (app/admin/eventos/[slug]/page.tsx) — não o approve-participant.ts, que é o
+ * gêmeo sem consumidor.
+ *
+ * ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
+ * Até 04/09/2026 exigia só `getSession`: qualquer sessão autenticada, de
+ * qualquer role — inclusive o OPERATOR da portaria — aprovava ou rejeitava
+ * qualquer participante de qualquer evento. Não era exposição de leitura: num
+ * evento com `requiresApprovalForAccess`, aprovar é o que libera a pessoa no
+ * portão E dispara o fan-out da biometria para os terminais. Uma aprovação
+ * indevida empurra o rosto de alguém para as catracas.
+ *
+ * Agora: ADMIN_ROLES + `canApprove` no evento DO PARTICIPANTE.
+ */
+async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -34,6 +44,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!participant) {
       return res.status(404).json({ error: 'Participant not found' })
+    }
+
+    // Permissão no evento DO PARTICIPANTE, antes de qualquer escrita.
+    // `hasEventPermission` casa por id ou slug, então o `eventId` que já está em
+    // mãos basta — não é preciso resolver o slug. `Participant.eventId` é
+    // nullable no schema; o sentinela não casa com vínculo nenhum, então
+    // SUPER_ADMIN passa (a função devolve true antes de olhar eventos) e as
+    // demais roles são recusadas, que é o lado seguro para um registro órfão.
+    if (!hasEventPermission(session, participant.eventId ?? '__participante_sem_evento__', 'canApprove')) {
+      return res.status(403).json({
+        error: 'Sem permissão para aprovar ou rejeitar participantes deste evento'
+      })
     }
 
     // Estado + fan-out + logs num lugar só (lib/participants/approval). O ator
@@ -140,3 +162,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+// 401 sem sessão, 403 fora de ADMIN_ROLES (SUPER_ADMIN, ADMIN, EVENT_ADMIN).
+export default withApiAuth(handler, { roles: ADMIN_ROLES })
