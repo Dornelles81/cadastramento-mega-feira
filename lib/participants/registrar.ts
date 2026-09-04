@@ -21,6 +21,26 @@
  * igual e a mudança seja invisível para o cliente. O `StandFullError` continua
  * sendo LANÇADO (não devolvido) porque o mapeamento dele para HTTP já vivia no
  * `catch` do endpoint, e mexer nisso mudaria comportamento.
+ *
+ * ── O QUE FOI VALIDADO EM PRODUÇÃO (04/09/2026) ───────────────────────────
+ * Cadastro real pelo link público, feito pelo responsável do projeto.
+ *
+ * PROVADO:
+ *   - cifragem da foto (AES-256-GCM) e cálculo do `faceVersion`
+ *   - carimbo de consentimento com IP e data
+ *   - reserva de vaga e atualização da contagem do stand
+ *   - cadastro completo (201), CPF repetido (409 de duplicidade) e stand
+ *     lotado (409), nesta ordem de checagem
+ *
+ * NÃO PROVADO — não confundir com "validado":
+ *   - a ENTREGA ao equipamento. No evento de teste a alocação vigente
+ *     apontava só para um terminal fora de contato, então a face ficou em
+ *     `pending`. Fica para o teste do balcão, que precisa dessa ponta de
+ *     qualquer forma.
+ *   - o `onBecameEligible` DESTE arquivo. Ele só roda em evento SEM
+ *     `requiresApprovalForAccess`; o evento de teste exige aprovação, e nesse
+ *     caminho quem dispara o fan-out é `lib/participants/approval.ts`, que a
+ *     extração não tocou. Continua sem teste.
  */
 import { prisma } from '../prisma'
 import { encryptString } from '../crypto'
