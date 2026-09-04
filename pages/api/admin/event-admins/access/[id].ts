@@ -28,6 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         canExport,
         canManageStands,
         canManageAdmins,
+        canRegisterAtDesk,
         isActive
       } = req.body
 
@@ -41,6 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ...(typeof canExport === 'boolean' && { canExport }),
           ...(typeof canManageStands === 'boolean' && { canManageStands }),
           ...(typeof canManageAdmins === 'boolean' && { canManageAdmins }),
+          ...(typeof canRegisterAtDesk === 'boolean' && { canRegisterAtDesk }),
           ...(typeof isActive === 'boolean' && { isActive })
         },
         include: {

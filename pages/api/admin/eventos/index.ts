@@ -51,7 +51,8 @@ export default async function handler(
             canDelete: true,
             canExport: true,
             canManageStands: true,
-            canManageAdmins: true
+            canManageAdmins: true,
+            canRegisterAtDesk: true
           }
         })
     const permissoesPorEvento = new Map(
@@ -112,7 +113,8 @@ export default async function handler(
         canDelete: true,
         canExport: true,
         canManageStands: true,
-        canManageAdmins: true
+        canManageAdmins: true,
+        canRegisterAtDesk: true
       }
     }))
 

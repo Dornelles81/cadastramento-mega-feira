@@ -23,7 +23,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         canDelete = false,
         canExport = true,
         canManageStands = true,
-        canManageAdmins = false
+        canManageAdmins = false,
+        canRegisterAtDesk = false
       } = req.body
 
       // Validate required fields
@@ -55,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           canExport,
           canManageStands,
           canManageAdmins,
+          canRegisterAtDesk,
           isActive: true
         },
         include: {

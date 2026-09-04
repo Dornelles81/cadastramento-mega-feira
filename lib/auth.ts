@@ -43,6 +43,7 @@ export async function checkEventAccess(
     canExport: boolean
     canManageStands: boolean
     canManageAdmins: boolean
+    canRegisterAtDesk: boolean
   }
 ) {
   // Super admin has access to everything
@@ -84,6 +85,7 @@ export async function requireEventAccess(
     canExport: boolean
     canManageStands: boolean
     canManageAdmins: boolean
+    canRegisterAtDesk: boolean
   }
 ) {
   const session = await requireAuth(req, res)

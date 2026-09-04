@@ -144,7 +144,11 @@ export const authOptions: NextAuthOptions = {
               canDelete: access.canDelete,
               canExport: access.canExport,
               canManageStands: access.canManageStands,
-              canManageAdmins: access.canManageAdmins
+              canManageAdmins: access.canManageAdmins,
+              // Balcão de cadastro (04/09/2026). Sem esta linha a permission
+              // existe no banco e nunca chega à sessão — hasEventPermission
+              // leria undefined e recusaria todo mundo.
+              canRegisterAtDesk: access.canRegisterAtDesk
             }
           }))
         }

@@ -194,6 +194,18 @@ model EventAdminAccess {
   canManageStands Boolean @default(false)
   canManageAdmins Boolean @default(false)
 
+  // Operar o BALCÃO de cadastro do evento: escolher um stand na lista e
+  // cadastrar credenciado por ele, sem link e sem ver participante nenhum.
+  //
+  // É permission e NÃO role de propósito. A role (BALCAO) só limita a superfície
+  // de navegação de uma conta dedicada de balcão; quem pode cadastrar é quem tem
+  // ESTA permission — assim um admin do evento assume o balcão numa emergência
+  // sem criar conta nova. E é concessão POSITIVA: a autorização do balcão não
+  // podia ser "as outras permissions estão todas false", que é implícito demais.
+  // Foi `EventAdminAccess` existir e não governar nada que produziu os furos
+  // fechados em 04/09/2026.
+  canRegisterAtDesk Boolean @default(false)
+
   // Status
   isActive Boolean @default(true)
 

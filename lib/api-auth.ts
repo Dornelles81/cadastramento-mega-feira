@@ -59,6 +59,7 @@ export function hasEventPermission(
     | 'canExport'
     | 'canManageStands'
     | 'canManageAdmins'
+    | 'canRegisterAtDesk'
 ): boolean {
   const user = session.user as any
   if (user?.role === 'SUPER_ADMIN') return true
