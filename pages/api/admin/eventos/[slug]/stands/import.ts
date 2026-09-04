@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import type { Session } from 'next-auth'
 import { prisma } from '../../../../../../lib/prisma'
-import { getSession } from '../../../../../../lib/auth'
+import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../../lib/api-auth'
 
 interface StandImport {
   code: string
@@ -14,13 +15,16 @@ interface StandImport {
   isActive?: boolean
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+// Importação em massa de stands de um evento.
+//
+// ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
+// Esta rota é a irmã de /api/admin/eventos/[slug]/stands e exigia apenas sessão
+// (`getSession`, sem role e sem vínculo com o evento do slug). Sem a mesma régua
+// do POST de lá, ela seria o DESVIO da trava: o que o POST unitário passou a
+// recusar continuaria possível em lote, por aqui. Mesma permissão, portanto:
+// criar stand é `canManageStands` no evento do slug.
+async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   console.log('📥 [IMPORT] Requisição recebida:', req.method, req.url)
-
-  const session = await getSession(req, res)
-  if (!session || !session.user) {
-    return res.status(401).json({ error: 'Não autenticado' })
-  }
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -61,6 +65,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!event) {
       res.status(404).json({ error: 'Evento não encontrado' })
+      return
+    }
+
+    // Mesma régua do POST unitário. `hasEventPermission` devolve true p/ SUPER_ADMIN.
+    if (!hasEventPermission(session, event.slug, 'canManageStands')) {
+      res.status(403).json({ error: 'Sem permissão para gerenciar os stands deste evento' })
       return
     }
 
@@ -130,3 +140,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
+
+// 401 sem sessão, 403 fora de ADMIN_ROLES (SUPER_ADMIN, ADMIN, EVENT_ADMIN).
+export default withApiAuth(handler, { roles: ADMIN_ROLES })

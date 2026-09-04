@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import type { Session } from 'next-auth';
 import { invalidateStandCache } from '../../../../../lib/cache';
-import { requireAuth } from '../../../../../lib/auth';
+import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../lib/api-auth';
 import { prisma } from '../../../../../lib/prisma'
 import { occupiedSlotsRelationWhere } from '../../../../../lib/stand-access/occupancy'
 import { visibleParticipantsRelationWhere } from '../../../../../lib/participants/visibility'
@@ -8,7 +9,15 @@ import { buscarRemocoes, montarRemocao } from '../../../../../lib/participants/r
 
 
 // API para gerenciamento de Stands por Evento (CRUD)
-export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
+//
+// ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
+// Até 04/09/2026 esta rota chamava só `requireAuth`, que apenas confirma que
+// existe sessão — sem role e sem vínculo com o evento do slug. Qualquer conta
+// autenticada, de qualquer role, lia com `?withParticipants=true` o nome, CPF,
+// e-mail e telefone de todos os participantes de QUALQUER evento (bastava
+// trocar o slug na URL), criava e alterava stands, e deletava os que estivessem
+// vazios. Agora: ADMIN_ROLES no wrapper + permissão POR EVENTO, por método.
+async function handler(req: NextApiRequest, res: NextApiResponse, session: Session): Promise<void> {
   const { slug } = req.query;
 
   if (!slug || typeof slug !== 'string') {
@@ -17,8 +26,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Verificar autenticação via NextAuth
-    await requireAuth(req, res);
     // Find event by slug
     const event = await prisma.event.findUnique({
       where: { slug: slug.toLowerCase() },
@@ -29,6 +36,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!event) {
       res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    // Leitura exige canView; escrita exige canManageStands. A separação importa:
+    // o GET com ?withParticipants=true devolve CPF, então não pode cair na mesma
+    // régua de "quem edita stand"; e criar/alterar/excluir stand é exatamente o
+    // que `canManageStands` existe para governar (não `canDelete`, que é do
+    // domínio de participante). `hasEventPermission` já devolve true p/ SUPER_ADMIN.
+    const permissaoNecessaria = req.method === 'GET' ? 'canView' : 'canManageStands';
+    if (!hasEventPermission(session, event.slug, permissaoNecessaria)) {
+      res.status(403).json({
+        error: req.method === 'GET'
+          ? 'Sem permissão para ver os stands deste evento'
+          : 'Sem permissão para gerenciar os stands deste evento'
+      });
       return;
     }
 
@@ -53,10 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.status(405).json({ error: 'Method not allowed' });
     }
   } catch (error: any) {
-    if (error.message === 'Não autenticado') {
-      res.status(401).json({ error: 'Não autenticado' });
-      return;
-    }
+    // O 401 saía daqui porque `requireAuth` sinalizava por exceção; quem responde
+    // 401/403 agora é o wrapper, antes de o handler rodar.
     console.error('Event Stand API Error:', error);
     res.status(500).json({
       error: 'Internal server error',
@@ -65,6 +85,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } finally {
   }
 }
+
+// 401 sem sessão, 403 fora de ADMIN_ROLES (SUPER_ADMIN, ADMIN, EVENT_ADMIN).
+export default withApiAuth(handler, { roles: ADMIN_ROLES });
 
 // GET - Listar stands do evento ou buscar por ID
 async function handleGet(req: NextApiRequest, res: NextApiResponse, eventId: string): Promise<void> {
