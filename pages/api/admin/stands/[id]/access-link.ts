@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import type { Session } from 'next-auth'
 import { prisma } from '../../../../../lib/prisma'
-import { withApiAuth, ADMIN_ROLES } from '../../../../../lib/api-auth'
+import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../lib/api-auth'
 import {
   generateStandAccessToken,
   revokeStandAccessTokens,
@@ -47,6 +47,43 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       req.socket.remoteAddress ||
       null,
     userAgent: (req.headers['user-agent'] as string) ?? null
+  }
+
+  // ── VÍNCULO DE EVENTO ──────────────────────────────────────────────────────
+  // A rota tinha role (ADMIN_ROLES) mas nenhum escopo: um admin de um evento
+  // gerava e revogava link de stand de QUALQUER outro. E não é link inócuo — o
+  // de gestão entrega a lista de credenciados, com foto e CPF, e o botão de
+  // excluir, a quem o receber. Gerar também REVOGA o anterior (só há um ativo
+  // por scope), então dava para derrubar o acesso da equipe de um evento alheio
+  // sem nenhum aviso.
+  //
+  // A permissão é `canManageStands` — a mesma do CRUD de stand, porque o link é
+  // uma propriedade do stand. Escolha deliberada também pelo lado da operação:
+  // é uma permissão que quem já administra stands POSSUI HOJE, então nenhuma
+  // sessão em curso é derrubada por esta trava. Exigir `canDelete` (defensável,
+  // já que o link de gestão exclui) romperia sessões vivas, porque essa
+  // permission acabou de ser concedida e o JWT tem validade de 24h — a trava só
+  // valeria depois do próximo login, e até lá pareceria bug.
+  //
+  // A busca fica ANTES das duas ramificações de propósito: o DELETE não
+  // carregava o stand (quem resolvia era o `revokeStandAccessTokens`, lá dentro,
+  // devolvendo 404 por comparação de string de erro). Agora as duas ramificações
+  // partem do mesmo fato já verificado.
+  const standAlvo = await prisma.stand.findUnique({
+    where: { id },
+    select: { id: true, event: { select: { slug: true } } }
+  })
+  if (!standAlvo) {
+    return res.status(404).json({ error: 'Stand não encontrado' })
+  }
+  // `Stand.eventId` é nullable no schema (0 órfãos hoje, mas o tipo permite).
+  // O slug sentinela nunca casa com vínculo nenhum: SUPER_ADMIN passa — a função
+  // devolve true antes de olhar eventos — e qualquer outra role é recusada, que
+  // é o lado seguro para um stand sem dono.
+  if (!hasEventPermission(session, standAlvo.event?.slug ?? '__stand_sem_evento__', 'canManageStands')) {
+    return res.status(403).json({
+      error: 'Sem permissão para gerenciar os links de acesso deste stand'
+    })
   }
 
   if (req.method === 'POST') {
