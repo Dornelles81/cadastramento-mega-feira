@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import type { Session } from 'next-auth'
 import { prisma } from '../../../../lib/prisma'
 import { enqueueDeviceRemovalBeforeDelete } from '../../../../lib/agent/device-removal'
 import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
+import { atorDaSessao } from '../../../../lib/participants/approval'
 
 /**
  * LGPD — snapshot de participante para o audit log, SEM o dado sensível.
@@ -30,7 +32,7 @@ function snapshotSemBiometria<T extends Record<string, any>>(participante: T): P
   return snapshot
 }
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   const { id } = req.query
 
   if (!id || typeof id !== 'string') {
@@ -40,13 +42,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Get admin IP
   const adminIp = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown'
 
+  // ── QUEM FEZ ──────────────────────────────────────────────────────────────
+  // Os INSERTs de auditoria daqui gravavam a string literal 'admin' no campo
+  // `adminUser`, e não o ator da sessão. O efeito: 113 exclusões de participante
+  // registradas até 04/09/2026 sem autoria — o log dizia que "admin" excluiu,
+  // e não havia como saber quem. A `description` ainda carrega o CPF de quem
+  // foi excluído, então era o pior dos dois mundos: identifica a vítima e não
+  // o autor. Mesmo defeito que já havia sido corrigido em approve-participant.
+  //
+  // `atorDaSessao` é o helper que os outros caminhos usam; o fallback dele é
+  // '(sessao-sem-email)', que deixa a falha VISÍVEL no log em vez de virar mais
+  // um 'admin' silencioso.
+  const adminUser = atorDaSessao(session).email
+
   switch (req.method) {
     case 'GET':
       return handleGet(id, res)
     case 'PUT':
-      return handleUpdate(id, req.body, adminIp, res)
+      return handleUpdate(id, req.body, adminIp, adminUser, res)
     case 'DELETE':
-      return handleDelete(id, adminIp, res)
+      return handleDelete(id, adminIp, adminUser, res)
     default:
       return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -69,7 +84,7 @@ async function handleGet(id: string, res: NextApiResponse) {
   }
 }
 
-async function handleUpdate(id: string, data: any, adminIp: string, res: NextApiResponse) {
+async function handleUpdate(id: string, data: any, adminIp: string, adminUser: string, res: NextApiResponse) {
   try {
     // Get the current participant data
     const currentParticipant = await prisma.participant.findUnique({
@@ -129,7 +144,7 @@ async function handleUpdate(id: string, data: any, adminIp: string, res: NextApi
             'UPDATE',
             'participant',
             ${id},
-            'admin',
+            ${adminUser},
             ${adminIp},
             ${JSON.stringify(snapshotSemBiometria(currentParticipant))}::jsonb,
             ${JSON.stringify(snapshotSemBiometria(updatedParticipant))}::jsonb,
@@ -155,7 +170,7 @@ async function handleUpdate(id: string, data: any, adminIp: string, res: NextApi
   }
 }
 
-async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
+async function handleDelete(id: string, adminIp: string, adminUser: string, res: NextApiResponse) {
   try {
     // Get the participant data before deleting
     const participant = await prisma.participant.findUnique({
@@ -192,7 +207,7 @@ async function handleDelete(id: string, adminIp: string, res: NextApiResponse) {
             'DELETE',
             'participant',
             ${id},
-            'admin',
+            ${adminUser},
             ${adminIp},
             ${JSON.stringify(auditSnapshot)}::jsonb,
             NULL,
