@@ -49,7 +49,7 @@ import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../face/size-limit'
 import { faceMetricsForPrisma } from '../face/metrics'
 import { respostaCpfDuplicado } from './cpf-duplicado'
 import { occupiedSlotsWhere } from '../stand-access/occupancy'
-import { onBecameEligible } from '../agent/sync-enqueue'
+import { onBecameEligible, enqueueFaceChange } from '../agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../consent'
 import { encryptDocuments } from '../documents'
 
@@ -109,6 +109,12 @@ export function isValidCPF(cpf: string): boolean {
   return remainder === parseInt(numbers[10])
 }
 
+
+/** Normaliza nome para comparar: sem acento, sem caixa, sem espaço duplo. */
+function nomeNormalizado(n: string): string {
+  return n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
 export async function registrarCredenciado(
   entrada: EntradaDoCadastro,
   contexto: ContextoDoCadastro
@@ -142,12 +148,55 @@ export async function registrarCredenciado(
     return { ok: false, recusa: { status: 400, body: { error: 'Invalid CPF', message: 'CPF inválido' } } }
   }
 
-  const existing = await prisma.participant.findFirst({
+  // ── DUPLICIDADE: só cadastro ATIVO bloqueia ───────────────────────────────
+  // Até 04/09/2026 esta checagem olhava qualquer linha do CPF no evento, sem
+  // filtrar status — então uma linha `removed` bloqueava o recadastro para
+  // sempre, com a mensagem de "já possui cadastro". No Expofest isso prendeu 9
+  // pessoas em duas semanas: o gestor removia (quase sempre para corrigir stand
+  // errado), a pessoa tentava de novo e batia num 409 que ninguém conseguia
+  // destravar — nem ela, nem o gestor, nem o balcão.
+  //
+  // ⚠️ REGRA EM DOIS LUGARES, COM COMPORTAMENTO DELIBERADAMENTE DIFERENTE.
+  // O gêmeo é pages/api/register-fixed.ts (cadastro público sem stand):
+  //
+  //   AQUI (link do stand)  : linha removida → REVIVE, a pessoa se recadastra
+  //   register-fixed.ts     : linha removida → 409 orientando a usar o link do
+  //                           stand. NÃO revive.
+  //
+  // A divergência é escolha, não esquecimento: aquele fluxo aceita cadastro SEM
+  // stand e valida limite por contagem, enquanto aqui a revivência depende da
+  // reserva atômica de vaga num stand. Dar revivência a ele exigiria um caminho
+  // de escrita novo, sem stand, que ninguém exercita — havia 1 participante sem
+  // stand no banco inteiro e nenhum no Expofest em 04/09/2026.
+  //
+  // MUDOU AQUI, MUDA LÁ — e reavalie se a divergência ainda se justifica. Está
+  // anotado nos DOIS arquivos porque é o padrão handleUpdate/handleDelete de
+  // participants/[id].ts, que divergiu por um ano justamente por omissão.
+  const existente = await prisma.participant.findFirst({
     where: { cpf: cleanCPF, eventId: event.id },
-    select: { id: true }
+    select: {
+      id: true, name: true, email: true, phone: true, status: true, isDeleted: true,
+      standId: true, createdAt: true, slotLockedUntil: true,
+      approvalStatus: true, approvedAt: true, approvedBy: true,
+      consentDate: true, consentTermVersion: true, faceVersion: true
+    }
   })
-  if (existing) {
+
+  // `isDeleted` é expurgo LGPD: NÃO revive. Reviver religaria a pessoa ao
+  // histórico (audit, acessos, aprovações) que o expurgo existiu para cortar.
+  // Custo assumido: o CPF segue bloqueado nesse caso. Zero ocorrências no banco
+  // em 04/09/2026 — se algum dia acontecer, é decisão nova, não silêncio.
+  const revivivel = !!existente && existente.status === 'removed' && !existente.isDeleted
+
+  if (existente && !revivivel) {
     return { ok: false, recusa: { status: 409, body: { ...respostaCpfDuplicado() } } }
+  }
+
+  // Vaga travada pela regra anti-rotatividade (Fase 7) vale para a revivência
+  // igual: quem usou a credencial hoje não libera a vaga até a virada, mesmo
+  // sendo a própria pessoa voltando.
+  if (existente && revivivel && existente.slotLockedUntil && existente.slotLockedUntil > new Date()) {
+    throw new StandFullError(existente.slotLockedUntil)
   }
 
   // Biometria: criptografa a imagem (AES-256-GCM) — nunca armazenar plaintext
@@ -249,12 +298,105 @@ export async function registrarCredenciado(
       WHERE id = ${standId} AND "currentCount" < "maxRegistrations"
     `
 
+  // ── GRAVAÇÃO: cria, ou REVIVE a linha removida ────────────────────────────
+  // Reviver é UPDATE na mesma linha, e não INSERT novo, por duas razões: o
+  // índice UNIQUE (eventId, cpf) recusaria o INSERT de qualquer forma, e manter
+  // o mesmo `id` preserva a auditoria inteira da pessoa — cadastrou, foi
+  // removida, voltou — em vez de espalhá-la por duas linhas sem ligação.
+  //
+  // O que a revivência ZERA, e por quê:
+  //   approvalStatus/approvedAt/approvedBy/rejectionReason → é cadastro novo na
+  //     prática; ninguém aprovou ESTE. Sem isso, quem foi removido estando
+  //     aprovado voltaria aprovado, com foto nova que ninguém conferiu.
+  //   status/removedAt/removedBy/slotLockedUntil/pendingDeviceRemoval → a
+  //     remoção deixou de valer.
+  //   checkedIn/checkedInAt/checkedInBy → "está dentro do evento" é estado do
+  //     cadastro anterior; herdar diria que a pessoa entrou hoje.
+  // NÃO zera `employeeNo`: é sequencial global e nunca reutilizado (Fase 1).
+  const resetDaRevivencia = {
+    status: 'active',
+    removedAt: null,
+    removedBy: null,
+    slotLockedUntil: null,
+    pendingDeviceRemoval: false,
+    approvalStatus: 'pending',
+    approvedAt: null,
+    approvedBy: null,
+    rejectionReason: null,
+    checkedIn: false,
+    checkedInAt: null,
+    checkedInBy: null
+  }
+
+  const gravar = async () => {
+    if (!existente) {
+      return prisma.participant.create({ data: participantData })
+    }
+    const [revivido] = await prisma.$transaction([
+      prisma.participant.update({
+        where: { id: existente.id },
+        data: { ...participantData, ...resetDaRevivencia }
+      }),
+      // O token de edição da linha ANTIGA continuaria válido apontando para o
+      // cadastro novo — quem o tivesse editaria os dados de outra pessoa.
+      prisma.participantEditToken.updateMany({
+        where: { participantId: existente.id, revokedAt: null },
+        data: { revokedAt: new Date() }
+      }),
+      prisma.auditLog.create({
+        data: {
+          eventId: event.id,
+          standId,
+          action: 'PARTICIPANT_RE_REGISTERED',
+          entityType: 'participant',
+          entityId: existente.id,
+          targetParticipantId: existente.id,
+          actorType: 'participant',
+          ip,
+          userAgent,
+          // Sem biometria e sem documento: o mesmo recorte do resto da auditoria.
+          previousData: {
+            name: existente.name, email: existente.email, phone: existente.phone,
+            standId: existente.standId, status: existente.status,
+            approvalStatus: existente.approvalStatus,
+            approvedAt: existente.approvedAt ? existente.approvedAt.toISOString() : null,
+            approvedBy: existente.approvedBy,
+            consentDate: existente.consentDate ? existente.consentDate.toISOString() : null,
+            consentTermVersion: existente.consentTermVersion,
+            tinhaFoto: !!existente.faceVersion,
+            registeredAt: existente.createdAt.toISOString()
+          },
+          newData: {
+            name: participantData.name, email: participantData.email,
+            phone: participantData.phone, standId,
+            status: 'active', approvalStatus: 'pending',
+            consentDate: participantData.consentDate.toISOString(),
+            consentTermVersion: participantData.consentTermVersion,
+            tinhaFoto: !!faceVersion
+          },
+          // NÃO bloqueia — marca para ser encontrável depois. Se o CPF tiver sido
+          // digitado errado no cadastro antigo, a linha era de OUTRA pessoa e o
+          // histórico dela passa a acompanhar quem cadastrou agora. Bloquear por
+          // divergência devolveria a pessoa ao beco que esta correção fecha, e
+          // nome diverge por motivo legítimo (apelido, nome de casada, grafia).
+          changes: {
+            nomeDivergente: nomeNormalizado(existente.name) !== nomeNormalizado(participantData.name)
+          },
+          description:
+            'Recadastro por cima de linha removida. Antes: ' + existente.name + '. Agora: ' + participantData.name + '.',
+          severity: 'INFO'
+        }
+      })
+    ])
+    return revivido
+  }
+
   let participant
   if (reserved === 1) {
-    // Vaga reservada. Cria o participante FORA de qualquer lock; se a criação
-    // falhar, devolve a vaga (compensação) para a vaga não vazar.
+    // Vaga reservada. Grava FORA de qualquer lock; se a gravação falhar,
+    // devolve a vaga (compensação) para a vaga não vazar.
     try {
-      participant = await prisma.participant.create({ data: participantData })
+      participant = await gravar()
     } catch (createErr) {
       await prisma.$executeRaw`
           UPDATE stands SET "currentCount" = "currentCount" - 1
@@ -291,7 +433,13 @@ export async function registrarCredenciado(
         throw new StandFullError(nextLocked?.slotLockedUntil ?? null)
       }
 
-      const created = await tx.participant.create({ data: participantData })
+      // Mesma decisão do caminho rápido: cria ou revive — aqui sob o lock.
+      const created = existente
+        ? await tx.participant.update({
+            where: { id: existente.id },
+            data: { ...participantData, ...resetDaRevivencia }
+          })
+        : await tx.participant.create({ data: participantData })
 
       // Reconcilia o cache defasado para a contagem canônica + esta criação,
       // curando a defasagem de locks expirados para as próximas reservas rápidas.
@@ -304,9 +452,32 @@ export async function registrarCredenciado(
     })
   }
 
-  // Evento SEM-APROVAÇÃO: já fica elegível no registro → identidade + fan-out
-  // (pós-commit da transação). Idempotente e não-fatal.
-  if (event.requiresApprovalForAccess === false) {
+  // ── REENFILEIRAMENTO ──────────────────────────────────────────────────────
+  // Na REVIVÊNCIA é preciso o PAR, porque as duas funções cobrem conjuntos
+  // complementares e nenhuma sozinha basta:
+  //   `onBecameEligible` → cria linha faltante e revive as que estão em remoção
+  //      (filtra `removalState != 'none'`)
+  //   `enqueueFaceChange` → re-empurra a face nas que estão em `removalState:
+  //      'none'` — inclusive as que ficaram `faceState: 'synced'` com a
+  //      faceVersion ANTIGA, que a primeira ignora
+  // Sem a segunda, quem foi removido e voltou manteria a foto velha no
+  // equipamento para sempre. É o mesmo par que participants/update.ts usa após
+  // uma re-captura, pela mesma razão.
+  //
+  // Em evento COM aprovação as duas são no-op seguras: `onBecameEligible` checa
+  // elegibilidade e sai (o revivido está `pending`), e o `/work` também valida
+  // elegibilidade antes de servir, então nada chega ao terminal antes da
+  // aprovação. Quem dispara o fan-out ali é lib/participants/approval.ts.
+  if (existente) {
+    try {
+      await onBecameEligible(event.id, participant.id)
+      await enqueueFaceChange(participant.id)
+    } catch (syncErr) {
+      console.error('reenfileiramento do sync falhou na revivência:', syncErr)
+    }
+  } else if (event.requiresApprovalForAccess === false) {
+    // Cadastro NOVO em evento sem aprovação: já fica elegível no registro →
+    // identidade + fan-out (pós-commit). Idempotente e não-fatal.
     try {
       await onBecameEligible(event.id, participant.id)
     } catch (syncErr) {

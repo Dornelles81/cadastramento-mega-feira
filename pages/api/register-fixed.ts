@@ -184,11 +184,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    // Check for duplicate CPF in this event (multi-tenant support)
+    // ── DUPLICIDADE: só cadastro ATIVO bloqueia ───────────────────────────────
+    // Antes, qualquer linha do CPF no evento bloqueava — inclusive uma `removed`,
+    // que prendia a pessoa num 409 que ninguém conseguia destravar.
+    //
+    // ⚠️ REGRA DUPLICADA, DE PROPÓSITO E COM CUSTO: a mesma decisão vive em
+    // lib/participants/registrar.ts (núcleo do cadastro por link de stand).
+    // MUDOU AQUI, MUDA LÁ — e vice-versa. Não foram unificadas porque este fluxo
+    // aceita cadastro SEM stand e valida limite por contagem, enquanto o núcleo
+    // exige stand e faz reserva atômica de vaga; unificar mexeria no caminho de
+    // escrita que o evento inteiro usa. É o padrão handleUpdate/handleDelete de
+    // participants/[id].ts, que divergiu por um ano — está anotado nos DOIS
+    // arquivos justamente para não repetir por omissão.
+    //
+    // A diferença em relação ao núcleo: aqui NÃO há revivência. Este endpoint
+    // tem 1 participante sem stand no banco inteiro e nenhum no Expofest, então
+    // ele recusa com uma mensagem que diz o que fazer, em vez de ganhar um
+    // caminho de escrita novo que ninguém exercita.
     const existingUser = await prisma.participant.findFirst({
       where: {
         cpf: cleanCPF,
-        eventId: event.id
+        eventId: event.id,
+        status: 'active',
+        isDeleted: false
       }
     })
 
@@ -196,6 +214,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('❌ CPF already exists in this event')
       return res.status(409).json({
         ...respostaCpfDuplicado()
+      })
+    }
+
+    // Linha REMOVIDA do mesmo CPF: o índice UNIQUE (eventId, cpf) recusaria o
+    // INSERT logo abaixo com um P2002 cru. Recusa aqui, com texto que orienta.
+    const removidoAntes = await prisma.participant.findFirst({
+      where: { cpf: cleanCPF, eventId: event.id },
+      select: { id: true }
+    })
+    if (removidoAntes) {
+      return res.status(409).json({
+        error: 'Previous registration found',
+        message:
+          'Este CPF teve um cadastro que foi removido neste evento. Use o link de ' +
+          'cadastro do seu stand para se inscrever novamente, ou procure a organização.'
       })
     }
 

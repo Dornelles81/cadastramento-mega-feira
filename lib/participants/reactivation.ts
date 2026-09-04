@@ -139,6 +139,21 @@ export async function reativarParticipante(opts: {
         }
       }
 
+      // ── APROVAÇÃO NÃO SOBREVIVE À VOLTA SEM FOTO ──────────────────────────
+      // Até 04/09/2026 esta atualização não tocava em `approvalStatus`, então
+      // quem era removido estando APROVADO voltava APROVADO — e sem foto, que a
+      // remoção apaga. Ninguém aprovou aquele cadastro no estado em que ele
+      // ficou, e como nenhuma aprovação nova acontece, a trava que recusa
+      // aprovar sem biometria nunca é consultada. O resultado é um cadastro que
+      // parece pronto na tela e falha no portão, invisível para todo mundo.
+      // Aconteceu com 2 pessoas do Expofest (corrigidas à mão em 04/09).
+      //
+      // A condição é ter biometria utilizável, e não "houve reativação": se a
+      // pessoa voltar COM foto, ela está completa e exigir nova aprovação seria
+      // fricção sem ganho. Hoje a remoção sempre apaga, então o `else` é
+      // defensivo — mas é a condição correta, e não a suposição.
+      const semBiometria = !p.faceData && !p.faceImageUrl
+
       await tx.participant.update({
         where: { id: participantId },
         data: {
@@ -148,7 +163,10 @@ export async function reativarParticipante(opts: {
           // A pessoa volta à equipe; nada a remover no device (ela já saiu de
           // lá, e sem face não volta).
           pendingDeviceRemoval: false,
-          slotLockedUntil: null
+          slotLockedUntil: null,
+          ...(semBiometria
+            ? { approvalStatus: 'pending', approvedAt: null, approvedBy: null }
+            : {})
         }
       })
 
