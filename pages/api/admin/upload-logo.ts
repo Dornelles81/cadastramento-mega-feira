@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { requireAuth } from '../../../lib/auth'
+import { withApiAuth } from '../../../lib/api-auth'
 import formidable from 'formidable'
 import fs from 'fs'
 
@@ -9,15 +9,22 @@ export const config = {
   },
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * Converte a logo enviada em data URL (não grava em disco — na Vercel o
+ * filesystem é efêmero). O retorno vai para `EventConfig.logoUrl`.
+ *
+ * ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
+ * Exigia apenas `requireAuth`, que só confirma que existe sessão: qualquer
+ * conta autenticada, de qualquer role, postava 5 MB aqui. É SUPER_ADMIN e não
+ * ADMIN_ROLES porque os dois únicos consumidores são telas de super
+ * (/admin/super/eventos/novo e /admin/super/eventos/[slug]/editar) e as APIs
+ * irmãs que gravam o evento — eventos/create.ts e eventos/[slug].ts — já usam
+ * a mesma régua. Uma trava mais frouxa que a do endpoint que consome o
+ * resultado não protegeria nada.
+ */
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método não permitido' })
-  }
-
-  try {
-    await requireAuth(req, res)
-  } catch {
-    return res.status(401).json({ error: 'Não autenticado' })
   }
 
   try {
@@ -49,3 +56,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Erro ao fazer upload da logo' })
   }
 }
+
+// 401 sem sessão, 403 para qualquer role que não seja SUPER_ADMIN.
+export default withApiAuth(handler, { roles: ['SUPER_ADMIN'] })
