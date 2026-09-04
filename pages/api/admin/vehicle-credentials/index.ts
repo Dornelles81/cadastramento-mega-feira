@@ -1,10 +1,30 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
-import { getSession } from '../../../../lib/auth'
+import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getSession(req, res)
-  if (!session?.user) return res.status(401).json({ error: 'Não autenticado' })
+/**
+ * Credenciais veiculares do evento.
+ *
+ * ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
+ * Exigia só `getSession`: qualquer sessão autenticada, de qualquer role,
+ * listava, criava, alterava e desativava credencial veicular de qualquer
+ * evento — e o PUT ainda grava as orientações no próprio Event.
+ *
+ * OPERATOR_ROLES e NÃO ADMIN_ROLES: o único consumidor é
+ * app/admin/access-control/credentials, que fica sob /admin/access-control —
+ * a área da portaria. Trancar em ADMIN_ROLES quebraria a emissão de credencial
+ * veicular em operação. A régua mais apertada aqui é a do consumidor real.
+ *
+ * ⚠️ ESCOPO POR EVENTO: PENDENTE. Isto é role, não vínculo — um operador de um
+ * evento ainda alcança as credenciais de outro (o `eventId` vem do client e não
+ * é conferido contra o vínculo de quem chama). Não dá para fechar hoje porque
+ * NENHUMA conta OPERATOR possui vínculo em `EventAdminAccess`: aplicar
+ * `hasEventPermission` agora recusaria toda a portaria. Para fechar: criar os
+ * vínculos das contas de portaria no evento em que vão trabalhar e então
+ * exigir `canView` (GET) / `canEdit` (POST, PUT, PATCH, DELETE) aqui e em
+ * ./[id].ts. Registrado na dívida do levantamento — não é para esquecer.
+ */
+async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // ── GET: list vehicle credentials + event orientations ────────────────────
   if (req.method === 'GET') {
@@ -105,3 +125,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(405).json({ error: 'Método não permitido' })
 }
+
+// 401 sem sessão, 403 fora de OPERATOR_ROLES (admins + OPERATOR). BALCAO não entra.
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

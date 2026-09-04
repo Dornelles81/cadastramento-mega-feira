@@ -1,10 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
-import { getSession } from '../../../../lib/auth'
+import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getSession(req, res)
-  if (!session?.user) return res.status(401).json({ error: 'Não autenticado' })
+/**
+ * PATCH (placa) e DELETE (desativa) de uma credencial veicular.
+ * Mesma régua e a MESMA pendência de escopo por evento do ./index.ts — ver o
+ * comentário de autorização de lá antes de mexer aqui.
+ */
+async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const { id } = req.query
   if (!id || typeof id !== 'string') return res.status(400).json({ error: 'ID inválido' })
@@ -39,3 +42,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(405).json({ error: 'Método não permitido' })
 }
+
+// 401 sem sessão, 403 fora de OPERATOR_ROLES (admins + OPERATOR). BALCAO não entra.
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })

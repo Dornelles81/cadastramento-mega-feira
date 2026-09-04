@@ -1,13 +1,23 @@
 import { NextApiRequest, NextApiResponse } from 'next'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '../auth/[...nextauth]'
+import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth'
 import { prisma } from '../../../lib/prisma'
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * Gera numeros de credencial (escreve em Participant). Consumidor unico:
+ * app/admin/access-control/credentials — area da portaria, por isso OPERATOR_ROLES
+ * e nao ADMIN_ROLES.
+ *
+ * ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
+ * Exigia apenas `getServerSession` sem checagem de role: qualquer sessão
+ * autenticada, de qualquer role, chamava.
+ *
+ * ⚠️ ESCOPO POR EVENTO: PENDENTE — é role, não vínculo. Ver a nota em
+ * ./vehicle-credentials/index.ts: nenhuma conta OPERATOR tem vínculo em
+ * `EventAdminAccess` hoje, então exigir `hasEventPermission` recusaria a
+ * portaria inteira. Registrado na dívida do levantamento.
+ */
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-
-  const session = await getServerSession(req, res, authOptions)
-  if (!session) return res.status(401).json({ error: 'Unauthorized' })
 
   const { eventId, onlyApproved = true, reset = false } = req.body
   if (!eventId) return res.status(400).json({ error: 'eventId obrigatório' })
@@ -73,3 +83,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: message })
   }
 }
+
+// 401 sem sessão, 403 fora de OPERATOR_ROLES. BALCAO não entra.
+export default withApiAuth(handler, { roles: OPERATOR_ROLES })
