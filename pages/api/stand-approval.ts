@@ -95,11 +95,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Credenciado não encontrado neste stand.'
     })
   }
-  // Removido não se aprova: ele não está na equipe. Reativar primeiro.
+  // Removido não se aprova: ele não está na equipe.
   if (p.status !== 'active') {
     return res.status(409).json({
       error: 'Conflict',
-      message: 'Este credenciado está excluído. Reative-o antes de aprovar.'
+      message:
+        'Esta pessoa foi retirada da equipe. Para voltar, ela precisa se cadastrar ' +
+        'novamente pelo link de cadastro do stand.'
+    })
+  }
+
+  // ── REJEIÇÃO É DA ORGANIZAÇÃO, E SÓ ELA REABRE ────────────────────────────
+  // O painel do gestor perdeu o botão de rejeitar (04/09/2026): em 466 aprovações
+  // nenhum gestor de stand rejeitou ninguém, e "rejeitar mas continuar ocupando a
+  // vaga" precisava de um modal para ser entendido — sinal de que o conceito não
+  // cabia naquela tela.
+  //
+  // Mas o gestor CONTINUA vendo quem está rejeitado (badge vermelho no painel) e
+  // continuava podendo aprovar. Sem esta guarda, uma rejeição feita pela
+  // organização — que é decisão dela, tomada por um motivo que o gestor não
+  // conhece — seria desfeita por um clique de quem não sabe que houve rejeição.
+  // Caso concreto: um participante rejeitado de propósito em 02/09 seguia
+  // aprovável pelo responsável do stand.
+  if (acao === 'approve' && p.approvalStatus === 'rejected') {
+    return res.status(409).json({
+      error: 'Conflict',
+      message:
+        `${p.name} teve o cadastro recusado pela organização do evento. ` +
+        'Só a organização pode liberar — fale com ela antes de aprovar.'
     })
   }
 

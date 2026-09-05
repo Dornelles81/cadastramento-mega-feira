@@ -469,11 +469,34 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
     }
   };
 
-  // Exclusão individual de participante (hard delete — apaga cadastro + biometria).
-  // Usada na tabela do modal de editar stand: esvaziar a lista de ativos libera o
-  // stand pra exclusão (a trava do DELETE do stand conta só ativos).
+  // APAGAR CADASTRO PERMANENTEMENTE — hard delete, e é MUITO mais destrutivo do
+  // que o "Retirar da equipe" do painel do gestor, que é soft-remove.
+  //
+  // O que some junto, por cascade no banco (verificado no schema em 04/09/2026):
+  //   ApprovalLog            — quem aprovou e quando
+  //   AccessLog              — TODAS as entradas e saídas da pessoa no evento
+  //   ParticipantTerminalSync, ParticipantEditToken, HikCentralSyncLog
+  // O que sobrevive: o AuditLog (entityId/targetParticipantId são texto, sem FK),
+  // então o registro de que houve exclusão e de quem a fez permanece.
+  //
+  // Até 04/09 a confirmação falava só em "cadastro, foto e documentos" e omitia
+  // aprovações e entradas/saídas — justamente o histórico que ninguém quer
+  // apagar sem saber. O texto abaixo diz tudo.
   const handleDeleteParticipant = async (participant: Participant) => {
-    if (!confirm(`Excluir ${participant.name}? Esta ação apaga permanentemente o cadastro, a foto e os documentos desta pessoa e não pode ser desfeita.`)) return;
+    const aviso = [
+      `APAGAR PERMANENTEMENTE o cadastro de ${participant.name}?`,
+      '',
+      'Isto apaga:',
+      '· o cadastro, a foto e os documentos',
+      '· o histórico de aprovações',
+      '· TODOS os registros de entrada e saída desta pessoa no evento',
+      '',
+      'Não pode ser desfeito.',
+      '',
+      'Se a intenção é só liberar a vaga do stand, o caminho é o painel do',
+      'responsável ("Retirar da equipe"), que preserva esse histórico.'
+    ].join('\n')
+    if (!confirm(aviso)) return;
     try {
       const response = await fetch(`/api/admin/participants/${participant.id}`, {
         method: 'DELETE',
@@ -1186,10 +1209,10 @@ export default function EventStandsPage({ params }: { params: Promise<{ slug: st
                                       onClick={() => handleDeleteParticipant(participant)}
                                       className="text-red-600 hover:text-red-800 text-sm font-medium"
                                       title={removido
-                                        ? 'Apagar de vez o registro (libera o CPF para novo cadastro)'
-                                        : 'Excluir este participante (apaga cadastro, foto e documentos)'}
+                                        ? 'Apagar de vez o registro desta pessoa'
+                                        : 'Apaga cadastro, foto, documentos, aprovações e registros de entrada/saída'}
                                     >
-                                      Excluir
+                                      Apagar cadastro
                                     </button>
                                   </td>
                                 </tr>

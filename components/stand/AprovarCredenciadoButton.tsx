@@ -5,17 +5,27 @@ import { useState } from 'react'
 type Status = 'pending' | 'approved' | 'rejected'
 
 /**
- * Aprovar / rejeitar no painel do gestor.
+ * APROVAR no painel do gestor. Só isso.
  *
  * Só aparece quando o evento habilitou a delegação (`standApprovalEnabled`);
  * quem decide isso é o servidor, esta peça só desenha.
  *
- * Três cuidados que estão aqui de propósito:
+ * ── POR QUE SÓ APROVAR (04/09/2026) ───────────────────────────────────────
+ * O painel do gestor foi reduzido a duas ações: Aprovar e Retirar da equipe.
+ * Motivo medido, não estético: em 466 aprovações do Expofest, NENHUM gestor de
+ * stand rejeitou alguém. As 16 rejeições do histórico saíram de contas da
+ * organização e de testes. E "rejeitar mas continuar ocupando a vaga" exigia um
+ * modal para ser entendido — quando um conceito precisa de parágrafo na
+ * confirmação, ele não cabe naquela tela.
  *
- *  · REJEITAR NÃO É EXCLUIR. O texto diz isso na confirmação, porque os dois
- *    botões ficam na mesma linha e são coisas muito diferentes: rejeitar tira a
- *    pessoa dos terminais e ela CONTINUA no stand, com a foto intacta, podendo
- *    ser aprovada depois; excluir apaga a biometria e consome cota.
+ * O binário que sobrou também é coerente com a vaga: Aprovar libera acesso,
+ * Retirar libera vaga. Nenhuma ação deixa a pessoa num terceiro estado que
+ * ocupa espaço sem servir para nada.
+ *
+ * Rejeitar continua existindo no painel da organização, operado por quem
+ * distingue "não aprovado" de "não cadastrado".
+ *
+ * Dois cuidados que continuam aqui de propósito:
  *
  *  · FOTO NÃO VALIDADA. O servidor responde 428 pedindo confirmação quando a
  *    foto nunca passou pelo detector. Aqui isso vira uma segunda pergunta, com
@@ -37,10 +47,10 @@ export default function AprovarCredenciadoButton({
   participantName: string
   status: Status
 }) {
-  const [enviando, setEnviando] = useState<'approve' | 'reject' | null>(null)
+  const [enviando, setEnviando] = useState<'approve' | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
-  const enviar = async (acao: 'approve' | 'reject', confirmaFotoNaoValidada = false) => {
+  const enviar = async (acao: 'approve', confirmaFotoNaoValidada = false) => {
     setEnviando(acao)
     setErro(null)
     try {
@@ -77,23 +87,24 @@ export default function AprovarCredenciadoButton({
 
   const aprovar = () => enviar('approve')
 
-  const rejeitar = () => {
-    const ok = window.confirm(
-      `Rejeitar ${participantName}?\n\n` +
-      'A pessoa CONTINUA no stand e ocupando a vaga — rejeitar não é excluir. ' +
-      'Ela deixa de valer nos terminais e não entra no evento até ser aprovada.\n\n' +
-      'Dá para aprovar depois, a qualquer momento.'
-    )
-    if (!ok) return
-    enviar('reject')
-  }
-
   const ocupado = enviando !== null
 
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-1.5">
-        {status !== 'approved' && (
+        {/* Só APROVAR. O botão de rejeitar saiu em 04/09/2026: em 466 aprovações
+            nenhum gestor de stand rejeitou ninguém, e "rejeitar mas continuar
+            ocupando a vaga" precisava de um modal para ser entendido — sinal de
+            que o conceito não cabia nesta tela. Rejeitar segue existindo no
+            painel da organização.
+
+            Quem está `rejected` NÃO ganha botão de aprovar: a recusa é decisão
+            da organização, por um motivo que o gestor não conhece, e um clique
+            aqui a desfaria sem ele saber que houve recusa. O painel continua
+            mostrando o estado em vermelho, e /api/stand-approval recusa a
+            aprovação com a mesma régua — esta ausência é conveniência, a trava
+            está no servidor. */}
+        {status !== 'approved' && status !== 'rejected' && (
           <button
             type="button"
             onClick={aprovar}
@@ -103,15 +114,8 @@ export default function AprovarCredenciadoButton({
             {enviando === 'approve' ? 'Aprovando...' : 'Aprovar'}
           </button>
         )}
-        {status !== 'rejected' && (
-          <button
-            type="button"
-            onClick={rejeitar}
-            disabled={ocupado}
-            className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {enviando === 'reject' ? 'Rejeitando...' : 'Rejeitar'}
-          </button>
+        {status === 'rejected' && (
+          <span className="text-xs text-red-700">Falar com a organização</span>
         )}
       </div>
       {erro && <p className="text-xs text-red-600 max-w-[16rem] text-right">{erro}</p>}

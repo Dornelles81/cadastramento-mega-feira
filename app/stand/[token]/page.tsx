@@ -11,7 +11,6 @@ import {
 import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 import RemoveCredenciadoButton from '../../../components/stand/RemoveCredenciadoButton'
 import FotoCredenciado from '../../../components/stand/FotoCredenciado'
-import ReativarCredenciadoButton from '../../../components/stand/ReativarCredenciadoButton'
 import AprovarCredenciadoButton from '../../../components/stand/AprovarCredenciadoButton'
 import { riscoDeFace } from '../../../lib/participants/face-risk'
 import { deriveFaceStatus } from '../../../lib/face/status'
@@ -406,7 +405,7 @@ export default async function StandPanelPage({
         {removidos.length > 0 && (
           <section className="bg-white rounded-2xl shadow p-6 mt-6">
             <h2 className="text-lg font-bold text-gray-900">
-              Removidos ({removidos.length})
+              Retirados da equipe ({removidos.length})
             </h2>
             <p className="text-sm text-gray-500 mt-1 mb-4">
               Estas pessoas saíram da equipe. O CPF delas continua reservado
@@ -443,11 +442,19 @@ export default async function StandPanelPage({
                         {formatRelease(p.slotLockedUntil!)}.
                       </p>
                     ) : (
-                      <ReativarCredenciadoButton
-                        token={token}
-                        participantId={p.id}
-                        participantName={p.name}
-                      />
+                      // "Reativar" saiu do painel do gestor em 04/09/2026.
+                      // Ele NUNCA devolvia acesso: a remoção apaga a biometria,
+                      // então a pessoa voltava para a lista sem foto, sem
+                      // conseguir entrar, e parecendo pronta na tela — foi o que
+                      // aconteceu com 7 pessoas do Expofest em quatro dias.
+                      // Com o recadastro funcionando (a linha removida deixou de
+                      // bloquear o CPF), o caminho de volta traz foto nova e é o
+                      // único que resolve. Reativar segue existindo no painel da
+                      // organização, para o caso que precisar dele.
+                      <p className="text-xs text-gray-500 text-right max-w-[15rem]">
+                        Para voltar à equipe, esta pessoa se cadastra de novo pelo
+                        link de cadastro do stand, com uma foto nova.
+                      </p>
                     )}
                   </li>
                 )
