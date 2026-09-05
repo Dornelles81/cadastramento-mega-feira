@@ -20,6 +20,10 @@ interface Participant {
   consentAccepted: boolean
   faceInterocularPx?: number | null
   faceStatus?: 'unmeasured' | 'no_face' | 'too_small' | 'valid'
+  /** Tem foto de verdade (faceData/faceImageUrl). NÃO usar faceVersion para isto. */
+  temFoto?: boolean
+  /** Estado nos terminais, só das linhas em push. */
+  sync?: { total: number; sincronizadas: number; desatualizadas: number; falhas: number; pendentes: number }
   hasValidFace: boolean
   faceUnvalidated?: boolean // [assim-mesmo] capturado sem validação (detector morto)
   faceImageUrl?: string
@@ -1511,16 +1515,68 @@ export default function EventAdminPage() {
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {(() => {
-                        const s = participant.faceStatus
-                        if (s === 'valid') return <span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">Válida</span>
-                        if (s === 'too_small') return <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700">Rosto pequeno</span>
-                        if (s === 'no_face') return <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">Sem rosto</span>
-                        // unmeasured/legado → NEUTRO, nunca inválido
-                        return <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500">Não medida</span>
+                        // ── O ESTADO REAL VEM PRIMEIRO ────────────────────────
+                        // Até 04/09/2026 esta coluna mostrava só a NOSSA validação
+                        // (distância interocular) e mentia em dois casos:
+                        //   · quem não tinha foto nenhuma aparecia "Não medida",
+                        //     que sugere que existe foto e ninguém mediu
+                        //   · quem o equipamento RECUSOU aparecia "Válida" — foi o
+                        //     caso de 4 pessoas do Expofest, com a foto reprovada
+                        //     nos quatro terminais e a tela dizendo que estava ok
+                        //
+                        // A ordem abaixo é a mesma de lib/participants/recaptura.ts:
+                        // fato (não tem foto) → veredito do equipamento → o que
+                        // nós achamos. Quem opera precisa da conclusão, não da
+                        // medida.
+                        const sync = participant.sync
+                        if (participant.temFoto === false) {
+                          return <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 font-medium" title="Não há foto no cadastro. A pessoa não entra no evento.">Sem foto</span>
+                        }
+                        if (sync && sync.falhas > 0) {
+                          return <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 font-medium" title={`O equipamento recusou esta foto em ${sync.falhas} terminal(is). Só recaptura resolve.`}>Recusada pelo equipamento</span>
+                        }
+                        if (sync && sync.desatualizadas > 0) {
+                          return <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800" title="O terminal está com uma foto ANTERIOR à do cadastro. Aguardando reenvio.">Foto antiga no terminal</span>
+                        }
+                        if (sync && sync.sincronizadas > 0) {
+                          return <span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700" title={`Foto aceita e presente em ${sync.sincronizadas} terminal(is).`}>No terminal ({sync.sincronizadas})</span>
+                        }
+                        if (sync && sync.pendentes > 0) {
+                          return <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700" title="Na fila para ir aos terminais.">Aguardando envio</span>
+                        }
+                        // Sem linha de sync. Os dois casos são MUITO diferentes:
+                        //
+                        //   pendente  → normal. A aprovação é que dispara o envio,
+                        //     então não ter linha ainda é o esperado. São a maioria
+                        //     (187 de 660 em 04/09) e chamá-los de "Não enviada"
+                        //     afogaria a anomalia real no ruído.
+                        //
+                        //   APROVADO sem linha → ANOMALIA. Alguém liberado cujo
+                        //     rosto não foi nem enfileirado: ou o fan-out não rodou,
+                        //     ou o evento não tem terminal alocado com janela
+                        //     vigente. É falha silenciosa — a pessoa parece pronta
+                        //     e para no portão. "Não enviada" existe para ser raro
+                        //     e chamar atenção.
+                        if (participant.approvalStatus === 'pending') {
+                          return <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-500" title="Normal: o envio aos terminais acontece na aprovação.">Aguardando aprovação</span>
+                        }
+                        return <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 font-medium" title="APROVADO mas o rosto não foi enfileirado para nenhum terminal. Verificar alocação de terminal do evento e o fan-out.">Não enviada</span>
                       })()}
+                      {/* A NOSSA validação vira informação SECUNDÁRIA: ela não
+                          previu nenhuma das recusas do equipamento (47 de 47
+                          marcadas como risco foram aceitas), então não pode
+                          ocupar o lugar da conclusão. Continua visível porque é
+                          a única pista sobre reconhecimento AO VIVO, que os
+                          dados de sync não medem. */}
+                      {participant.temFoto !== false && participant.faceStatus === 'too_small' && (
+                        <span className="ml-1 px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700" title="Rosto perto do piso da medição: o equipamento aceita, mas o reconhecimento ao vivo pode falhar.">Rosto pequeno</span>
+                      )}
+                      {participant.temFoto !== false && participant.faceStatus === 'no_face' && (
+                        <span className="ml-1 px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700" title="O detector rodou e não encontrou rosto nesta foto.">Sem rosto</span>
+                      )}
                       {/* [assim-mesmo] Capturado sem validação (detector morto) — tag de conferência */}
-                      {participant.faceUnvalidated && (
-                        <span className="ml-1 px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700" title="Foto capturada sem validação automática do rosto">⚠ Sem validação</span>
+                      {participant.temFoto !== false && participant.faceUnvalidated && (
+                        <span className="ml-1 px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-700" title="Foto capturada sem validação automática: ninguém verificou se há um rosto.">⚠ Sem validação</span>
                       )}
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>

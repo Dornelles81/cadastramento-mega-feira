@@ -141,6 +141,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
         faceInterocularPx: true,
         faceImageUrl: true, // Foto legada (data URL em claro)
         faceData: true, // Foto nova (AES-256-GCM) — decriptada server-side abaixo, nunca enviada crua
+        // Estado REAL nos terminais. Sem isto a coluna "Status da face" mostra
+        // só a nossa validação e mente: em 04/09/2026 o painel exibia "Válida"
+        // para quem estava `failed` nos quatro equipamentos — a foto tinha
+        // passado no nosso gate e sido recusada pelo modelador do device.
+        terminalSyncs: {
+          select: { faceState: true, removalState: true, faceVersion: true }
+        },
+        faceVersion: true,
         customData: true,
         documents: true, // Include documents field
         approvalStatus: true, // Include approval status
@@ -199,6 +207,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       // [assim-mesmo] Captura sem validação (detector morto) — distingue de legado (null
       // sem a chave). Conferência operacional: badge no painel + filtro + coluna no export.
       faceUnvalidated: !!((participant.customData as any)?.__faceUnvalidated),
+      // ── ESTADO REAL DA FOTO ──────────────────────────────────────────────
+      // `temFoto` vem de faceData/faceImageUrl, NUNCA de faceVersion: até 03/09
+      // o faceVersion sobrevivia à remoção que apagava a foto, e linhas antigas
+      // ainda estão assim — o campo AFIRMA "tenho a foto versão X" sobre um
+      // registro sem foto nenhuma.
+      temFoto: !!(participant.faceData || participant.faceImageUrl),
+      // Contagem por estado, só das linhas em push (`removalState: 'none'`).
+      // Linha em remoção descreve saída, não a foto — misturar as duas foi o que
+      // fez `faceState: 'synced'` com `removalState: 'removed'` ser lido como
+      // "está no terminal" para quem já tinha saído.
+      sync: (() => {
+        const emPush = participant.terminalSyncs.filter((t) => t.removalState === 'none')
+        return {
+          total: emPush.length,
+          // `synced` de verdade: além do estado, a versão da face no device tem
+          // que bater com a do cadastro. Igual ao que o reconcile compara.
+          sincronizadas: emPush.filter(
+            (t) => t.faceState === 'synced' && !!t.faceVersion && t.faceVersion === participant.faceVersion
+          ).length,
+          desatualizadas: emPush.filter(
+            (t) => t.faceState === 'synced' && (!t.faceVersion || t.faceVersion !== participant.faceVersion)
+          ).length,
+          falhas: emPush.filter((t) => t.faceState === 'failed').length,
+          pendentes: emPush.filter((t) => t.faceState === 'pending').length
+        }
+      })(),
       // Tolerante: uma biometria corrompida vira card sem foto, não 500 na
       // listagem inteira. A falha sai no log com o participantId.
       faceImageUrl: removido
