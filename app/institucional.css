@@ -1,0 +1,429 @@
+/* =========================================================================
+   PÁGINA INSTITUCIONAL (megacredenciamento.com.br) — estilo da raiz "/"
+   =========================================================================
+   Importado APENAS por app/page.tsx. Não vai para globals.css de propósito.
+
+   ── Por que escopado em .institucional ──────────────────────────────────
+   O CSS veio de um HTML autônomo e trazia regras de ELEMENTO — body, html,
+   *, a, img, h1, h2, section, footer — além de um bloco :root. Solto no
+   globals.css, isso repintaria o app inteiro: a fonte Archivo, o
+   background branco e o font-size 17px valeriam para o painel do admin, o
+   painel do stand e o fluxo de cadastro.
+
+   Pior: o :root novo define --verde:#0D8577, e o globals.css usa --verde
+   como COMPONENTE HSL do Tailwind (176 44% 56%). A sobrescrita produziria
+   hsl(#0D8577), que é inválido, e quebraria cor em telas que nada têm a
+   ver com esta página.
+
+   Então os seletores de elemento viraram descendentes de .institucional e
+   o :root virou .institucional. NENHUM valor, nome de classe ou nome de
+   variável foi alterado — só o alvo dos seletores, que é o mínimo para a
+   regra "nada além da raiz muda de aparência" continuar verdadeira.
+
+   ── Fonte ───────────────────────────────────────────────────────────────
+   Archivo é servida de public/fonts/archivo-latin.woff2 (mesma origem). Não
+   há Google Fonts nem CDN: a CSP em next.config.js libera apenas 'self' e
+   cdn.jsdelivr.net.
+   ========================================================================= */
+
+/* Fonte hospedada localmente: a CSP do projeto não libera o Google Fonts.
+   O arquivo vai em public/fonts/archivo-latin.woff2 */
+@font-face{
+  font-family:"Archivo";
+  src:url("/fonts/archivo-latin.woff2") format("woff2-variations");
+  font-weight:100 900;
+  font-stretch:62% 125%;
+  font-display:swap;
+}
+html:has(.institucional),
+body:has(.institucional),
+.institucional{
+  --campo:#FFFFFF;
+  --placa:#FFFFFF;
+  --tinta:#12252C;
+  --tinta-fraca:#5F757E;
+  --navy:#1B3550;
+  --fundo-escuro:#0F2233;
+  --fundo-escuro-2:#0B1A28;
+  --teal:#2DD4BF;
+  --teal-texto:#0D8577;
+  --sol:#0D8577;
+  --sol-fraco:#EFF7F4;
+  --verde:#0D8577;
+  --hero-1:#FFF6E4;
+  --hero-2:#EDF7F1;
+  --raio:18px;
+  --linha:rgba(20,35,47,.16);
+  --linha-forte:rgba(20,35,47,.28);
+  --sobre-escuro:#DDE6EC;
+  --sobre-escuro-fraco:#93A9B8;
+}
+
+/* ── FUNDO DO DOCUMENTO NESTA PÁGINA ────────────────────────────────────────
+   app/layout.tsx põe `bg-feira-900 text-white` no <body> — fundo #0C122C e
+   texto branco — e isso vale para o admin e para o resto do sistema, então não
+   se mexe lá. Com o CSS desta página escopado em .institucional, o documento
+   ficava escuro por baixo de um wrapper branco: faixa escura no efeito elástico
+   do mobile e em qualquer área além do conteúdo.
+
+   `:has()` resolve sem vazar: a regra só casa nas páginas que renderizam
+   .institucional. A especificidade de body:has(...) supera a classe utilitária
+   do Tailwind, e incluir o html é o que cobre o overscroll.
+
+   As variáveis acima foram estendidas a html/body por causa disto: `--tinta`
+   nasce em .institucional, e custom property não herda para o ancestral — em
+   body:has() ela resolveria vazio, qualquer que fosse a ordem no arquivo. */
+html:has(.institucional),
+body:has(.institucional){
+  background:#FFF;
+  color:var(--tinta);
+}
+
+.institucional *,.institucional{box-sizing:border-box}
+.institucional{-webkit-text-size-adjust:100%}
+.institucional{
+  margin:0;
+  background:var(--campo);
+  color:var(--tinta);
+  font-family:"Archivo","Helvetica Neue",Arial,sans-serif;
+  font-variation-settings:"wdth" 100;
+  font-size:17px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  /* Sem :has() (navegador antigo), o wrapper ainda cobre a tela inteira com o
+     fundo certo — o documento escuro não aparece por baixo. */
+  min-height:100vh;
+}
+.institucional img{max-width:100%;display:block}
+.institucional a{color:inherit}
+.env{width:min(1180px,100% - 2.6rem);margin-inline:auto}
+
+/* ---------- topo ---------- */
+.topo{
+  position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb,var(--campo) 88%,transparent);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--linha);
+}
+.topo-in{display:flex;align-items:center;gap:1.6rem;padding:.85rem 0}
+.marca{display:flex;align-items:baseline;gap:.55rem;text-decoration:none;margin-right:auto}
+.marca b{
+  font-variation-settings:"wdth" 116,"wght" 800;
+  font-size:1.24rem;letter-spacing:-.032em;
+}
+.marca b i{
+  font-style:normal;
+  font-variation-settings:"wdth" 86,"wght" 400;
+  color:var(--tinta-fraca);letter-spacing:-.01em;
+}
+.marca span{
+  font-variation-settings:"wdth" 87,"wght" 500;
+  font-size:.78rem;color:var(--tinta-fraca);
+}
+.nav{display:flex;gap:1.4rem}
+.nav a{
+  text-decoration:none;font-size:.92rem;color:var(--tinta-fraca);
+  font-variation-settings:"wght" 500;padding:.2rem 0;
+  border-bottom:2px solid transparent;
+}
+.nav a:hover,.nav a:focus-visible{color:var(--tinta);border-bottom-color:var(--teal)}
+.btn{
+  display:inline-block;text-decoration:none;border:0;cursor:pointer;
+  font-family:inherit;font-size:.95rem;
+  font-variation-settings:"wght" 650;
+  padding:.78rem 1.35rem;border-radius:999px;
+}
+.btn-cheio{background:var(--teal);color:#07241F;box-shadow:0 8px 20px -10px rgba(16,150,133,.9)}
+.btn-cheio:hover{background:#25c4b0}
+.btn-linha{background:transparent;color:var(--tinta);box-shadow:inset 0 0 0 1.5px var(--linha-forte)}
+.btn-linha:hover{box-shadow:inset 0 0 0 1.5px var(--tinta)}
+.topo .btn{padding:.6rem 1rem}
+.topo-acoes{display:flex;align-items:center;gap:.5rem}
+.btn-chave{
+  display:inline-flex;align-items:center;gap:.45rem;
+  background:transparent;color:var(--tinta);
+  box-shadow:inset 0 0 0 1px var(--linha-forte);
+}
+.btn-chave:hover{box-shadow:inset 0 0 0 1px var(--tinta);background:var(--placa)}
+.btn-chave svg{opacity:.7}
+
+
+/* seção do painel */
+.painel-in{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start}
+.perfis{display:grid;gap:1.6rem}
+.perfil{padding-left:1.1rem;border-left:3px solid var(--teal)}
+.perfil h3{margin:0 0 .4rem;font-size:1.1rem;font-variation-settings:"wdth" 105,"wght" 700}
+.perfil p{margin:0;color:var(--tinta-fraca);font-size:.94rem;max-width:44ch}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;overflow:hidden;
+  background:var(--sol-fraco);
+  color:var(--tinta);
+}
+.hero::after{
+  content:"";position:absolute;z-index:1;
+  width:520px;height:520px;border-radius:50%;
+  right:-90px;top:-140px;
+  background:rgba(13,133,119,.1);
+}
+.hero-in{
+  display:grid;grid-template-columns:1.15fr .85fr;gap:3.5rem;align-items:center;
+  padding:5rem 0 7rem;position:relative;z-index:2;
+}
+.institucional h1{
+  margin:0 0 1.15rem;
+  font-variation-settings:"wdth" 116,"wght" 800;
+  font-size:clamp(2.5rem,5.4vw,4.15rem);
+  line-height:.99;letter-spacing:-.026em;
+  color:var(--tinta);
+}
+.hero p.lede{
+  margin:0 0 2rem;max-width:44ch;
+  font-size:1.1rem;line-height:1.6;color:var(--tinta-fraca);
+}
+.hero-botoes{display:flex;gap:.7rem;flex-wrap:wrap}
+.hero-rodape{
+  margin-top:2.4rem;padding-left:.9rem;
+  border-left:2px solid var(--teal-texto);
+  font-size:.88rem;color:var(--tinta-fraca);max-width:42ch;
+}
+
+/* painel do terminal — o momento da página */
+.terminal{
+  background:#0A1F2C;
+  border:1px solid rgba(45,212,191,.22);
+  border-radius:6px;padding:1.1rem;
+  box-shadow:0 34px 70px -34px rgba(12,60,55,.5);
+  border-radius:var(--raio);
+}
+.terminal-topo{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:.76rem;color:var(--sobre-escuro-fraco);
+  font-variation-settings:"wdth" 90,"wght" 600;
+  padding-bottom:.8rem;border-bottom:1px solid rgba(221,230,236,.12);
+}
+.ponto{display:flex;align-items:center;gap:.4rem}
+.led{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px rgba(45,212,191,.16)}
+.quadro{
+  position:relative;margin:1rem 0 .9rem;height:190px;border-radius:4px;
+  background:
+    radial-gradient(120% 90% at 50% 30%, rgba(45,212,191,.09), transparent 60%),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 4px),
+    #071720;
+  overflow:hidden;
+}
+.oval{
+  position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);
+  width:118px;height:152px;border-radius:50% 50% 46% 46%;
+  border:2px dashed rgba(221,230,236,.3);
+}
+.rosto{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:96px;height:130px;
+}
+.rosto svg{width:100%;height:100%;opacity:.62}
+.scan{
+  position:absolute;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--teal),transparent);
+  top:12%;opacity:.85;
+  animation:varre 1.5s cubic-bezier(.5,0,.5,1) 2 forwards;
+}
+@keyframes varre{0%{top:12%}100%{top:84%}}
+.selo{
+  position:absolute;inset:auto 0 0 0;padding:.55rem .7rem;
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(0deg,rgba(45,212,191,.2),transparent);
+  opacity:0;animation:entra .5s ease 3s forwards;
+}
+.selo b{
+  font-variation-settings:"wdth" 112,"wght" 800;
+  font-size:1.05rem;color:var(--teal);letter-spacing:.01em;
+}
+.selo span{font-size:.74rem;color:var(--sobre-escuro-fraco)}
+@keyframes entra{to{opacity:1}}
+.linha-dado{
+  display:flex;justify-content:space-between;gap:1rem;
+  padding:.5rem 0;border-top:1px solid rgba(221,230,236,.1);
+  font-size:.84rem;
+}
+.linha-dado dt{color:var(--sobre-escuro-fraco);margin:0}
+.linha-dado dd{margin:0;font-variation-settings:"wght" 600}
+.rele{
+  margin-top:.9rem;display:flex;align-items:center;gap:.6rem;
+  font-size:.8rem;color:var(--sobre-escuro-fraco);
+}
+.rele-barra{flex:1;height:4px;border-radius:2px;background:rgba(221,230,236,.14);overflow:hidden}
+.rele-barra i{
+  display:block;height:100%;width:0;background:var(--teal);
+  animation:abre .5s ease 3.05s forwards;
+}
+@keyframes abre{to{width:100%}}
+@media (prefers-reduced-motion:reduce){
+  .scan{display:none}
+  .selo{opacity:1;animation:none}
+  .rele-barra i{width:100%;animation:none}
+}
+
+/* ---------- números ---------- */
+.numeros{background:transparent;position:relative;z-index:6}
+.numeros-in{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  padding:2.6rem 0 .6rem;
+}
+.numero{padding:1.6rem 1.4rem;border-left:1px solid var(--linha)}
+.numero:first-child{border-left:0}
+.numero b{
+  display:block;font-variation-settings:"wdth" 112,"wght" 800;
+  font-size:2.9rem;line-height:1;letter-spacing:-.04em;color:var(--teal-texto);
+}
+.numero span{display:block;margin-top:.35rem;font-size:.85rem;color:var(--tinta-fraca);max-width:22ch}
+
+/* ---------- seções ---------- */
+.institucional section{padding:5rem 0}
+.institucional h2{
+  margin:0 0 .6rem;
+  font-variation-settings:"wdth" 112,"wght" 780;
+  font-size:clamp(1.8rem,3.2vw,2.6rem);
+  line-height:1.05;letter-spacing:-.02em;
+}
+.intro{margin:0 0 2.8rem;max-width:56ch;color:var(--tinta-fraca);font-size:1.02rem}
+
+/* parede de marcas */
+.grade-marcas{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+  gap:1.4rem;
+}
+.marca-item{display:flex;flex-direction:column;gap:.55rem}
+.placa{
+  background:#FDFDFB;
+  border:1px solid var(--linha);
+  border-radius:var(--raio);
+  height:116px;
+  display:flex;align-items:center;justify-content:center;
+  padding:1rem;text-align:center;
+  transition:border-color .18s ease;
+}
+.marca-item:hover .placa{border-color:var(--linha-forte)}
+.placa img{max-height:62px;max-width:100%;width:auto;object-fit:contain}
+.placa img.tile{max-height:none;height:calc(100% + 2rem);width:auto;border-radius:calc(var(--raio) - 1px);margin:-1rem 0}
+.cidade{margin:0;font-size:.86rem;font-variation-settings:"wght" 650}
+.placa .nome{
+  font-variation-settings:"wdth" 108,"wght" 750;
+  font-size:1.12rem;line-height:1.1;letter-spacing:-.015em;
+}
+.placa .nome small{
+  display:block;margin-top:.2rem;
+  font-variation-settings:"wdth" 88,"wght" 500;
+  font-size:.72rem;color:var(--tinta-fraca);letter-spacing:0;
+}
+.meta{margin:.15rem 0 0;font-size:.84rem;color:var(--tinta-fraca);line-height:1.4}
+.meta b{color:var(--tinta);font-variation-settings:"wght" 600}
+
+.aviso{
+  margin-top:2.4rem;padding:1rem 1.1rem;
+  border-left:3px solid var(--teal);
+  background:var(--placa);border-radius:0 4px 4px 0;
+  font-size:.88rem;color:var(--tinta-fraca);max-width:70ch;
+}
+
+/* grupo de marcas */
+.servicos{background:var(--sol-fraco);border-block:0}
+.servicos.claro{background:var(--placa)}
+.grupo{display:grid;grid-template-columns:repeat(2,1fr);gap:1.4rem}
+.frente{
+  background:var(--placa);border:1px solid var(--linha);
+  border-radius:var(--raio);padding:1.5rem;
+}
+.frente-aqui{
+  border-color:transparent;
+  box-shadow:0 0 0 2px var(--teal), 0 18px 36px -26px rgba(16,150,133,.8);
+}
+.selo-aqui{
+  display:inline-block;margin:0 0 .8rem;padding:.2rem .6rem;
+  font-size:.74rem;color:#07241F;background:var(--teal);border-radius:999px;
+  font-variation-settings:"wdth" 88,"wght" 650;
+}
+.frente h3{
+  margin:0;font-size:1.34rem;letter-spacing:-.032em;
+  font-variation-settings:"wdth" 114,"wght" 800;
+}
+.frente h3 i{
+  font-style:normal;color:var(--tinta-fraca);letter-spacing:-.01em;
+  font-variation-settings:"wdth" 86,"wght" 400;
+}
+
+.papel{
+  margin:.3rem 0 .7rem;font-size:.92rem;color:var(--teal-texto);
+  font-variation-settings:"wght" 650;
+}
+
+.desc{margin:0;font-size:.94rem;color:var(--tinta-fraca);max-width:46ch}
+
+
+/* passos */
+.passos{counter-reset:p;display:grid;grid-template-columns:repeat(4,1fr);gap:1.6rem}
+.passo{counter-increment:p;position:relative;padding-top:2.9rem}
+.passo::before{
+  content:counter(p);
+  position:absolute;top:0;left:0;
+  width:2.2rem;height:2.2rem;border-radius:50%;
+  display:grid;place-items:center;
+  background:transparent;color:var(--teal-texto);
+  box-shadow:inset 0 0 0 2px var(--teal-texto);
+  font-variation-settings:"wdth" 100,"wght" 800;
+  font-size:.95rem;
+}
+.passo h3{margin:0 0 .4rem;font-size:1.04rem;font-variation-settings:"wght" 700}
+.passo p{margin:0;font-size:.92rem;color:var(--tinta-fraca)}
+
+/* ficha tecnica */
+.ficha{margin:0;background:var(--placa);border:1px solid var(--linha);border-radius:var(--raio);padding:.2rem 1.6rem}
+.ficha-linha{
+  display:grid;grid-template-columns:210px 1fr;gap:1.6rem;
+  padding:1.05rem 0;border-bottom:1px solid var(--linha);
+}
+.ficha-linha:last-child{border-bottom:0}
+.ficha-linha dt{color:var(--teal-texto)}
+.ficha-linha dt{
+  margin:0;font-size:.9rem;
+  font-variation-settings:"wdth" 92,"wght" 700;
+}
+.ficha-linha dd{margin:0;color:var(--tinta-fraca);font-size:.95rem;max-width:70ch}
+.ficha-linha dd b{color:var(--tinta);font-variation-settings:"wght" 650}
+
+/* cta */
+.cta{background:var(--teal-texto);color:#fff}
+.cta-in{display:grid;grid-template-columns:1.1fr .9fr;gap:3rem;align-items:center}
+.cta h2{color:#fff}
+.cta p{color:rgba(255,255,255,.8);max-width:46ch;margin:.4rem 0 0}
+.cta-acoes{display:flex;gap:.7rem;flex-wrap:wrap;justify-content:flex-end}
+.cta .btn-cheio{background:#fff;color:var(--teal-texto);box-shadow:none}
+.cta .btn-cheio:hover{background:#E6F4F1}
+.cta .btn-linha{color:#fff;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}
+.cta .btn-linha:hover{box-shadow:inset 0 0 0 1.5px #fff}
+
+.institucional footer{background:var(--sol-fraco);color:var(--tinta-fraca);padding:2.6rem 0;font-size:.86rem}
+.rodape-in{display:flex;justify-content:space-between;gap:2rem;flex-wrap:wrap}
+.institucional footer b{color:var(--tinta);font-variation-settings:"wght" 650}
+.razao{font-size:.8rem;opacity:.72;text-align:right;max-width:34ch}
+@media (max-width:700px){.razao{text-align:left}}
+
+:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+
+@media (max-width:900px){
+  .hero-in,.cta-in{grid-template-columns:1fr;gap:2.6rem;padding:3.4rem 0}
+  .numeros-in{grid-template-columns:repeat(2,1fr)}
+  .numero{border-left:0;border-top:1px solid var(--linha);padding-left:0}
+  .numero:nth-child(-n+2){border-top:0}
+  .lista-serv,.passos,.grupo{grid-template-columns:1fr;gap:1.4rem}
+  .nav{display:none}
+  .cta-acoes{justify-content:flex-start}
+  .painel-in{grid-template-columns:1fr;gap:2.2rem}
+  .ficha-linha{grid-template-columns:1fr;gap:.3rem}
+  section{padding:3.4rem 0}
+}
+@media (max-width:520px){
+  .topo .btn{padding:.55rem .7rem;font-size:.86rem}
+  .marca span{display:none}
+}
