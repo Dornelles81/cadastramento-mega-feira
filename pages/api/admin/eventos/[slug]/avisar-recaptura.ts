@@ -1,6 +1,18 @@
 /**
- * GET  /api/admin/eventos/[slug]/avisar-recaptura  → prévia: quem seria avisado
+ * GET  /api/admin/eventos/[slug]/avisar-recaptura  → prévia: quem precisa de foto
  * POST /api/admin/eventos/[slug]/avisar-recaptura  → envia os e-mails
+ *
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ ⚠️ O POST EXISTE MAS **NÃO É O CANAL ADOTADO** (decisão de 04/09/2026).   ║
+ * ║                                                                           ║
+ * ║ A organização decidiu NÃO enviar comunicado por e-mail aos responsáveis   ║
+ * ║ de stand — a comunicação com os gestores passa pelo canal próprio dela.   ║
+ * ║ O que se usa deste endpoint é o GET: a LISTA de quem precisa de foto,     ║
+ * ║ agrupada por stand, para ser repassada por fora.                          ║
+ * ║                                                                           ║
+ * ║ Não clique em enviar achando que é o fluxo normal. Se algum dia o e-mail  ║
+ * ║ voltar a ser o canal, isto aqui é a decisão a revisar — não um bug.       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * Agrupa por STAND os participantes com foto de risco e manda ao responsável a
  * lista da equipe DELE. Quem tem contato com o participante é o gestor — a
@@ -21,19 +33,13 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import type { Session } from 'next-auth'
 import { prisma } from '../../../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../lib/api-auth'
-import { riscoDeFace, type RiscoFace } from '../../../../../lib/participants/face-risk'
-import { deriveFaceStatus } from '../../../../../lib/face/status'
+import { motivoDaRecaptura, frasePara, type MotivoRecaptura } from '../../../../../lib/participants/recaptura'
 import { sendRecapturaEmail, type PessoaParaRecapturar } from '../../../../../lib/email/recaptura-fotos'
 
 /** Stands por chamada. Ver "Escala" no topo. */
 const LOTE = 20
 
-function motivoDe(risco: Exclude<RiscoFace, null>): string {
-  // Linguagem de quem vai PEDIR a foto, não do gate.
-  return risco === 'nao-validada'
-    ? 'o rosto não foi confirmado na foto'
-    : 'o rosto ficou pequeno demais na foto'
-}
+
 
 interface StandPendente {
   standId: string
@@ -44,14 +50,37 @@ interface StandPendente {
   pessoas: PessoaParaRecapturar[]
 }
 
-async function levantar(eventId: string): Promise<StandPendente[]> {
+async function levantar(
+  eventId: string,
+  /**
+   * Classes a incluir. Ausente = todas — o GET de prévia sempre pede tudo, para
+   * o operador ver o quadro inteiro antes de escolher.
+   *
+   * Existe porque as quatro classes NÃO têm a mesma urgência, e o levantamento
+   * de 04/09 mostrou por quê: das 47 fotos que o nosso gate marcou como risco e
+   * que chegaram ao equipamento, o equipamento aceitou as 47. Já `sem-foto` e
+   * `recusada-device` são fato e veredito — quem está nelas comprovadamente não
+   * entra. Disparar as quatro juntas mandaria 86 pedidos de foto quando 11 são
+   * os que importam agora, e gastaria a paciência dos gestores antes da feira.
+   */
+  tipos?: MotivoRecaptura[]
+): Promise<StandPendente[]> {
+  // O filtro "só quem TEM foto" saiu daqui em 04/09/2026: quem está sem foto
+  // nenhuma é justamente o caso mais grave, e era o único que o aviso não
+  // enxergava. Ver lib/participants/recaptura.ts para as três origens.
   const ps = await prisma.participant.findMany({
-    where: {
-      eventId, isDeleted: false, status: 'active',
-      OR: [{ faceData: { not: null } }, { faceImageUrl: { not: null } }]
-    },
+    where: { eventId, isDeleted: false, status: 'active' },
     select: {
       name: true, faceInterocularPx: true, customData: true,
+      faceData: true, faceImageUrl: true,
+      // Veredito do equipamento. `faceState: 'failed'` = o device recebeu a foto
+      // e recusou (SubpicAnalysisModelingError e afins). Só contamos as linhas
+      // em push: `removalState: 'none'`, senão uma falha de remoção antiga
+      // entraria como se fosse problema de foto.
+      terminalSyncs: {
+        where: { faceState: 'failed', removalState: 'none' },
+        select: { id: true }
+      },
       stand: {
         select: { id: true, code: true, name: true, responsibleEmail: true, responsibleName: true }
       }
@@ -62,12 +91,15 @@ async function levantar(eventId: string): Promise<StandPendente[]> {
   const porStand = new Map<string, StandPendente>()
   for (const p of ps) {
     if (!p.stand) continue // sem stand não há a quem avisar
-    const risco = riscoDeFace({
+    const motivo = motivoDaRecaptura({
+      faceData: p.faceData,
+      faceImageUrl: p.faceImageUrl,
       faceInterocularPx: p.faceInterocularPx,
-      faceStatus: deriveFaceStatus(p.faceInterocularPx),
-      faceUnvalidated: !!(p.customData as any)?.__faceUnvalidated
+      customData: p.customData,
+      terminaisComFalha: p.terminalSyncs.length
     })
-    if (!risco) continue
+    if (!motivo) continue
+    if (tipos && !tipos.includes(motivo)) continue
 
     if (!porStand.has(p.stand.id)) {
       porStand.set(p.stand.id, {
@@ -79,7 +111,7 @@ async function levantar(eventId: string): Promise<StandPendente[]> {
         pessoas: []
       })
     }
-    porStand.get(p.stand.id)!.pessoas.push({ nome: p.name, motivo: motivoDe(risco) })
+    porStand.get(p.stand.id)!.pessoas.push({ nome: p.name, motivo: frasePara(motivo), tipo: motivo })
   }
   // Maior pendência primeiro: se o lote cortar, corta o que menos importa.
   return [...porStand.values()].sort((a, b) => b.pessoas.length - a.pessoas.length)
@@ -101,11 +133,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       return res.status(403).json({ error: 'Sem permissão neste evento' })
     }
     const stands = await levantar(event.id)
+    // Contagem por CLASSE: o painel precisa distinguir "sem foto" de "o
+    // equipamento recusou" — são o mesmo pedido para o gestor, mas problemas
+    // diferentes para quem opera o evento.
+    const porTipo: Record<string, number> = {}
+    for (const st of stands) {
+      for (const pes of st.pessoas) {
+        const k = pes.tipo ?? 'desconhecido'
+        porTipo[k] = (porTipo[k] ?? 0) + 1
+      }
+    }
     return res.status(200).json({
       evento: event.name,
       lote: LOTE,
       totalStands: stands.length,
       totalPessoas: stands.reduce((s, x) => s + x.pessoas.length, 0),
+      porTipo,
       semEmail: stands.filter((s) => !s.email).map((s) => s.code),
       stands: stands.map((s) => ({
         standId: s.standId, code: s.code, name: s.name,
@@ -129,7 +172,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       return res.status(400).json({ error: 'Informe standId ou todos: true' })
     }
 
-    const stands = await levantar(event.id)
+    // Classes a avisar. Sem `tipos`, mantém o comportamento antigo (todas) para
+    // não quebrar chamador existente — mas a UI SEMPRE manda, porque escolher é
+    // o ponto: ver a prévia e decidir a quem pedir foto.
+    const TIPOS_VALIDOS: MotivoRecaptura[] = ['sem-foto', 'recusada-device', 'nao-validada', 'medida-baixa']
+    const tiposPedidos = Array.isArray(req.body?.tipos)
+      ? (req.body.tipos as unknown[]).filter((t): t is MotivoRecaptura =>
+          typeof t === 'string' && (TIPOS_VALIDOS as string[]).includes(t))
+      : undefined
+    if (Array.isArray(req.body?.tipos) && (!tiposPedidos || tiposPedidos.length === 0)) {
+      return res.status(400).json({ error: 'Nenhuma classe válida em `tipos`.' })
+    }
+
+    const stands = await levantar(event.id, tiposPedidos)
     const alvo = standId ? stands.filter((s) => s.standId === standId) : stands
     if (alvo.length === 0) {
       return res.status(404).json({ error: 'Nenhum stand com pendência corresponde ao pedido' })

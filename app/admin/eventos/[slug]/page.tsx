@@ -7,6 +7,7 @@ import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
 import SyncResumo from '../../../../components/admin/SyncResumo'
 import { textoRemocao } from '../../../../lib/participants/removal-label'
 import { riscoDeFace, tituloRiscoDeFace } from '../../../../lib/participants/face-risk'
+import AvisoRecapturaButton from '../../../../components/admin/AvisoRecapturaButton'
 
 interface Participant {
   id: string
@@ -1166,6 +1167,10 @@ export default function EventAdminPage() {
                 >
                   📋 <span className="hidden sm:inline ml-1">Logs</span>
                 </a>
+                {/* Pedir foto nova aos responsáveis. A prévia (GET) vem antes do
+                    envio (POST), sempre: mandar e-mail em nome da organização para
+                    dezenas de responsáveis é ação externa e irreversível. */}
+                {eventSlug && <AvisoRecapturaButton slug={eventSlug} />}
                 <button
                   onClick={toggleDarkMode}
                   className={`inline-flex items-center px-3 py-2 text-sm rounded-lg transition-colors shadow-sm ${

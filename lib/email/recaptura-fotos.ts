@@ -27,6 +27,12 @@ export interface PessoaParaRecapturar {
   nome: string
   /** Motivo em linguagem de quem vai pedir a foto, não rótulo técnico. */
   motivo: string
+  /**
+   * A ORIGEM do motivo, para quem precisa agrupar (prévia no painel, banner).
+   * O e-mail não usa — para o gestor a ação é a mesma nas quatro. Opcional
+   * porque o template é mais antigo que a classificação.
+   */
+  tipo?: 'sem-foto' | 'recusada-device' | 'nao-validada' | 'medida-baixa'
 }
 
 export interface RecapturaEmailParams {
