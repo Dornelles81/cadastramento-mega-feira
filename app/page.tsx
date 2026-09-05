@@ -1,15 +1,15 @@
-'use client'
-
-import { Suspense, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
+import RedirecionamentosLegados from '../components/institucional/RedirecionamentosLegados'
 import './institucional.css'
 
 /**
  * PÁGINA INSTITUCIONAL — raiz "/" de megacredenciamento.com.br.
  *
- * Layout estático, sem estado e sem chamada de API. O que ela AINDA faz, e não
- * pode deixar de fazer, são os dois redirecionamentos de compatibilidade abaixo
- * — links antigos com esses parâmetros continuam circulando.
+ * SERVER COMPONENT, pré-renderizado estático. Sem estado e sem chamada de API.
+ * Os dois redirecionamentos de compatibilidade (?event= e ?update=) vivem em
+ * components/institucional/RedirecionamentosLegados — links antigos com esses
+ * parâmetros continuam circulando, mas o hook que os lê não pode ficar nesta
+ * árvore, senão o HTML servido sai vazio.
  *
  * ── O que NÃO mudou nesta troca ───────────────────────────────────────────
  * Nada de autenticação, NextAuth, middleware, papéis, EventAdmin, links de
@@ -23,31 +23,18 @@ import './institucional.css'
  * a institucional.
  */
 
-function PaginaInstitucional() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-
-  useEffect(() => {
-    // Compatibilidade 1: ?event=<slug> → página do evento.
-    const eventSlug = searchParams.get('event')
-    if (eventSlug) {
-      router.replace(`/eventos/${eventSlug}`)
-      return
-    }
-
-    // Compatibilidade 2: link ?update=<uuid> ANTIGO (sem token de posse): nao
-    // buscar PII nenhum. Redireciona direto para a pagina amigavel, ANTES de
-    // qualquer query — a edicao agora exige o link tokenizado /editar/<token>
-    // (Grupo D).
-    const updateId = searchParams.get('update')
-    if (updateId) {
-      router.replace('/editar/expirado')
-      return
-    }
-  }, [searchParams, router])
-
+export default function HomePage() {
   return (
     <div className="institucional">
+      {/* Só os redirecionamentos legados dependem do cliente. Eles vivem num
+          componente à parte que não desenha nada: `useSearchParams` dentro da
+          árvore da página faria o Next.js servir HTML VAZIO
+          (BAILOUT_TO_CLIENT_SIDE_RENDERING), e numa página institucional isso
+          significa buscador vendo página em branco. */}
+      <Suspense fallback={null}>
+        <RedirecionamentosLegados />
+      </Suspense>
+
       <header className="topo">
         <div className="env topo-in">
           <a className="marca" href="#">
@@ -512,14 +499,5 @@ function PaginaInstitucional() {
         </div>
       </footer>
     </div>
-  )
-}
-
-export default function HomePage() {
-  // `useSearchParams` exige Suspense no App Router — mantido do arquivo anterior.
-  return (
-    <Suspense fallback={null}>
-      <PaginaInstitucional />
-    </Suspense>
   )
 }
