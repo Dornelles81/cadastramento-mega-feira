@@ -67,7 +67,7 @@ export default function HomePage() {
       <div className="hero">
         <div className="env hero-in">
           <div>
-            <h1>O rosto de quem entra é a credencial.</h1>
+            <h1>A credencial que é a sua cara.</h1>
             <p className="lede">
               Controle de acesso, credenciamento facial, bilheteria e estacionamento para eventos de
               qualquer porte. O expositor no portão do pavilhão, o público na catraca do show, o
@@ -139,27 +139,6 @@ export default function HomePage() {
               </span>
               <span>aberto</span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="numeros">
-        <div className="env numeros-in">
-          <div className="numero">
-            <b>7</b>
-            <span>feiras e eventos atendidos</span>
-          </div>
-          <div className="numero">
-            <b>+12 mil</b>
-            <span>credenciados cadastrados</span>
-          </div>
-          <div className="numero">
-            <b>4</b>
-            <span>pontos de acesso simultâneos por evento</span>
-          </div>
-          <div className="numero">
-            <b>11</b>
-            <span>dias seguidos de operação no maior deles</span>
           </div>
         </div>
       </div>
@@ -474,10 +453,10 @@ export default function HomePage() {
             </p>
           </div>
           <div className="cta-acoes">
-            <a className="btn btn-cheio" href="https://wa.me/5551000000000">
+            <a className="btn btn-cheio" href="https://wa.me/5551992456196">
               Chamar no WhatsApp
             </a>
-            <a className="btn btn-linha" href="mailto:contato@megacredenciamento.com.br">
+            <a className="btn btn-linha" href="mailto:megafeira@megafeira.com">
               Mandar um e-mail
             </a>
           </div>
@@ -489,7 +468,7 @@ export default function HomePage() {
           <div>
             <b>megacredenciamento.com.br</b>
             <br />
-            contato@megacredenciamento.com.br
+            megafeira@megafeira.com
           </div>
           <div className="razao">
             Plataforma operada por Mega Feira Tecnologia para Acessos Ltda

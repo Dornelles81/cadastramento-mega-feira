@@ -169,7 +169,7 @@ body:has(.institucional){
 }
 .hero-in{
   display:grid;grid-template-columns:1.15fr .85fr;gap:3.5rem;align-items:center;
-  padding:5rem 0 7rem;position:relative;z-index:2;
+  padding:5rem 0 5.5rem;position:relative;z-index:2;
 }
 .institucional h1{
   margin:0 0 1.15rem;
@@ -265,19 +265,6 @@ body:has(.institucional){
   .rele-barra i{width:100%;animation:none}
 }
 
-/* ---------- números ---------- */
-.numeros{background:transparent;position:relative;z-index:6}
-.numeros-in{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
-  padding:2.6rem 0 .6rem;
-}
-.numero{padding:1.6rem 1.4rem;border-left:1px solid var(--linha)}
-.numero:first-child{border-left:0}
-.numero b{
-  display:block;font-variation-settings:"wdth" 112,"wght" 800;
-  font-size:2.9rem;line-height:1;letter-spacing:-.04em;color:var(--teal-texto);
-}
-.numero span{display:block;margin-top:.35rem;font-size:.85rem;color:var(--tinta-fraca);max-width:22ch}
 
 /* ---------- seções ---------- */
 .institucional section{padding:5rem 0}
@@ -413,9 +400,6 @@ body:has(.institucional){
 
 @media (max-width:900px){
   .hero-in,.cta-in{grid-template-columns:1fr;gap:2.6rem;padding:3.4rem 0}
-  .numeros-in{grid-template-columns:repeat(2,1fr)}
-  .numero{border-left:0;border-top:1px solid var(--linha);padding-left:0}
-  .numero:nth-child(-n+2){border-top:0}
   .lista-serv,.passos,.grupo{grid-template-columns:1fr;gap:1.4rem}
   .nav{display:none}
   .cta-acoes{justify-content:flex-start}
