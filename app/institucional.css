@@ -132,6 +132,9 @@ body:has(.institucional){
   font-family:inherit;font-size:.95rem;
   font-variation-settings:"wght" 650;
   padding:.78rem 1.35rem;border-radius:999px;
+  /* Com border-radius de pilula, uma quebra de linha nao vira botao de duas
+     linhas: vira bola. "Area do cliente" quebrava em tres no celular. */
+  white-space:nowrap;
 }
 .btn-cheio{background:var(--teal);color:#07241F;box-shadow:0 8px 20px -10px rgba(16,150,133,.9)}
 .btn-cheio:hover{background:#25c4b0}
@@ -407,9 +410,27 @@ body:has(.institucional){
   .ficha-linha{grid-template-columns:1fr;gap:.3rem}
   section{padding:3.4rem 0}
 }
+/* No celular o cabecalho nao comporta os dois botoes lado a lado: some o
+   "Falar com a gente", que continua existindo na chamada do fim da pagina, e
+   fica so a "Area do cliente" — a acao que nao tem outra porta de entrada. */
+@media (max-width:680px){
+  .topo-acoes .btn-cheio{display:none}
+}
 @media (max-width:520px){
-  .topo .btn{padding:.55rem .7rem;font-size:.86rem}
+  .topo .btn{padding:.55rem .8rem;font-size:.85rem}
   .marca span{display:none}
+  .marca b{font-size:1.08rem}
+}
+/* Tela muito estreita (320px e abaixo: iPhone SE de 1a geracao, Fold fechado).
+   Logotipo e botao juntos nao cabem em 320 e a pagina INTEIRA rolava de lado.
+   Encolher a marca sozinho economiza 15px dos 34 que faltavam; o cadeado do
+   botao (icone + folga) fecha o resto. O cadeado e decorativo — o rotulo
+   "Area do cliente" ja diz o que o botao faz, e ele volta acima de 380px. */
+@media (max-width:380px){
+  .marca b{font-size:.9rem}
+  .topo .btn{padding:.5rem .7rem;font-size:.8rem}
+  .topo .btn-chave svg{display:none}
+  .topo .btn-chave{gap:0}
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
