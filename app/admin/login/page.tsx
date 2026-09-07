@@ -3,6 +3,25 @@
 import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import '../../institucional.css'
+
+/**
+ * Tela de acesso ao painel.
+ *
+ * Reformulada em 07/09/2026 para o visual da página institucional — envolve o
+ * conteúdo em `.institucional login-tela` e herda dali a fonte Archivo, as
+ * variáveis de cor e o fundo branco. O estilo específico vive no bloco
+ * "TELA DE LOGIN" de app/institucional.css, escopado como o resto.
+ *
+ * ⚠️ A MUDANÇA FOI SÓ DE APARÊNCIA. `signIn`, os campos, a validação, as
+ * mensagens de erro vindas do NextAuth, o estado de carregamento e o
+ * `callbackUrl` estão exatamente como estavam — o que mudou foram classes e
+ * texto visível. Ao mexer aqui, mantenha essa separação.
+ *
+ * A marca passou a ser "megacredenciamento", com o mesmo tratamento tipográfico
+ * do topo institucional: "mega" leve e estreito, "credenciamento" pesado e
+ * largo. Mega Feira ficou como a linha de operadora no rodapé do cartão.
+ */
 
 function LoginForm() {
   const router = useRouter()
@@ -42,80 +61,60 @@ function LoginForm() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-      {/* Logo */}
-      <div className="text-center mb-8">
-        <div className="flex items-center justify-center font-bold text-3xl mb-4">
-          <span className="text-verde-agua italic">MEGA</span>
-          <span className="text-azul-marinho ml-2">FEIRA</span>
-        </div>
-        <h1 className="text-2xl font-bold text-azul-marinho mb-2">
-          Painel Administrativo
-        </h1>
-        <p className="text-cinza">
-          Sistema Multi-Evento
-        </p>
-      </div>
+    <div className="login-cartao">
+      <span className="login-marca">
+        <i>mega</i>credenciamento
+      </span>
 
-      {/* Error Message */}
+      <h1 className="login-titulo">Área do cliente</h1>
+      <p className="login-sub">Acesso ao painel do seu evento.</p>
+
+      {/* Error Message — o texto vem do NextAuth, inalterado. */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800 text-sm flex items-center">
-            <span className="mr-2">❌</span>
-            {error}
-          </p>
+        <div className="login-erro">
+          <p style={{ margin: 0 }}>{error}</p>
         </div>
       )}
 
       {/* Login Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-azul-marinho mb-2">
-            Email
-          </label>
+      <form onSubmit={handleSubmit}>
+        <div className="login-campo">
+          <label htmlFor="login-email">Email</label>
           <input
+            id="login-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 border border-cinza-300 rounded-lg text-cinza-900 bg-white focus:ring-2 focus:ring-verde-agua focus:border-verde-agua transition-colors placeholder:text-cinza-400"
             placeholder="seu@email.com"
             required
             disabled={loading}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-azul-marinho mb-2">
-            Senha
-          </label>
+        <div className="login-campo">
+          <label htmlFor="login-senha">Senha</label>
           <input
+            id="login-senha"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 border border-cinza-300 rounded-lg text-cinza-900 bg-white focus:ring-2 focus:ring-verde-agua focus:border-verde-agua transition-colors placeholder:text-cinza-400"
             placeholder="••••••••"
             required
             disabled={loading}
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-3 bg-verde-agua text-white rounded-lg font-semibold hover:bg-verde-agua-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-        >
-          {loading ? '🔄 Entrando...' : '🔓 Entrar'}
+        <button type="submit" disabled={loading} className="login-btn">
+          {loading ? 'Entrando...' : 'Entrar'}
         </button>
       </form>
 
       {/* Footer */}
-      <div className="mt-6 text-center">
-        <a
-          href="/"
-          className="text-sm text-verde-agua hover:text-verde-agua-dark underline"
-        >
-          ← Voltar para o site
-        </a>
+      <div className="login-rodape">
+        <a href="/">← Voltar para o site</a>
+        <p className="login-operado">
+          Plataforma operada por Mega Feira Tecnologia para Acessos Ltda
+        </p>
       </div>
     </div>
   )
@@ -123,26 +122,19 @@ function LoginForm() {
 
 function LoginFormFallback() {
   return (
-    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-      <div className="text-center mb-8">
-        <div className="flex items-center justify-center font-bold text-3xl mb-4">
-          <span className="text-verde-agua italic">MEGA</span>
-          <span className="text-azul-marinho ml-2">FEIRA</span>
-        </div>
-        <h1 className="text-2xl font-bold text-azul-marinho mb-2">
-          Painel Administrativo
-        </h1>
-        <p className="text-cinza">
-          Carregando...
-        </p>
-      </div>
+    <div className="login-cartao">
+      <span className="login-marca">
+        <i>mega</i>credenciamento
+      </span>
+      <h1 className="login-titulo">Área do cliente</h1>
+      <p className="login-sub">Carregando...</p>
     </div>
   )
 }
 
 export default function AdminLoginPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-azul-marinho via-azul-medio to-verde-agua flex items-center justify-center p-4">
+    <div className="institucional login-tela">
       <Suspense fallback={<LoginFormFallback />}>
         <LoginForm />
       </Suspense>

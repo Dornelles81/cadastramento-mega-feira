@@ -11,8 +11,14 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Mega Feira - Cadastro Facial',
-  description: 'Sistema de cadastro com reconhecimento facial para eventos da Mega Feira',
+  // Título e descrição do SITE, herdados por toda rota que não define os seus.
+  // Trocados em 07/09/2026: diziam "Mega Feira - Cadastro Facial", que era o que
+  // aparecia na aba do navegador na página institucional.
+  // O manifest do PWA NÃO acompanha esta mudança de propósito — ele continua
+  // com o nome e o start_url que os aparelhos já instalados conhecem.
+  title: 'Megacredenciamento — controle de acesso e credenciamento facial para eventos',
+  description:
+    'Credenciamento facial, bilheteria e estacionamento para feiras, shows, casas de eventos e grandes públicos.',
   manifest: '/manifest.json',
   icons: {
     icon: '/icons/icon.svg',

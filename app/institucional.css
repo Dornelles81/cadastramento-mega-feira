@@ -411,3 +411,121 @@ body:has(.institucional){
   .topo .btn{padding:.55rem .7rem;font-size:.86rem}
   .marca span{display:none}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TELA DE LOGIN (/admin/login)
+   ═══════════════════════════════════════════════════════════════════════════
+   Reaproveita as variáveis, a fonte e o fundo branco da institucional: a página
+   envolve o conteúdo em `.institucional login-tela`, então herda tudo daqui e
+   nada do gradiente escuro que a tela usava antes.
+
+   Só aparência. Nenhuma classe abaixo participa da autenticação — os campos, a
+   validação, o bloqueio por tentativas e o callbackUrl seguem como estavam.
+
+   Escopado como o resto do arquivo: sem `.institucional` na frente, estas regras
+   valeriam para o app inteiro. */
+
+.login-tela{
+  display:flex;align-items:center;justify-content:center;
+  padding:1.5rem;
+}
+.institucional .login-cartao{
+  width:100%;max-width:26rem;
+  background:var(--placa);
+  border:1px solid var(--linha);
+  border-radius:var(--raio);
+  padding:2.2rem 1.9rem;
+}
+
+/* Marca: mesmo tratamento tipográfico da .marca do topo institucional —
+   "mega" leve e estreito, "credenciamento" pesado e largo. */
+.institucional .login-marca{
+  display:block;margin-bottom:1.6rem;
+  font-variation-settings:"wdth" 116,"wght" 800;
+  font-size:1.32rem;letter-spacing:-.032em;
+  color:var(--tinta);
+}
+.institucional .login-marca i{
+  font-style:normal;
+  font-variation-settings:"wdth" 86,"wght" 400;
+  color:var(--tinta-fraca);letter-spacing:-.01em;
+}
+
+.institucional .login-titulo{
+  margin:0 0 .3rem;
+  font-size:1.5rem;letter-spacing:-.03em;
+  font-variation-settings:"wdth" 112,"wght" 700;
+  color:var(--tinta);
+}
+.institucional .login-sub{
+  margin:0 0 1.7rem;
+  font-size:.94rem;color:var(--tinta-fraca);
+}
+
+.institucional .login-campo{margin-bottom:1.05rem}
+.institucional .login-campo label{
+  display:block;margin-bottom:.4rem;
+  font-size:.85rem;color:var(--tinta-fraca);
+  font-variation-settings:"wght" 600;
+}
+.institucional .login-campo input{
+  width:100%;
+  padding:.8rem .9rem;
+  font-family:inherit;font-size:.98rem;color:var(--tinta);
+  background:var(--campo);
+  border:1px solid var(--linha);
+  border-radius:12px;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.institucional .login-campo input::placeholder{color:var(--sobre-escuro-fraco)}
+.institucional .login-campo input:focus{
+  outline:none;
+  border-color:var(--teal-texto);
+  box-shadow:0 0 0 3px rgba(45,212,191,.22);
+}
+.institucional .login-campo input:disabled{opacity:.6}
+
+/* Botão em pílula, no verde-água de destaque — mesmo par de cores do
+   .btn-cheio da institucional, em largura total. */
+.institucional .login-btn{
+  width:100%;
+  display:inline-block;text-align:center;
+  border:0;cursor:pointer;
+  font-family:inherit;font-size:.98rem;
+  font-variation-settings:"wght" 650;
+  padding:.85rem 1.35rem;border-radius:999px;
+  background:var(--teal);color:#07241F;
+  box-shadow:0 8px 20px -10px rgba(16,150,133,.9);
+  transition:background .15s ease;
+}
+.institucional .login-btn:hover:not(:disabled){background:#25c4b0}
+.institucional .login-btn:disabled{opacity:.55;cursor:not-allowed}
+
+.institucional .login-erro{
+  margin-bottom:1.2rem;padding:.8rem .9rem;
+  border:1px solid #F3C2C2;border-radius:12px;
+  background:#FDF2F2;color:#8A2020;
+  font-size:.9rem;
+}
+
+.institucional .login-rodape{
+  margin-top:1.6rem;padding-top:1.2rem;
+  border-top:1px solid var(--linha);
+  text-align:center;
+}
+.institucional .login-rodape a{
+  font-size:.88rem;color:var(--teal-texto);
+  font-variation-settings:"wght" 600;
+  text-decoration:none;
+}
+.institucional .login-rodape a:hover{text-decoration:underline}
+.institucional .login-operado{
+  margin:.9rem 0 0;
+  font-size:.76rem;line-height:1.45;color:var(--sobre-escuro-fraco);
+  font-variation-settings:"wdth" 90;
+}
+
+@media (max-width:420px){
+  .login-tela{padding:1rem}
+  .institucional .login-cartao{padding:1.7rem 1.2rem}
+}
