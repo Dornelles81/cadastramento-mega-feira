@@ -91,6 +91,11 @@ export default async function handler(
         enableCheckIn,
         enableQRCode,
         successMessage,
+        // Texto de conclusao do fluxo por LINK DE STAND. Separado de
+        // `successMessage` (que alimenta o fluxo publico /eventos/[slug]):
+        // string vazia vira null, para "apagar o texto" significar "voltar ao
+        // padrao" em vez de gravar um paragrafo em branco na tela final.
+        standSuccessMessage,
         // Política de credenciais e substituições (Fase 7)
         dayResetHour,
         substitutionQuotaEnabled,
@@ -204,7 +209,8 @@ export default async function handler(
           typeof autoApprove === 'boolean' ||
           typeof enableCheckIn === 'boolean' ||
           typeof enableQRCode === 'boolean' ||
-          successMessage !== undefined) {
+          successMessage !== undefined ||
+          standSuccessMessage !== undefined) {
 
         if (existingEvent.eventConfigs) {
           // Update existing config
@@ -222,6 +228,9 @@ export default async function handler(
               ...(typeof enableCheckIn === 'boolean' && { enableCheckIn }),
               ...(typeof enableQRCode === 'boolean' && { enableQRCode }),
               ...(successMessage !== undefined && { successMessage }),
+              ...(standSuccessMessage !== undefined && {
+                standSuccessMessage: standSuccessMessage || null
+              }),
               updatedAt: new Date()
             }
           })
@@ -239,7 +248,9 @@ export default async function handler(
               requireDocuments: requireDocuments !== undefined ? requireDocuments : false,
               autoApprove: autoApprove !== undefined ? autoApprove : false,
               enableCheckIn: enableCheckIn !== undefined ? enableCheckIn : true,
-              enableQRCode: enableQRCode !== undefined ? enableQRCode : true
+              enableQRCode: enableQRCode !== undefined ? enableQRCode : true,
+              // Sem default: evento novo nasce com a tela final padrao.
+              ...(standSuccessMessage ? { standSuccessMessage } : {})
             }
           })
         }

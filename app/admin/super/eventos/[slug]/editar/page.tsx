@@ -36,6 +36,7 @@ interface Event {
     enableCheckIn?: boolean
     enableQRCode?: boolean
     successMessage?: string
+    standSuccessMessage?: string
   }
 }
 
@@ -75,6 +76,7 @@ export default function EditarEventoPage() {
     enableCheckIn: true,
     enableQRCode: true,
     successMessage: '',
+    standSuccessMessage: '',
     // Política de credenciais e substituições (Fase 7)
     dayResetHour: 4,
     substitutionQuotaEnabled: false,
@@ -143,6 +145,9 @@ export default function EditarEventoPage() {
         enableCheckIn: event.eventConfigs?.enableCheckIn !== undefined ? event.eventConfigs.enableCheckIn : true,
         enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true,
         successMessage: event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.',
+        // SEM fallback de propósito: vazio significa "usar o texto padrão da
+        // tela final", e preencher aqui gravaria um texto em eventos que não pediram.
+        standSuccessMessage: event.eventConfigs?.standSuccessMessage || '',
         dayResetHour: event.dayResetHour ?? 4,
         substitutionQuotaEnabled: event.substitutionQuotaEnabled ?? false,
         substitutionsPerSlot: event.substitutionsPerSlot ?? 1
@@ -718,6 +723,22 @@ export default function EditarEventoPage() {
               rows={3}
               placeholder="Ex: Retire sua credencial física na secretaria do parque."
             />
+
+            <label className="block text-sm font-medium text-gray-700 mb-2 mt-6">
+              Texto de conclusão do cadastro pelo link do stand
+            </label>
+            <textarea
+              value={formData.standSuccessMessage}
+              onChange={(e) => setFormData({ ...formData, standSuccessMessage: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900"
+              rows={3}
+              placeholder="Deixe em branco para usar o texto padrão"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Vale só para quem se cadastra pelo <strong>link do stand</strong>. Em branco, a tela
+              final continua exibindo &quot;Olá, [nome]! Seu cadastro no stand [stand] foi
+              concluído.&quot; — que é o que todos os eventos mostram hoje.
+            </p>
           </div>
 
           {/* Submit */}

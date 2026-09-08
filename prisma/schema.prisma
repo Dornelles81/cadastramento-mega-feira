@@ -852,6 +852,15 @@ model EventConfig {
   // Messages
   welcomeMessage String?
   successMessage String?
+  /// Texto de conclusão do fluxo de cadastro por LINK DE STAND
+  /// (components/stand/StandCadastroFlow.tsx). NULL = a tela final fica
+  /// exatamente como sempre foi — este campo só substitui o parágrafo de
+  /// conclusão quando o evento define um texto próprio.
+  ///
+  /// É separado de `successMessage` de propósito: aquele já vem preenchido em
+  /// todos os eventos e alimenta o fluxo público (/eventos/[slug]). Reaproveitá-lo
+  /// aqui mudaria a tela final de quem já está em captação.
+  standSuccessMessage String?
   consentText    String?
   // Versão do termo versionado (lib/consent) que ESTE evento usa. null =
   // fluxo de consentimento antigo (modal hard-coded). Setar para ativar.

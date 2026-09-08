@@ -43,6 +43,13 @@ interface StandCadastroFlowProps {
   modoBalcao?: boolean
   /** Quem ainda precisa aprovar para o acesso valer no dia. */
   aprovacao?: { necessaria: boolean; porGestor: boolean }
+  /**
+   * Texto de conclusão proprio do evento (EventConfig.standSuccessMessage).
+   * NULL/ausente = a tela final fica EXATAMENTE como sempre foi. Quando vem
+   * preenchido, substitui apenas o paragrafo de conclusao — o titulo, o icone,
+   * o cartao, o aviso de aprovacao e o modo balcao nao mudam.
+   */
+  standSuccessMessage?: string | null
 }
 
 interface RegistrationData {
@@ -57,7 +64,8 @@ interface RegistrationData {
 export default function StandCadastroFlow({
   token, stand, event, requireFace, consentTermVersion, consentTerm,
   modoBalcao = false,
-  aprovacao = { necessaria: true, porGestor: false }
+  aprovacao = { necessaria: true, porGestor: false },
+  standSuccessMessage = null
 }: StandCadastroFlowProps) {
   const isFull = stand.activeCount >= stand.maxRegistrations
 
@@ -348,11 +356,20 @@ export default function StandCadastroFlow({
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-verde-agua/30 mb-6">
           <div className="text-6xl mb-3">🎉</div>
           <h1 className="text-2xl font-bold text-verde-agua mb-2">Cadastro Realizado!</h1>
-          <p className="text-sm text-white/80">
-            Olá, <strong className="text-white">{registeredName}</strong>!<br />
-            Seu cadastro no stand <strong className="text-verde-agua">{stand.name}</strong> foi
-            concluído.
-          </p>
+          {/* Texto de conclusao. O ramo customizado so existe quando o evento
+              define `standSuccessMessage`; sem ele o markup e as classes sao os
+              mesmos de sempre, linha por linha. `whitespace-pre-line` vive so no
+              ramo custom, para o texto configurado respeitar as quebras de
+              linha sem alterar em nada o padrao. */}
+          {standSuccessMessage ? (
+            <p className="text-sm text-white/80 whitespace-pre-line">{standSuccessMessage}</p>
+          ) : (
+            <p className="text-sm text-white/80">
+              Olá, <strong className="text-white">{registeredName}</strong>!<br />
+              Seu cadastro no stand <strong className="text-verde-agua">{stand.name}</strong> foi
+              concluído.
+            </p>
+          )}
         </div>
         {/* FALTA UM PASSO, e ele não é do participante.
             Sem esta linha a tela diz "concluído" e a pessoa vai embora achando

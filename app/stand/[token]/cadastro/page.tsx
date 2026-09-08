@@ -116,7 +116,9 @@ export default async function StandCadastroPage({
           select: {
             requireFace: true, logoUrl: true, consentTermVersion: true,
             // Quem aprova neste evento decide o texto da tela final.
-            standApprovalEnabled: true
+            standApprovalEnabled: true,
+            // Texto de conclusao proprio do evento (null = tela final padrao).
+            standSuccessMessage: true
           }
         })
       : Promise.resolve(null),
@@ -179,6 +181,7 @@ export default async function StandCadastroPage({
         necessaria: eventoAprovacao?.requiresApprovalForAccess !== false,
         porGestor: eventConfig?.standApprovalEnabled === true
       }}
+      standSuccessMessage={eventConfig?.standSuccessMessage ?? null}
     />
   )
 }
