@@ -56,6 +56,7 @@ import {
   montarIdentidadeEstrangeira,
   normalizarNumeroDocumento
 } from './documento'
+import { ehCodigoPaisValido } from './paises'
 import { occupiedSlotsWhere } from '../stand-access/occupancy'
 import { onBecameEligible, enqueueFaceChange } from '../agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../consent'
@@ -173,11 +174,14 @@ export async function registrarCredenciado(
       } } }
     }
     const pais = (documentCountry || '').replace(/[^A-Za-z]/g, '').toUpperCase()
-    if (pais.length !== 2) {
-      // O país é metade da chave de unicidade: sem ele, dois documentos de
-      // países diferentes com o mesmo número viram o mesmo cadastro.
+    // Confere contra a LISTA, não só o formato. "2 letras" aceitava PA para quem
+    // quis dizer Paraguai (PY) — código válido e errado, e o país é metade da
+    // chave de unicidade: o mesmo documento caberia duas vezes, e a portaria
+    // pediria à pessoa um país que ela não reconhece. O formulário já usa um
+    // seletor, mas a requisição vem do cliente e não merece confiança.
+    if (!ehCodigoPaisValido(pais)) {
       return { ok: false, recusa: { status: 400, body: {
-        error: 'Invalid document country', message: 'Informe o país do documento (2 letras, ex.: AR).'
+        error: 'Invalid document country', message: 'Selecione o país do documento.'
       } } }
     }
     const numero = normalizarNumeroDocumento(cpf)

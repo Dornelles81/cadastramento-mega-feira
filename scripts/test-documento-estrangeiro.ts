@@ -91,6 +91,14 @@ async function main() {
   const semPais = await registrarCredenciado(
     { ...base, name: 'Sem Pais', cpf: 'XY999', documentType: 'PP', documentCountry: '' }, ctx)
   check('país é obrigatório (é metade da chave)', !semPais.ok && recusa(semPais) === 'Invalid document country')
+  // O truncamento de "Paraguay" para "PA" produzia um codigo VALIDO e ERRADO.
+  // Agora o servidor confere contra a lista — e um codigo inexistente cai.
+  const paisInexistente = await registrarCredenciado(
+    { ...base, name: 'Pais Inexistente', cpf: 'XY9991', documentType: 'PP', documentCountry: 'ZZ' }, ctx)
+  check('codigo de pais inexistente recusado', !paisInexistente.ok && recusa(paisInexistente) === 'Invalid document country')
+  const paisLongo = await registrarCredenciado(
+    { ...base, name: 'Pais Por Extenso', cpf: 'XY9992', documentType: 'PP', documentCountry: 'Paraguay' }, ctx)
+  check('nome por extenso NAO e aceito como codigo', !paisLongo.ok && recusa(paisLongo) === 'Invalid document country')
   const tipoRuim = await registrarCredenciado(
     { ...base, name: 'Tipo Ruim', cpf: 'XY999', documentType: 'RG', documentCountry: 'AR' }, ctx)
   check('tipo fora da lista recusado', !tipoRuim.ok && recusa(tipoRuim) === 'Invalid document type')

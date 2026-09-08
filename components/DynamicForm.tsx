@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import DocumentField from './DocumentField'
 import FileField from './FileField'
 import { isValidCPF } from '../lib/participants/documento'
+import { paisesDestaque, paisesRestantes, ehCodigoPaisValido } from '../lib/participants/paises'
 
 interface FormField {
   fieldName: string
@@ -284,8 +285,8 @@ export default function DynamicForm({
             newErrors[field.fieldName] = 'Informe o número do documento'
             isValid = false
           }
-          if (!/^[A-Za-z]{2}$/.test(docPais.trim())) {
-            newErrors[field.fieldName] = 'Informe o país do documento (2 letras, ex.: AR)'
+          if (!ehCodigoPaisValido(docPais)) {
+            newErrors[field.fieldName] = 'Selecione o país do documento'
             isValid = false
           }
         } else {
@@ -348,7 +349,7 @@ export default function DynamicForm({
         // Só viajam quando a pessoa marcou. Ausentes = cadastro de brasileiro,
         // e o servidor segue pelo caminho do CPF.
         ...(semCpf
-          ? { documentType: docTipo, documentCountry: docPais.trim().toUpperCase() }
+          ? { documentType: docTipo, documentCountry: docPais }
           : {})
       }
       onSubmit(completeData)
@@ -648,16 +649,29 @@ export default function DynamicForm({
                             <label className="block text-sm font-medium text-white mb-2">
                               País <span className="text-red-400">*</span>
                             </label>
-                            <input
-                              type="text"
+                            {/* ⚠️ NUNCA texto livre aqui. A primeira versão pedia 2
+                                letras e truncava o que fosse digitado: quem escrevia
+                                "Paraguay" gravava PA — que é o Panamá. O código sai
+                                válido e errado, sem sinal nenhum, e o país é METADE
+                                da chave de unicidade. Escolhe-se pelo NOME; o código
+                                ISO viaja por trás. */}
+                            <select
                               value={docPais}
-                              onChange={(e) =>
-                                setDocPais(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2))
-                              }
-                              placeholder="AR"
-                              maxLength={2}
-                              className="w-full px-4 py-3 border border-white/30 rounded-lg text-base bg-white text-gray-900 placeholder-gray-500 uppercase"
-                            />
+                              onChange={(e) => setDocPais(e.target.value)}
+                              className="w-full px-4 py-3 border border-white/30 rounded-lg text-base bg-white text-gray-900"
+                            >
+                              <option value="">Selecione…</option>
+                              <optgroup label="Mais comuns">
+                                {paisesDestaque().map((pais) => (
+                                  <option key={pais.codigo} value={pais.codigo}>{pais.nome}</option>
+                                ))}
+                              </optgroup>
+                              <optgroup label="Todos os países">
+                                {paisesRestantes().map((pais) => (
+                                  <option key={pais.codigo} value={pais.codigo}>{pais.nome}</option>
+                                ))}
+                              </optgroup>
+                            </select>
                           </div>
                         </div>
                       )}

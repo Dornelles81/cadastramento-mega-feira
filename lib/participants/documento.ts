@@ -35,6 +35,8 @@
  * seria reintroduzir a pessoa errada no portão pela porta dos fundos.
  */
 
+import { nomeDoPais } from './paises'
+
 // ── CPF ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -219,7 +221,10 @@ export type ResolucaoDocumento =
 export function mensagemDocumentoAmbiguo(
   opcoes: { tipo: string; pais: string; identidade: string }[]
 ): string {
-  const lista = opcoes.map((o) => o.identidade).join('  ou  ')
+  // O NOME do país, não a sigla: o operador vai PERGUNTAR à pessoa, e
+  // "é da Argentina ou do Paraguai?" é uma pergunta; "AR ou PY?" não é.
+  // A string exata para digitar vem junto, porque é ela que refaz a busca.
+  const lista = opcoes.map((o) => nomeDoPais(o.pais) + ' → ' + o.identidade).join('   |   ')
   return (
     'Mais de uma pessoa tem esse número de documento. ' +
     'Pergunte o país e busque de novo digitando: ' + lista
