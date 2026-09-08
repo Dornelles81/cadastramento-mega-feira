@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import MarcaMegacredenciamento, { LinhaOperadora } from '../../../components/MarcaMegacredenciamento'
 
 interface Event {
   id: string
@@ -112,12 +113,22 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-cinza-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center font-bold text-2xl">
-                <span className="text-verde-agua italic">MEGA</span>
-                <span className="text-azul-marinho ml-2">FEIRA</span>
-              </div>
+          {/* Empilha no celular, como as outras cinco telas do painel ja
+              faziam (flex-col md:flex-row). Em uma linha so, marca + titulo +
+              Sair nao cabiam em 375px e a pagina rolava de lado — o botao Sair
+              saia 21px da tela mesmo antes da marca nova. No desktop nada muda:
+              md:flex-row + md:items-center + justify-between e o mesmo arranjo,
+              e o gap-4 nao encosta em nada com os dois blocos afastados. */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            {/* flex-wrap + gap (no lugar de space-x-4, que nao trata quebra):
+                a 320px marca e titulo lado a lado nao cabem nem com o titulo no
+                minimo, e o bloco vazava 44px. Com wrap o titulo desce so quando
+                falta espaco de verdade — a 375px e no desktop nada muda. */}
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Marca do painel. O tamanho e menor que o text-2xl do MEGA/FEIRA
+                  anterior de proposito: "megacredenciamento" tem o dobro de
+                  caracteres e, no mesmo corpo, empurraria o titulo da tela. */}
+              <MarcaMegacredenciamento className="text-base md:text-lg" darkMode={false} />
               <div>
                 <h1 className="text-2xl font-bold text-azul-marinho">
                   {isSuperAdmin ? '👑 Super Admin Dashboard' : '📊 Dashboard Administrativo'}
@@ -388,6 +399,15 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Atribuicao da solucao. Bloco NOVO no fim do conteudo, irmao do
+          container principal — nao altera cabecalho, cartoes nem espacamentos
+          existentes. E o unico lugar do painel onde a Mega Feira aparece: nao
+          ha layout compartilhado em /admin, entao por-la nos cabecalhos
+          significaria repeti-la em seis telas de altura diferente. */}
+      <div className="max-w-7xl mx-auto px-4 pb-8">
+        <LinhaOperadora />
       </div>
     </div>
   )

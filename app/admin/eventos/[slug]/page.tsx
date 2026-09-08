@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import MegaFeiraLogo from '../../../../components/MegaFeiraLogo'
+import MarcaMegacredenciamento from '../../../../components/MarcaMegacredenciamento'
 import SyncResumo from '../../../../components/admin/SyncResumo'
 import { textoRemocao } from '../../../../lib/participants/removal-label'
 import { riscoDeFace, tituloRiscoDeFace } from '../../../../lib/participants/face-risk'
@@ -1108,7 +1108,7 @@ export default function EventAdminPage() {
         <div className={`rounded-lg shadow-sm p-4 md:p-6 mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
-              <MegaFeiraLogo className="text-2xl md:text-3xl" darkMode={darkMode} />
+              <MarcaMegacredenciamento className="text-base md:text-lg" darkMode={darkMode} />
               <div>
                 <h1 className={`text-xl md:text-2xl font-bold mb-1 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                   📊 {event ? event.name : 'Painel Administrativo'}

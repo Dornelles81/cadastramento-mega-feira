@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
-import MegaFeiraLogo from '../../../../../components/MegaFeiraLogo'
+import MarcaMegacredenciamento from '../../../../../components/MarcaMegacredenciamento'
 
 interface ApprovalLog {
   id: string
@@ -160,7 +160,7 @@ export default function EventApprovalsPage() {
         <div className={`rounded-lg shadow-lg p-6 mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-4">
-              <MegaFeiraLogo className="text-2xl" darkMode={darkMode} />
+              <MarcaMegacredenciamento className="text-base md:text-lg" darkMode={darkMode} />
               <div>
                 <h1 className={`text-2xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                   ✅ Central de Aprovacoes

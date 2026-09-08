@@ -1,0 +1,79 @@
+/* ==========================================================================
+   MARCA DO PAINEL — Megacredenciamento
+   ==========================================================================
+   Estilo do logotipo tipografico usado nos cabecalhos de /admin e da linha de
+   atribuicao da Mega Feira. Importado por components/MarcaMegacredenciamento.tsx,
+   entao a folha viaja junto com o componente: nenhuma tela carrega estas regras
+   sem usar a marca.
+
+   ⚠️ POR QUE ISTO NAO REUSA app/institucional.css
+   Aquele arquivo escopa tudo em `.institucional`, e o bloco de variaveis casa
+   com `html:has(.institucional), body:has(.institucional)` — envolver uma tela
+   do painel naquele wrapper trocaria fundo, cor de texto e fonte do PAINEL
+   INTEIRO, nao so da marca. Aqui as regras dependem exclusivamente de
+   `.marca-mc`, que so existe onde o componente foi colocado.
+
+   O @font-face repete o de app/institucional.css de proposito: aponta para o
+   mesmo arquivo ja versionado em public/fonts, entao o navegador reaproveita o
+   download e a declaracao duplicada e inofensiva. Repetir aqui e o que permite
+   a marca funcionar em /admin sem arrastar a folha institucional junto.
+   ========================================================================== */
+
+@font-face{
+  font-family:"Archivo";
+  src:url("/fonts/archivo-latin.woff2") format("woff2-variations");
+  font-weight:100 900;
+  font-stretch:62% 125%;
+  font-display:swap;
+}
+
+/* O logotipo. NAO define `font-size` de proposito: o tamanho continua vindo da
+   classe Tailwind que o cabecalho passa, como ja acontecia com o MegaFeiraLogo.
+   Fixar tamanho aqui criaria empate de especificidade com `text-base`/`text-lg`
+   e o vencedor dependeria da ordem das folhas. */
+.marca-mc{
+  display:inline-block;
+  font-family:"Archivo","Segoe UI",system-ui,-apple-system,sans-serif;
+  /* Peso e largura do eixo variavel — mesmos valores da .login-marca. */
+  font-variation-settings:"wdth" 116,"wght" 800;
+  font-weight:800; /* fallback: navegador sem suporte a fonte variavel */
+  letter-spacing:-.032em;
+  line-height:1.1;
+  /* A palavra e longa: sem isto ela quebra no meio ("megacredencia-mento")
+     quando o cabecalho aperta no celular. */
+  white-space:nowrap;
+  /* Azul-marinho do painel (#1F3664) — a mesma cor do "FEIRA" de antes e dos
+     titulos das telas. Nenhuma cor nova entra na paleta. */
+  color:#1F3664;
+}
+
+/* "mega": leve e estreito, na cor secundaria (verde-agua #5EC2B7, a mesma que
+   o "MEGA" ja usava). O <i> e so o gancho de estilo; nao ha italico. */
+.marca-mc i{
+  font-style:normal;
+  font-variation-settings:"wdth" 86,"wght" 400;
+  font-weight:400;
+  letter-spacing:-.01em;
+  color:#5EC2B7;
+}
+
+/* Telas do painel com tema escuro (as que passam darkMode). O verde-agua do
+   "mega" tem contraste suficiente nos dois temas e nao muda. */
+.marca-mc-escuro{
+  color:#FFFFFF;
+}
+
+/* Linha de atribuicao. Discreta por definicao: cinza secundario (#64748B, o
+   token `cinza` do painel) e menor que qualquer texto de conteudo. */
+.marca-mc-operadora{
+  font-family:"Archivo","Segoe UI",system-ui,-apple-system,sans-serif;
+  font-variation-settings:"wdth" 92,"wght" 400;
+  font-weight:400;
+  font-size:.78rem;
+  letter-spacing:.01em;
+  line-height:1.4;
+  color:#64748B;
+}
+.marca-mc-operadora-escuro{
+  color:#94A3B8;
+}
