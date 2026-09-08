@@ -417,7 +417,19 @@ export default function EventoPage() {
   }
 
   // Loading state
-  if (currentStep === 'loading' || eventLoading) {
+  //
+  // `!eventError` da PRECEDENCIA ao erro. Sem ele os ramos de erro de
+  // `loadEventConfig` (delegatedStandAccess, evento encerrado/nao iniciado,
+  // vagas esgotadas e o `catch` de rede) eram INALCANCAVEIS: eles chamam
+  // `setEventError` mas nao mexem em `currentStep`, que continua 'loading' —
+  // entao esta guarda vencia para sempre e a pagina ficava em "Carregando
+  // evento..." com a mensagem pronta no estado, sem nunca exibi-la.
+  //
+  // Por que nao trocar os dois blocos de lugar, que seria a inversao literal:
+  // a guarda de erro testa `eventError || !event`, e `event` nasce `null`. Ela
+  // acima faria a tela "Evento Nao Encontrado" aparecer durante o carregamento
+  // normal, antes de a requisicao voltar. A precedencia resolve sem esse efeito.
+  if (!eventError && (currentStep === 'loading' || eventLoading)) {
     return (
       <div className="min-h-screen gradient-hero flex items-center justify-center">
         <div className="text-center">
