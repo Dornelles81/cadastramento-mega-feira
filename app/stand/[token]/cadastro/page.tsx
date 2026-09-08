@@ -118,7 +118,9 @@ export default async function StandCadastroPage({
             // Quem aprova neste evento decide o texto da tela final.
             standApprovalEnabled: true,
             // Texto de conclusao proprio do evento (null = tela final padrao).
-            standSuccessMessage: true
+            standSuccessMessage: true,
+            // Aceita cadastro sem CPF, com documento estrangeiro?
+            allowForeignDocument: true
           }
         })
       : Promise.resolve(null),
@@ -182,6 +184,7 @@ export default async function StandCadastroPage({
         porGestor: eventConfig?.standApprovalEnabled === true
       }}
       standSuccessMessage={eventConfig?.standSuccessMessage ?? null}
+      permiteDocumentoEstrangeiro={eventConfig?.allowForeignDocument === true}
     />
   )
 }

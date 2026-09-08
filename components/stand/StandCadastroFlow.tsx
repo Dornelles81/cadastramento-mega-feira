@@ -50,11 +50,19 @@ interface StandCadastroFlowProps {
    * o cartao, o aviso de aprovacao e o modo balcao nao mudam.
    */
   standSuccessMessage?: string | null
+  /**
+   * Evento aceita documento estrangeiro (EventConfig.allowForeignDocument).
+   * Sem isto o formulário é o de sempre: CPF obrigatório, com máscara.
+   */
+  permiteDocumentoEstrangeiro?: boolean
 }
 
 interface RegistrationData {
   name: string
+  /** CPF, OU o número do documento quando `documentType` vem junto. */
   cpf: string
+  documentType?: string | null
+  documentCountry?: string | null
   email?: string
   phone: string
   consent: boolean
@@ -65,7 +73,8 @@ export default function StandCadastroFlow({
   token, stand, event, requireFace, consentTermVersion, consentTerm,
   modoBalcao = false,
   aprovacao = { necessaria: true, porGestor: false },
-  standSuccessMessage = null
+  standSuccessMessage = null,
+  permiteDocumentoEstrangeiro = false
 }: StandCadastroFlowProps) {
   const isFull = stand.activeCount >= stand.maxRegistrations
 
@@ -82,11 +91,18 @@ export default function StandCadastroFlow({
   })
 
   const handlePersonalSubmit = (formData: any) => {
-    const { name, cpf, email, phone, evento, eventCode, mesa, estande, standCode, ...custom } = formData
+    // documentType/documentCountry saem do rest de propósito: sem isso eles
+    // entrariam em `customData` e o servidor nunca os veria como identidade.
+    const {
+      name, cpf, documentType, documentCountry,
+      email, phone, evento, eventCode, mesa, estande, standCode, ...custom
+    } = formData
     const updated: RegistrationData = {
       ...data,
       name,
       cpf,
+      documentType: documentType || null,
+      documentCountry: documentCountry || null,
       email,
       phone,
       customData: custom
@@ -111,6 +127,8 @@ export default function StandCadastroFlow({
           token,
           name: reg.name || '',
           cpf: reg.cpf || '',
+          documentType: reg.documentType || undefined,
+          documentCountry: reg.documentCountry || undefined,
           email: reg.email || '',
           phone: reg.phone || '',
           faceImage: imageData || null,
@@ -311,6 +329,7 @@ export default function StandCadastroFlow({
               onBack={() => setStep('consent')}
               eventCode={event.code}
               fixedStand={{ name: stand.name, code: stand.code, location: stand.location }}
+              permiteDocumentoEstrangeiro={permiteDocumentoEstrangeiro}
               initialData={{
                 name: data.name,
                 cpf: data.cpf,

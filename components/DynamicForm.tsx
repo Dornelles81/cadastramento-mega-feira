@@ -41,6 +41,12 @@ interface DynamicFormProps {
    * Desabilita o input e pula a validação de 11 dígitos para o valor mascarado.
    */
   cpfReadOnly?: boolean
+  /**
+   * Evento aceita documento estrangeiro (EventConfig.allowForeignDocument).
+   * Sem isto o formulário é EXATAMENTE o de sempre: campo CPF, máscara de 11
+   * dígitos e validação de dígitos verificadores.
+   */
+  permiteDocumentoEstrangeiro?: boolean
 }
 
 // Campo file com OCR é renderizado como DocumentField, cujo valor vive em
@@ -49,7 +55,16 @@ function isOcrDocumentField(field: { type: string; validation?: any }): boolean 
   return field.type === 'file' && !!field.validation?.enableOCR
 }
 
-export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, fixedStand, cpfReadOnly }: DynamicFormProps) {
+export default function DynamicForm({
+  onSubmit, onBack, eventCode, initialData, fixedStand, cpfReadOnly,
+  permiteDocumentoEstrangeiro = false
+}: DynamicFormProps) {
+  // Marcação "não tenho CPF". Só existe quando o evento aceita — e ao ligar,
+  // o campo deixa de ser CPF: some a máscara, o rótulo vira "Documento" e
+  // aparecem tipo e país, que são metade da chave de unicidade.
+  const [semCpf, setSemCpf] = useState(false)
+  const [docTipo, setDocTipo] = useState('PP')
+  const [docPais, setDocPais] = useState('')
   const [fields, setFields] = useState<FormField[]>([])
   const [documentFields, setDocumentFields] = useState<DocumentFieldConfig[]>([])
   const [formData, setFormData] = useState<any>(initialData || {})
@@ -259,10 +274,25 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
 
       // Special validations
       if (field.fieldName === 'cpf' && !cpfReadOnly && formData[field.fieldName]) {
-        const cpf = formData[field.fieldName].replace(/\D/g, '')
-        if (cpf.length !== 11) {
-          newErrors[field.fieldName] = 'CPF inválido'
-          isValid = false
+        if (semCpf) {
+          // Documento estrangeiro NÃO tem formato validável — cada país tem o
+          // seu. O piso mínimo recusa campo em branco e digitação acidental; o
+          // resto da validação é do servidor, que conhece o evento.
+          const numero = String(formData[field.fieldName]).replace(/[^0-9A-Za-z]/g, '')
+          if (numero.length < 4) {
+            newErrors[field.fieldName] = 'Informe o número do documento'
+            isValid = false
+          }
+          if (!/^[A-Za-z]{2}$/.test(docPais.trim())) {
+            newErrors[field.fieldName] = 'Informe o país do documento (2 letras, ex.: AR)'
+            isValid = false
+          }
+        } else {
+          const cpf = formData[field.fieldName].replace(/\D/g, '')
+          if (cpf.length !== 11) {
+            newErrors[field.fieldName] = 'CPF inválido'
+            isValid = false
+          }
         }
       }
 
@@ -303,7 +333,12 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
       // Combine form data with document data
       const completeData = {
         ...formData,
-        documents: documentData
+        documents: documentData,
+        // Só viajam quando a pessoa marcou. Ausentes = cadastro de brasileiro,
+        // e o servidor segue pelo caminho do CPF.
+        ...(semCpf
+          ? { documentType: docTipo, documentCountry: docPais.trim().toUpperCase() }
+          : {})
       }
       onSubmit(completeData)
     }
@@ -448,13 +483,20 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
               name={field.fieldName}
               value={formData[field.fieldName]}
               onChange={(e) => {
+                if (semCpf) {
+                  // Texto livre: sem máscara e sem teto de 14, que sao do CPF.
+                  // Passaporte tem letras; documento de outro pais pode ser mais
+                  // longo. Quem normaliza e o servidor.
+                  handleFieldChange(field.fieldName, e.target.value)
+                  return
+                }
                 const value = e.target.value.replace(/\D/g, '')
                 const formatted = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
                 handleFieldChange(field.fieldName, formatted)
               }}
               required={field.required}
-              placeholder={field.placeholder}
-              maxLength={14}
+              placeholder={semCpf ? '' : field.placeholder}
+              maxLength={semCpf ? 40 : 14}
               className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-500"
             />
           )
@@ -534,12 +576,81 @@ export default function DynamicForm({ onSubmit, onBack, eventCode, initialData, 
                       label — não duplicar com o do wrapper. */}
                   {field.type !== 'checkbox' && field.type !== 'file' && (
                     <label className="block text-sm font-medium text-white mb-2">
-                      {field.label} {field.required && <span className="text-red-400">*</span>}
+                      {/* Rótulo honesto: marcada a opção, o campo deixa de ser
+                          CPF e passar a chamá-lo assim seria o campo mentindo. */}
+                      {field.fieldName === 'cpf' && semCpf ? 'Documento' : field.label}
+                      {field.required && <span className="text-red-400">*</span>}
                     </label>
                   )}
                   {renderField(field)}
                   {errors[field.fieldName] && (
                     <p className="text-red-400 text-sm mt-1">{errors[field.fieldName]}</p>
+                  )}
+
+                  {/* ── MARCAÇÃO "NÃO TENHO CPF" ────────────────────────────
+                      Só aparece no evento que aceita (allowForeignDocument) e
+                      nunca na edição por link, onde o documento é imutável.
+                      Tipo e país não são enfeite: os dois formam a chave de
+                      unicidade junto do número — o mesmo DNI pode existir na
+                      Argentina e no Paraguai, e sem o país os dois cadastros
+                      virariam um só. */}
+                  {field.fieldName === 'cpf' && permiteDocumentoEstrangeiro && !cpfReadOnly && (
+                    <div className="mt-3">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={semCpf}
+                          onChange={(e) => {
+                            setSemCpf(e.target.checked)
+                            // O valor digitado até aqui foi formatado por outra
+                            // regra (máscara de CPF, ou texto livre). Manter
+                            // levaria pontuação de CPF para dentro de um
+                            // passaporte, e vice-versa.
+                            handleFieldChange('cpf', '')
+                            setDocPais('')
+                          }}
+                          className="w-4 h-4 mt-0.5 rounded"
+                        />
+                        <span className="text-sm text-white/90">
+                          Não tenho CPF — sou estrangeiro
+                        </span>
+                      </label>
+
+                      {semCpf && (
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="block text-sm font-medium text-white mb-2">
+                              Tipo <span className="text-red-400">*</span>
+                            </label>
+                            <select
+                              value={docTipo}
+                              onChange={(e) => setDocTipo(e.target.value)}
+                              className="w-full px-4 py-3 border border-white/30 rounded-lg text-base bg-white text-gray-900"
+                            >
+                              <option value="PP">Passaporte</option>
+                              <option value="DNI">DNI</option>
+                              <option value="CI">Cédula de identidade</option>
+                              <option value="OUTRO">Outro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-white mb-2">
+                              País <span className="text-red-400">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={docPais}
+                              onChange={(e) =>
+                                setDocPais(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2))
+                              }
+                              placeholder="AR"
+                              maxLength={2}
+                              className="w-full px-4 py-3 border border-white/30 rounded-lg text-base bg-white text-gray-900 placeholder-gray-500 uppercase"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )
