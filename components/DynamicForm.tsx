@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import DocumentField from './DocumentField'
 import FileField from './FileField'
+import { isValidCPF } from '../lib/participants/documento'
 
 interface FormField {
   fieldName: string
@@ -288,8 +289,18 @@ export default function DynamicForm({
             isValid = false
           }
         } else {
-          const cpf = formData[field.fieldName].replace(/\D/g, '')
-          if (cpf.length !== 11) {
+          // Dígitos verificadores, e não só o comprimento.
+          //
+          // Até 08/09/2026 a checagem aqui era `length !== 11`, então
+          // "000.000.000-00" passava: a pessoa avançava, TIRAVA A FOTO INTEIRA
+          // e só no fim recebia um alert "CPF inválido", sem saber qual campo
+          // corrigir. O servidor sempre recusou (o registrar valida de
+          // verdade), mas recusar depois da selfie é uma experiência muito
+          // diferente de recusar no campo.
+          //
+          // É a mesma função do servidor — quinta cópia da regra virando uma
+          // implementação só.
+          if (!isValidCPF(formData[field.fieldName])) {
             newErrors[field.fieldName] = 'CPF inválido'
             isValid = false
           }
