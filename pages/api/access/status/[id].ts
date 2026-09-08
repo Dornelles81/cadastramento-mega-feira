@@ -1,6 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
+import { montarBuscaPortaria } from '../../../../lib/participants/documento'
 import { tryGetFaceImageDataUrl } from '../../../../lib/face-image'
 
 /**
@@ -27,25 +28,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'eventId is required - participants are segregated by event' })
     }
 
-    // Support: full ID (uuid), short ID (8 chars), or CPF (11 digits)
-    const isCPF = /^\d{11}$/.test(id.replace(/\D/g, ''))
-    const cleanCPF = id.replace(/\D/g, '')
-
-    // Always include eventId in the where clause
-    let whereClause: any = {
-      eventId: eventId
-    }
-
-    if (isCPF) {
-      // Search by CPF (remove formatting)
-      whereClause.cpf = cleanCPF
-    } else if (id.length === 8) {
-      // Short ID (first 8 chars of uuid)
-      whereClause.id = { startsWith: id.toLowerCase() }
-    } else {
-      // Full ID
-      whereClause.id = id
-    }
+    // Mesmo despachante do fast-status, agora numa implementacao so:
+    // 11 digitos = CPF, 8 caracteres = id curto, resto = UUID completo.
+    const busca = montarBuscaPortaria(id)
+    const whereClause: any = { eventId, ...busca.where }
 
     const participant = await prisma.participant.findFirst({
       where: whereClause,

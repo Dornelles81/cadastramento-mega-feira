@@ -8,6 +8,7 @@ import SyncResumo from '../../../../components/admin/SyncResumo'
 import { textoRemocao } from '../../../../lib/participants/removal-label'
 import { riscoDeFace, tituloRiscoDeFace } from '../../../../lib/participants/face-risk'
 import AvisoRecapturaButton from '../../../../components/admin/AvisoRecapturaButton'
+import { generateCompactQRData } from '../../../../lib/qrcode/generator'
 
 interface Participant {
   id: string
@@ -1073,7 +1074,10 @@ export default function EventAdminPage() {
         const standName = (p as any).standName || standCode
 
         // QR Code — formato compacto compatível com o scanner de acesso
-        const qrPayload = `MF|${p.id.substring(0, 8)}|${p.cpf.replace(/\D/g, '')}|${evCode}|${standCode}|${p.name.substring(0, 30)}`
+        const qrPayload = generateCompactQRData({
+          id: p.id, name: p.name, cpf: p.cpf,
+          eventCode: evCode, standCode
+        })
         const qrDataUrl = await QRCode.toDataURL(qrPayload, {
           width: 200, margin: 1, errorCorrectionLevel: 'M',
           color: { dark: '#000000', light: '#ffffff' }

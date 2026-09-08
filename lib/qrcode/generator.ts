@@ -140,12 +140,21 @@ export function generateCompactQRData(participant: {
   eventCode?: string
   standCode?: string
 }): string {
-  // Format: MF|ID|CPF|EVENT|STAND|NAME
-  // MF = Mega Feira identifier
+  // Format: MF|ID|IDENTIDADE|EVENT|STAND|NAME
+  //
+  // ⚠️ FONTE UNICA do payload compacto. O mesmo template estava escrito a mao em
+  // TRES outros lugares — export/qrcodes.ts (duas vezes) e a etiqueta do painel
+  // — enquanto esta funcao, exportada, nao era chamada por ninguem. Formato
+  // posicional divergindo entre as vias significa QR que o scanner nao le, e a
+  // falha aparece no PORTAO, com a pessoa esperando. Se precisar mudar, mude
+  // aqui e em `parseCompactQRData`, que le por posicao.
   const parts = [
     'MF',
     participant.id.substring(0, 8), // Short ID
-    participant.cpf.replace(/\D/g, ''), // CPF numbers only
+    // `replace` de nao-digitos: para CPF e no-op sobre 11 digitos. Quando o
+    // documento estrangeiro entrar, ESTA linha passa a usar o valor normalizado
+    // de lib/participants/documento.ts — hoje ela apagaria as letras dele.
+    participant.cpf.replace(/\D/g, ''),
     participant.eventCode || '-',
     participant.standCode || '-',
     participant.name.substring(0, 30) // Truncate name

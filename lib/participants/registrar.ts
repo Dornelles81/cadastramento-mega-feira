@@ -48,6 +48,9 @@ import { faceVersionOf } from '../face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../face/size-limit'
 import { faceMetricsForPrisma } from '../face/metrics'
 import { respostaCpfDuplicado } from './cpf-duplicado'
+// isValidCPF vinha de uma copia LOCAL deste arquivo. Ver documento.ts: eram
+// tres implementacoes, comparadas contra 616 entradas antes de unificar.
+import { isValidCPF } from './documento'
 import { occupiedSlotsWhere } from '../stand-access/occupancy'
 import { onBecameEligible, enqueueFaceChange } from '../agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../consent'
@@ -93,21 +96,7 @@ export class StandFullError extends Error {
   }
 }
 
-export function isValidCPF(cpf: string): boolean {
-  const numbers = cpf.replace(/\D/g, '')
-  if (numbers.length !== 11) return false
-  if (/^(\d)\1{10}$/.test(numbers)) return false
-  let sum = 0
-  for (let i = 0; i < 9; i++) sum += parseInt(numbers[i]) * (10 - i)
-  let remainder = (sum * 10) % 11
-  if (remainder === 10 || remainder === 11) remainder = 0
-  if (remainder !== parseInt(numbers[9])) return false
-  sum = 0
-  for (let i = 0; i < 10; i++) sum += parseInt(numbers[i]) * (11 - i)
-  remainder = (sum * 10) % 11
-  if (remainder === 10 || remainder === 11) remainder = 0
-  return remainder === parseInt(numbers[10])
-}
+
 
 
 /** Normaliza nome para comparar: sem acento, sem caixa, sem espaço duplo. */

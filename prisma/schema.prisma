@@ -234,8 +234,19 @@ model Participant {
   eventCode String? // Kept for backward compatibility
 
   // Personal info
-  name  String
+  name String
+  /// IDENTIDADE da pessoa no evento — e o que o UNIQUE (eventId, cpf) protege.
+  /// Para brasileiro: 11 digitos do CPF. Para estrangeiro (quando o evento
+  /// liga `EventConfig.allowForeignDocument`): o documento com tipo e pais
+  /// embutidos, ex. "PP-AR:AB1234567". O nome da coluna passou a mentir um
+  /// pouco; renomear e mover a constraint para uma coluna de identidade
+  /// honesta esta anotado como divida pos-feira.
+  /// Formato e regras: lib/participants/documento.ts
   cpf   String
+  /// 'PP' | 'DNI' | 'CI' | 'OUTRO'. NULL = a identidade acima e um CPF.
+  documentType    String?
+  /// ISO-3166 alpha-2 do pais emissor. NULL = CPF (Brasil).
+  documentCountry String?
   email String?
   phone String?
 
@@ -840,6 +851,13 @@ model EventConfig {
   requireFace      Boolean @default(true)
   requireDocuments Boolean @default(false)
   autoApprove      Boolean @default(false)
+
+  /// Este evento aceita cadastro com DOCUMENTO ESTRANGEIRO (sem CPF)?
+  /// Default FALSE: o CPF continua obrigatorio em todo evento que nao pedir o
+  /// contrario. Ligado, o formulario do link do stand oferece a marcacao
+  /// "sou estrangeiro" e o servidor aceita documento no lugar do CPF.
+  /// Ver lib/participants/documento.ts.
+  allowForeignDocument Boolean @default(false)
 
   /// O responsável do stand pode APROVAR/REJEITAR a própria equipe pelo painel?
   /// Default FALSE: aprovar é a transição que dá acesso físico, e delegá-la é

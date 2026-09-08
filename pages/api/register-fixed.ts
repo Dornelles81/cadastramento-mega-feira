@@ -6,6 +6,8 @@ import { faceVersionOf } from '../../lib/face/version'
 import { checkFaceSize, FACE_TOO_LARGE_MESSAGE } from '../../lib/face/size-limit'
 import { faceMetricsForPrisma } from '../../lib/face/metrics'
 import { respostaCpfDuplicado } from '../../lib/participants/cpf-duplicado'
+// Terceira copia do isValidCPF vivia aqui. Agora e a mesma de todo mundo.
+import { isValidCPF } from '../../lib/participants/documento'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
@@ -27,28 +29,7 @@ const registrationSchema = Joi.object({
 })
 
 // Simplified CPF validation
-function isValidCPF(cpf: string): boolean {
-  const numbers = cpf.replace(/\D/g, '')
-  
-  if (numbers.length !== 11) return false
-  if (/^(\d)\1{10}$/.test(numbers)) return false
 
-  let sum = 0
-  for (let i = 0; i < 9; i++) {
-    sum += parseInt(numbers[i]) * (10 - i)
-  }
-  let remainder = (sum * 10) % 11
-  if (remainder === 10 || remainder === 11) remainder = 0
-  if (remainder !== parseInt(numbers[9])) return false
-
-  sum = 0
-  for (let i = 0; i < 10; i++) {
-    sum += parseInt(numbers[i]) * (11 - i)
-  }
-  remainder = (sum * 10) % 11
-  if (remainder === 10 || remainder === 11) remainder = 0
-  return remainder === parseInt(numbers[10])
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

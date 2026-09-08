@@ -1,6 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
+import { montarBuscaPortaria } from '../../../lib/participants/documento'
 import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
 
 /**
@@ -27,22 +28,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'eventId is required - participants are segregated by event' })
     }
 
-    // Determine search type: CPF (11 digits) or ID
-    const cleanQuery = q.replace(/\D/g, '')
-    const isCPF = cleanQuery.length === 11
+    // O despachante (11 digitos = CPF, 8 caracteres = id curto, resto = UUID)
+    // vive em lib/participants/documento.ts. Estava copiado aqui e em
+    // access/status/[id].ts; quando o documento estrangeiro entrar, a quarta
+    // perna precisa aparecer nos dois — e esquecer um significa a pessoa nao
+    // ser encontrada no portao, com ela esperando.
+    const busca = montarBuscaPortaria(q)
 
     // Build where clause - ALWAYS filter by event
-    let whereClause: any = {
-      eventId: eventId // Always required
-    }
-
-    if (isCPF) {
-      whereClause.cpf = cleanQuery
-    } else if (q.length === 8) {
-      whereClause.id = { startsWith: q.toLowerCase() }
-    } else {
-      whereClause.id = q
-    }
+    const whereClause: any = { eventId, ...busca.where }
 
     // Single optimized query
     const participant = await prisma.participant.findFirst({

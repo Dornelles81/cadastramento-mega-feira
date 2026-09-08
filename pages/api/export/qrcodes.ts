@@ -2,6 +2,7 @@ import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../lib/prisma'
 import QRCode from 'qrcode'
+import { generateCompactQRData } from '../../../lib/qrcode/generator'
 
 interface QRPayload {
   id: string
@@ -256,7 +257,10 @@ async function exportBatchJSON(
   const results = await Promise.all(
     participants.map(async (p) => {
       // Compact QR payload for easier scanning
-      const compactPayload = `MF|${p.id.substring(0, 8)}|${p.cpf.replace(/\D/g, '')}|${event.code}|${p.stand?.code || '-'}|${p.name.substring(0, 30)}`
+      const compactPayload = generateCompactQRData({
+      id: p.id, name: p.name, cpf: p.cpf,
+      eventCode: event.code, standCode: p.stand?.code
+    })
 
       const result: any = {
         id: p.id,
@@ -334,7 +338,10 @@ async function exportCSV(
   ]
 
   const rows = participants.map(p => {
-    const compactPayload = `MF|${p.id.substring(0, 8)}|${p.cpf.replace(/\D/g, '')}|${event.code}|${p.stand?.code || '-'}|${p.name.substring(0, 30)}`
+    const compactPayload = generateCompactQRData({
+      id: p.id, name: p.name, cpf: p.cpf,
+      eventCode: event.code, standCode: p.stand?.code
+    })
     const fullPayload = JSON.stringify({
       id: p.id,
       name: p.name,
