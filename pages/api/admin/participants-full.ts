@@ -3,10 +3,12 @@ import type { Session } from 'next-auth'
 import { prisma } from '../../../lib/prisma'
 import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../lib/api-auth'
 import { visibleParticipantsRelationWhere } from '../../../lib/participants/visibility'
-import { buscarRemocoes, montarRemocao } from '../../../lib/participants/removal-badge'
-import { tryGetFaceImageDataUrl } from '../../../lib/face-image'
-import { deriveFaceStatus, isValidFace } from '../../../lib/face/status'
-import { decryptDocuments } from '../../../lib/documents'
+import { buscarRemocoes } from '../../../lib/participants/removal-badge'
+// O `select` e o formato saem daqui e do PUT de edicao pelo MESMO modulo: a
+// tela funde a resposta do servidor depois de salvar, e formatos diferentes
+// eram justamente o que fazia a linha editada perder `standName` e sumir do
+// filtro por stand.
+import { ADMIN_PARTICIPANT_SELECT, formatAdminParticipant } from '../../../lib/participants/admin-view'
 
 async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   // CORS headers (restricted to same origin for authenticated endpoint)
@@ -123,54 +125,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     // ========================================================================
     const participants = await prisma.participant.findMany({
       where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        cpf: true,
-        email: true,
-        phone: true,
-        eventCode: true,
-        eventId: true,
-        createdAt: true,
-        // Estado de exclusão: alimenta o badge "Excluído pelo gestor" e é o que
-        // explica ao admin por que aquele CPF continua bloqueado para recadastro
-        status: true,
-        removedAt: true,
-        removedBy: true,
-        consentAccepted: true,
-        faceInterocularPx: true,
-        faceImageUrl: true, // Foto legada (data URL em claro)
-        faceData: true, // Foto nova (AES-256-GCM) — decriptada server-side abaixo, nunca enviada crua
-        // Estado REAL nos terminais. Sem isto a coluna "Status da face" mostra
-        // só a nossa validação e mente: em 04/09/2026 o painel exibia "Válida"
-        // para quem estava `failed` nos quatro equipamentos — a foto tinha
-        // passado no nosso gate e sido recusada pelo modelador do device.
-        terminalSyncs: {
-          select: { faceState: true, removalState: true, faceVersion: true }
-        },
-        faceVersion: true,
-        customData: true,
-        documents: true, // Include documents field
-        approvalStatus: true, // Include approval status
-        approvedAt: true,
-        approvedBy: true,
-        rejectionReason: true,
-        standId: true, // Stand ID
-        stand: {
-          select: {
-            code: true,
-            name: true
-          }
-        },
-        event: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            slug: true
-          }
-        }
-      },
+      select: ADMIN_PARTICIPANT_SELECT,
       orderBy: {
         createdAt: 'desc'
       }
@@ -183,75 +138,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
       participants.filter(p => p.status === 'removed').map(p => p.id)
     )
 
-    // Format response
-    const formattedParticipants = participants.map(participant => {
-    // Removido pelo gestor: a exclusão já apagou biometria/documentos no banco
-    // (SENSITIVE_PARTICIPANT_CLEAR). Zerar de novo aqui é cinto e suspensório —
-    // linha antiga ou falha parcial na limpeza não vira foto exposta no painel.
-    const removido = participant.status === 'removed'
-    return {
-      id: participant.id,
-      name: participant.name,
-      cpf: participant.cpf,
-      email: participant.email || '',
-      phone: participant.phone || '',
-      eventCode: participant.eventCode || 'MEGA-FEIRA-2025',
-      eventId: participant.eventId,
-      eventName: participant.event?.name || '',
-      eventSlug: participant.event?.slug || '',
-      createdAt: participant.createdAt.toISOString(),
-      consentAccepted: participant.consentAccepted,
-      faceInterocularPx: participant.faceInterocularPx,
-      faceStatus: deriveFaceStatus(participant.faceInterocularPx),
-      hasValidFace: isValidFace(participant.faceInterocularPx),
-      // [assim-mesmo] Captura sem validação (detector morto) — distingue de legado (null
-      // sem a chave). Conferência operacional: badge no painel + filtro + coluna no export.
-      faceUnvalidated: !!((participant.customData as any)?.__faceUnvalidated),
-      // ── ESTADO REAL DA FOTO ──────────────────────────────────────────────
-      // `temFoto` vem de faceData/faceImageUrl, NUNCA de faceVersion: até 03/09
-      // o faceVersion sobrevivia à remoção que apagava a foto, e linhas antigas
-      // ainda estão assim — o campo AFIRMA "tenho a foto versão X" sobre um
-      // registro sem foto nenhuma.
-      temFoto: !!(participant.faceData || participant.faceImageUrl),
-      // Contagem por estado, só das linhas em push (`removalState: 'none'`).
-      // Linha em remoção descreve saída, não a foto — misturar as duas foi o que
-      // fez `faceState: 'synced'` com `removalState: 'removed'` ser lido como
-      // "está no terminal" para quem já tinha saído.
-      sync: (() => {
-        const emPush = participant.terminalSyncs.filter((t) => t.removalState === 'none')
-        return {
-          total: emPush.length,
-          // `synced` de verdade: além do estado, a versão da face no device tem
-          // que bater com a do cadastro. Igual ao que o reconcile compara.
-          sincronizadas: emPush.filter(
-            (t) => t.faceState === 'synced' && !!t.faceVersion && t.faceVersion === participant.faceVersion
-          ).length,
-          desatualizadas: emPush.filter(
-            (t) => t.faceState === 'synced' && (!t.faceVersion || t.faceVersion !== participant.faceVersion)
-          ).length,
-          falhas: emPush.filter((t) => t.faceState === 'failed').length,
-          pendentes: emPush.filter((t) => t.faceState === 'pending').length
-        }
-      })(),
-      // Tolerante: uma biometria corrompida vira card sem foto, não 500 na
-      // listagem inteira. A falha sai no log com o participantId.
-      faceImageUrl: removido
-        ? ''
-        : tryGetFaceImageDataUrl(participant, { participantId: participant.id, where: 'admin/participants-full' }) || '',
-      customData: removido ? {} : participant.customData || {},
-      documents: removido ? {} : decryptDocuments(participant.documents) || {}, // decifra server-side p/ o modal
-      approvalStatus: participant.approvalStatus || 'pending',
-      approvedAt: participant.approvedAt?.toISOString() || null,
-      approvedBy: participant.approvedBy || null,
-      rejectionReason: participant.rejectionReason || null,
-      standCode: participant.stand?.code || null,
-      standName: participant.stand?.name || null,
-      // Estado de exclusão para o badge. `removal` só existe para removidos; o
-      // ator vem do audit log, com removedAt/removedBy de fallback (legado).
-      status: participant.status,
-      removal: removido ? montarRemocao(participant, exclusaoPorParticipante) : null
-    }
-    })
+    // Format response — mesmo formato que o PUT de edicao devolve.
+    const formattedParticipants = participants.map(participant =>
+      formatAdminParticipant(participant, exclusaoPorParticipante, 'admin/participants-full')
+    )
 
     res.status(200).json({
       participants: formattedParticipants,

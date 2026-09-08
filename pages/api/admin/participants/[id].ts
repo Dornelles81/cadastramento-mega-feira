@@ -4,6 +4,7 @@ import { prisma } from '../../../../lib/prisma'
 import { enqueueDeviceRemovalBeforeDelete } from '../../../../lib/agent/device-removal'
 import { withApiAuth, ADMIN_ROLES } from '../../../../lib/api-auth'
 import { atorDaSessao } from '../../../../lib/participants/approval'
+import { lerParticipanteParaAdmin } from '../../../../lib/participants/admin-view'
 
 /**
  * LGPD — snapshot de participante para o audit log, SEM o dado sensível.
@@ -95,7 +96,30 @@ async function handleUpdate(id: string, data: any, adminIp: string, adminUser: s
       return res.status(404).json({ error: 'Participant not found' })
     }
 
-    // Update the participant
+    // Update the participant.
+    //
+    // Todo campo ausente do corpo chega como `undefined`, que o Prisma ignora —
+    // e por isso um PUT parcial (a tela de stands manda so `{ standId: null }`)
+    // nao apaga o resto.
+    //
+    // `customData` e a excecao perigosa: ele guarda `standCode`, `mesa`, os
+    // campos personalizados do evento e as referencias de arquivo em uploads/.
+    // Escrever o que vier, sem olhar, significa que QUALQUER chamador que mande
+    // um objeto vazio ou podado zera tudo isso em silencio, sem log de que algo
+    // foi perdido. Aqui a regra fica explicita: so grava quando a chave veio de
+    // fato na requisicao E nao e um objeto vazio; caso contrario preserva o que
+    // esta no banco.
+    //
+    // (Esvaziar customData DE PROPOSITO existe no sistema, mas nao passa por
+    // aqui: e o SENSITIVE_PARTICIPANT_CLEAR da exclusao pelo stand e do expurgo
+    // LGPD, que escrevem `Prisma.DbNull` direto. Nenhum consumidor deste
+    // endpoint depende dele para limpar — conferido nos tres call sites.)
+    const mandouCustomData =
+      Object.prototype.hasOwnProperty.call(data, 'customData') &&
+      data.customData !== null &&
+      data.customData !== undefined &&
+      Object.keys(data.customData).length > 0
+
     const updatedParticipant = await prisma.participant.update({
       where: { id },
       data: {
@@ -104,7 +128,7 @@ async function handleUpdate(id: string, data: any, adminIp: string, adminUser: s
         email: data.email,
         phone: data.phone,
         eventCode: data.eventCode,
-        customData: data.customData,
+        customData: mandouCustomData ? data.customData : undefined,
         standId: data.standId !== undefined ? data.standId : undefined
       }
     })
@@ -159,9 +183,20 @@ async function handleUpdate(id: string, data: any, adminIp: string, adminUser: s
       // Continue without logging
     }
 
-    return res.status(200).json({ 
+    // Devolve o registro no MESMO formato da listagem (participants-full), para
+    // a tela poder fundir a resposta do SERVIDOR na linha da lista em vez da
+    // copia local do formulario. Fundir a copia exibiria o que foi enviado, nao
+    // o que foi gravado — e a copia nao carrega `standName`, que e o campo pelo
+    // qual a tela filtra por stand: em 07/09/2026 um participante editado sumiu
+    // da lista por isso, intacto no banco.
+    //
+    // De quebra, para de vazar `faceData` (a biometria cifrada) numa resposta de
+    // edicao, que era o que a linha crua do Prisma trazia.
+    const participanteFormatado = await lerParticipanteParaAdmin(id, 'admin/participants/[id] PUT')
+
+    return res.status(200).json({
       success: true,
-      participant: updatedParticipant,
+      participant: participanteFormatado,
       message: 'Participante atualizado com sucesso'
     })
   } catch (error) {

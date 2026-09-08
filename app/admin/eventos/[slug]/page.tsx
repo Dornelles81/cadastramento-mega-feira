@@ -524,9 +524,32 @@ export default function EventAdminPage() {
         })
         
         if (response.ok) {
-          // Update local state
-          setParticipants(prev => 
-            prev.map(p => p.id === editingParticipant.id ? editingParticipant : p)
+          // Atualiza a linha na lista com o que o SERVIDOR gravou.
+          //
+          // Antes isto substituia a linha inteira por `editingParticipant`, a
+          // copia local do formulario. Duas consequencias:
+          //
+          //  1. exibia o que foi ENVIADO, nao o que foi salvo — qualquer
+          //     normalizacao, corte ou campo ignorado pelo backend so aparecia
+          //     no proximo carregamento;
+          //  2. a copia e PARCIAL: `handleEdit` monta ~20 campos e nao inclui
+          //     `standName`. E o filtro por stand le exatamente ele
+          //     (`standName || 'Sem stand'`), entao editar com um stand
+          //     selecionado no dropdown fazia o cadastro SUMIR da tela, intacto
+          //     no banco, ate um F5. Aconteceu em 07/09/2026.
+          //
+          // O PUT agora devolve o participante no mesmo formato da listagem. O
+          // spread sobre `p` e cinto e suspensario: se algum dia a resposta vier
+          // sem um campo, o valor que ja estava na linha sobrevive em vez de
+          // virar undefined. Sem recarregar a lista inteira — sao centenas de
+          // registros com imagem embutida.
+          const salvo = await response.json().catch(() => null)
+          setParticipants(prev =>
+            prev.map(p =>
+              p.id === editingParticipant.id
+                ? (salvo?.participant ? { ...p, ...salvo.participant } : { ...p, ...editingParticipant })
+                : p
+            )
           )
           setEditingParticipant(null)
           alert('Participante atualizado com sucesso! Log de audição registrado.')
