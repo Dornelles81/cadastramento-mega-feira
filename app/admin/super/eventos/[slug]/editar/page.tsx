@@ -33,6 +33,7 @@ interface Event {
     requireFace?: boolean
     requireDocuments?: boolean
     autoApprove?: boolean
+    allowForeignDocument?: boolean
     enableCheckIn?: boolean
     enableQRCode?: boolean
     successMessage?: string
@@ -73,6 +74,7 @@ export default function EditarEventoPage() {
     requireFace: true,
     requireDocuments: false,
     autoApprove: false,
+    allowForeignDocument: false,
     enableCheckIn: true,
     enableQRCode: true,
     successMessage: '',
@@ -142,6 +144,7 @@ export default function EditarEventoPage() {
         requireFace: event.eventConfigs?.requireFace !== undefined ? event.eventConfigs.requireFace : true,
         requireDocuments: event.eventConfigs?.requireDocuments !== undefined ? event.eventConfigs.requireDocuments : false,
         autoApprove: event.eventConfigs?.autoApprove !== undefined ? event.eventConfigs.autoApprove : false,
+        allowForeignDocument: event.eventConfigs?.allowForeignDocument === true,
         enableCheckIn: event.eventConfigs?.enableCheckIn !== undefined ? event.eventConfigs.enableCheckIn : true,
         enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true,
         successMessage: event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.',
@@ -612,6 +615,22 @@ export default function EditarEventoPage() {
                 <div>
                   <div className="font-medium text-gray-800">Auto-aprovar Cadastros</div>
                   <div className="text-sm text-gray-600">Cadastros são aprovados automaticamente</div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input
+                  type="checkbox"
+                  checked={formData.allowForeignDocument}
+                  onChange={(e) => setFormData({ ...formData, allowForeignDocument: e.target.checked })}
+                  className="w-5 h-5 text-purple-600 rounded"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">Aceitar documento estrangeiro</div>
+                  <div className="text-sm text-gray-600">
+                    Permite cadastro sem CPF, com passaporte ou documento de identidade de outro
+                    país. Desligado, o CPF continua obrigatório para todo mundo.
+                  </div>
                 </div>
               </label>
 

@@ -18,7 +18,12 @@ import { registrarCredenciado, StandFullError } from '../../lib/participants/reg
 const schema = Joi.object({
   token: Joi.string().required(),
   name: Joi.string().min(2).max(100).required(),
+  // `cpf` carrega o CPF OU o numero do documento estrangeiro; quem decide e o
+  // `documentType`. A validacao de formato mora no registrar, que e quem
+  // conhece o evento e sabe se ele aceita estrangeiro.
   cpf: Joi.string().required(),
+  documentType: Joi.string().optional().allow(null, ''),
+  documentCountry: Joi.string().optional().allow(null, ''),
   email: Joi.string().email().allow('', null).optional(),
   phone: Joi.string().min(10).allow('', null).optional(),
   faceImage: Joi.string().allow('', null).optional(),
@@ -46,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     }
 
-    const { token, name, cpf, email, phone, faceImage, faceData, consent, consentTermVersion, customData } = value
+    const { token, name, cpf, documentType, documentCountry, email, phone, faceImage, faceData, consent, consentTermVersion, customData } = value
 
     // Erro genérico para token inválido: não revelar se o stand existe
     const access = await validateStandToken(token)
@@ -91,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // validação do token e a trava de scope continuam sendo a autorização, e é
     // ela que produz o `standId` — o núcleo confia no contexto que recebe.
     const resultado = await registrarCredenciado(
-      { name, cpf, email, phone, faceImage, faceData, consent, consentTermVersion, customData },
+      { name, cpf, documentType, documentCountry, email, phone, faceImage, faceData, consent, consentTermVersion, customData },
       {
         standId: access.stand.id,
         standMaxRegistrations: access.stand.maxRegistrations,

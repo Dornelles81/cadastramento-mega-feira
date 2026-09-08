@@ -171,17 +171,96 @@ export type BuscaPortaria =
  *   exatamente 8 caracteres -> prefixo do UUID (id curto)
  *   qualquer outra coisa    -> UUID completo
  *
- * ⚠️ AINDA NÃO ENCONTRA DOCUMENTO ESTRANGEIRO. O operador não sabe o prefixo
- * ("PP-AR:"), então digitar "AB1234567" cai no ramo do UUID e não acha — sem
- * erro, só "não encontrado", que no portão se lê como "não está cadastrada".
- * A quarta perna (buscar por sufixo SEPARADOR_IDENTIDADE + número normalizado)
- * entra JUNTO com o cadastro de estrangeiro, e precisa CONTAR os resultados:
- * número solto pode casar com dois países, e aí a resposta é pedir o país —
- * nunca escolher um.
+ * Documento estrangeiro NÃO passa por aqui: o operador digita o número solto e
+ * ele cai no ramo do UUID. A quarta perna é `resolverDocumentoEstrangeiro`,
+ * chamada pelos endpoints DEPOIS que esta busca não acha — ver lá a regra de
+ * contar antes de escolher.
  */
 export function montarBuscaPortaria(entrada: string): BuscaPortaria {
   const soDigitos = entrada.replace(/\D/g, '')
   if (soDigitos.length === 11) return { por: 'cpf', where: { cpf: soDigitos } }
   if (entrada.length === 8) return { por: 'idCurto', where: { id: { startsWith: entrada.toLowerCase() } } }
   return { por: 'id', where: { id: entrada } }
+}
+
+/**
+ * O que vai no campo de identidade do QR compacto.
+ *
+ * Para CPF: os 11 dígitos, exatamente como sempre foi — `replace` de
+ * não-dígitos sobre 11 dígitos é no-op, então o QR de quem já está cadastrado
+ * não muda. Para estrangeiro: o valor inteiro, com prefixo. Ele contém ":" e
+ * "-", mas nunca "|", então o formato posicional continua íntegro.
+ *
+ * Sem isto, o `replace(/\D/g, '')` do payload apagaria as letras do documento
+ * e o QR passaria a identificar um número que não é de ninguém.
+ */
+export function identidadeParaQR(valor: string): string {
+  const id = interpretarIdentidade(valor)
+  return id.estrangeiro ? id.valor : id.numero
+}
+
+// ── BUSCA DE DOCUMENTO ESTRANGEIRO (a quarta perna) ─────────────────────────
+
+export type ResolucaoDocumento =
+  | { tipo: 'unico'; identidade: string }
+  | { tipo: 'ambiguo'; opcoes: { tipo: string; pais: string; identidade: string }[]; mensagem: string }
+  | { tipo: 'nada' }
+
+/**
+ * Mensagem para o operador quando o mesmo número existe em mais de um país.
+ *
+ * ⚠️ Ela precisa INSTRUIR, não só recusar. No portão há uma pessoa na frente e
+ * fila atrás: "documento ambíguo" sem o que fazer trava o atendimento. Então a
+ * mensagem entrega a string exata para digitar, pronta para repetir a busca.
+ *
+ * NÃO expõe nome de ninguém — só tipo e país, que é o que o operador precisa
+ * perguntar. Quem tem legitimidade para ver as pessoas vê no painel.
+ */
+export function mensagemDocumentoAmbiguo(
+  opcoes: { tipo: string; pais: string; identidade: string }[]
+): string {
+  const lista = opcoes.map((o) => o.identidade).join('  ou  ')
+  return (
+    'Mais de uma pessoa tem esse número de documento. ' +
+    'Pergunte o país e busque de novo digitando: ' + lista
+  )
+}
+
+/**
+ * Procura por documento estrangeiro quando o despachante padrão não achou.
+ *
+ * O operador digita o número solto ("AB1234567"): ele não conhece o prefixo
+ * "PP-AR:". A busca é por SUFIXO do valor gravado. Como CPF é armazenado sem o
+ * separador, um sufixo ":numero" nunca casa com CPF por acidente.
+ *
+ * ⚠️ CONTA ANTES DE ESCOLHER. Números de DNI são sequenciais na casa dos
+ * milhões e o mesmo número pode existir na Argentina e no Paraguai. Devolver o
+ * primeiro seria liberar a pessoa errada — o mesmo erro que o prefixo no valor
+ * existe para impedir. Com mais de um, quem decide é o operador, com a
+ * informação na mão.
+ *
+ * `endsWith` não usa o índice, mas roda só depois de as três pernas falharem e
+ * sobre as centenas de linhas de UM evento. É irrelevante nessa escala.
+ */
+export async function resolverDocumentoEstrangeiro(
+  prisma: { participant: { findMany: (args: any) => Promise<{ cpf: string }[]> } },
+  eventId: string,
+  entrada: string
+): Promise<ResolucaoDocumento> {
+  const numero = normalizarNumeroDocumento(entrada)
+  if (!numero) return { tipo: 'nada' }
+
+  const candidatos = await prisma.participant.findMany({
+    where: { eventId, cpf: { endsWith: SEPARADOR_IDENTIDADE + numero } },
+    select: { cpf: true }
+  })
+
+  if (candidatos.length === 0) return { tipo: 'nada' }
+  if (candidatos.length === 1) return { tipo: 'unico', identidade: candidatos[0].cpf }
+
+  const opcoes = candidatos.map((c) => {
+    const id = interpretarIdentidade(c.cpf)
+    return { tipo: id.tipo, pais: id.pais, identidade: id.valor }
+  })
+  return { tipo: 'ambiguo', opcoes, mensagem: mensagemDocumentoAmbiguo(opcoes) }
 }

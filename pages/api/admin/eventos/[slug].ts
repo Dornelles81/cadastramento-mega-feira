@@ -88,6 +88,9 @@ export default async function handler(
         requireFace,
         requireDocuments,
         autoApprove,
+        // Aceita cadastro com documento estrangeiro (sem CPF) neste evento.
+        // Default false no schema: nenhum evento muda sem alguem ligar aqui.
+        allowForeignDocument,
         enableCheckIn,
         enableQRCode,
         successMessage,
@@ -207,6 +210,7 @@ export default async function handler(
           typeof requireFace === 'boolean' ||
           typeof requireDocuments === 'boolean' ||
           typeof autoApprove === 'boolean' ||
+          typeof allowForeignDocument === 'boolean' ||
           typeof enableCheckIn === 'boolean' ||
           typeof enableQRCode === 'boolean' ||
           successMessage !== undefined ||
@@ -225,6 +229,7 @@ export default async function handler(
               ...(typeof requireFace === 'boolean' && { requireFace }),
               ...(typeof requireDocuments === 'boolean' && { requireDocuments }),
               ...(typeof autoApprove === 'boolean' && { autoApprove }),
+              ...(typeof allowForeignDocument === 'boolean' && { allowForeignDocument }),
               ...(typeof enableCheckIn === 'boolean' && { enableCheckIn }),
               ...(typeof enableQRCode === 'boolean' && { enableQRCode }),
               ...(successMessage !== undefined && { successMessage }),
@@ -247,6 +252,7 @@ export default async function handler(
               requireFace: requireFace !== undefined ? requireFace : true,
               requireDocuments: requireDocuments !== undefined ? requireDocuments : false,
               autoApprove: autoApprove !== undefined ? autoApprove : false,
+              allowForeignDocument: allowForeignDocument === true,
               enableCheckIn: enableCheckIn !== undefined ? enableCheckIn : true,
               enableQRCode: enableQRCode !== undefined ? enableQRCode : true,
               // Sem default: evento novo nasce com a tela final padrao.

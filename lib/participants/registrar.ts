@@ -50,7 +50,12 @@ import { faceMetricsForPrisma } from '../face/metrics'
 import { respostaCpfDuplicado } from './cpf-duplicado'
 // isValidCPF vinha de uma copia LOCAL deste arquivo. Ver documento.ts: eram
 // tres implementacoes, comparadas contra 616 entradas antes de unificar.
-import { isValidCPF } from './documento'
+import {
+  isValidCPF,
+  TIPOS_DOCUMENTO,
+  montarIdentidadeEstrangeira,
+  normalizarNumeroDocumento
+} from './documento'
 import { occupiedSlotsWhere } from '../stand-access/occupancy'
 import { onBecameEligible, enqueueFaceChange } from '../agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../consent'
@@ -59,7 +64,15 @@ import { encryptDocuments } from '../documents'
 /** Campos que o participante preenche. Já validados pelo schema do chamador. */
 export interface EntradaDoCadastro {
   name: string
+  /**
+   * CPF, OU o número do documento estrangeiro quando `documentType` vem junto.
+   * O que vai para o banco é a identidade normalizada — ver lib/participants/documento.ts.
+   */
   cpf: string
+  /** 'PP' | 'DNI' | 'CI' | 'OUTRO'. Ausente = brasileiro com CPF. */
+  documentType?: string | null
+  /** ISO-3166 alpha-2 do país emissor. Obrigatório quando `documentType` vem. */
+  documentCountry?: string | null
   email?: string | null
   phone?: string | null
   faceImage?: string | null
@@ -108,7 +121,7 @@ export async function registrarCredenciado(
   entrada: EntradaDoCadastro,
   contexto: ContextoDoCadastro
 ): Promise<ResultadoDoCadastro> {
-  const { name, cpf, email, phone, faceImage, faceData, consent, consentTermVersion, customData } = entrada
+  const { name, cpf, documentType, documentCountry, email, phone, faceImage, faceData, consent, consentTermVersion, customData } = entrada
   const { standId, standMaxRegistrations, ip, userAgent } = contexto
 
   const event = contexto.eventId
@@ -132,10 +145,57 @@ export async function registrarCredenciado(
     } } }
   }
 
-  const cleanCPF = cpf.replace(/\D/g, '')
-  if (!isValidCPF(cleanCPF)) {
-    return { ok: false, recusa: { status: 400, body: { error: 'Invalid CPF', message: 'CPF inválido' } } }
+  // ── IDENTIDADE: CPF ou documento estrangeiro ──────────────────────────────
+  // O valor calculado aqui é o que o UNIQUE (eventId, cpf) protege, e é o mesmo
+  // que a busca da portaria vai procurar. Ver lib/participants/documento.ts.
+  //
+  // O caminho do brasileiro é EXATAMENTE o de sempre: limpa e valida os dígitos
+  // verificadores. Sem `documentType`, nada muda — é o que garante que os
+  // eventos que não pediram estrangeiro não mudam de comportamento.
+  const querEstrangeiro = !!documentType
+  const eventoAceitaEstrangeiro = event.eventConfigs?.allowForeignDocument === true
+
+  if (querEstrangeiro && !eventoAceitaEstrangeiro) {
+    // Trava por evento: o formulário só oferece a marcação onde o interruptor
+    // está ligado, mas o servidor não confia nisso — a requisição é do cliente.
+    return { ok: false, recusa: { status: 400, body: {
+      error: 'Foreign document not allowed',
+      message: 'Este evento aceita apenas cadastro com CPF.'
+    } } }
   }
+
+  let identidade: string
+  if (querEstrangeiro) {
+    const tipo = String(documentType).toUpperCase()
+    if (!(TIPOS_DOCUMENTO as readonly string[]).includes(tipo)) {
+      return { ok: false, recusa: { status: 400, body: {
+        error: 'Invalid document type', message: 'Tipo de documento inválido.'
+      } } }
+    }
+    const pais = (documentCountry || '').replace(/[^A-Za-z]/g, '').toUpperCase()
+    if (pais.length !== 2) {
+      // O país é metade da chave de unicidade: sem ele, dois documentos de
+      // países diferentes com o mesmo número viram o mesmo cadastro.
+      return { ok: false, recusa: { status: 400, body: {
+        error: 'Invalid document country', message: 'Informe o país do documento (2 letras, ex.: AR).'
+      } } }
+    }
+    const numero = normalizarNumeroDocumento(cpf)
+    if (numero.length < 4) {
+      // Não há formato validável — cada país tem o seu. O piso mínimo existe só
+      // para recusar campo em branco ou digitação acidental.
+      return { ok: false, recusa: { status: 400, body: {
+        error: 'Invalid document number', message: 'Número do documento inválido.'
+      } } }
+    }
+    identidade = montarIdentidadeEstrangeira({ tipo: tipo as any, pais, numero })
+  } else {
+    identidade = cpf.replace(/\D/g, '')
+    if (!isValidCPF(identidade)) {
+      return { ok: false, recusa: { status: 400, body: { error: 'Invalid CPF', message: 'CPF inválido' } } }
+    }
+  }
+  const cleanCPF = identidade
 
   // ── DUPLICIDADE: só cadastro ATIVO bloqueia ───────────────────────────────
   // Até 04/09/2026 esta checagem olhava qualquer linha do CPF no evento, sem
@@ -271,7 +331,13 @@ export async function registrarCredenciado(
     retentionDate,
     deviceInfo: userAgent,
     documents: encryptDocuments(documents || {}), // cifrado em repouso (AES-256-GCM)
-    customData: otherCustomData || {}
+    customData: otherCustomData || {},
+    // NULL para brasileiro — é o que distingue os dois mundos nas telas e no
+    // relatório sem precisar reinterpretar o valor da identidade.
+    documentType: querEstrangeiro ? String(documentType).toUpperCase() : null,
+    documentCountry: querEstrangeiro
+      ? (documentCountry || '').replace(/[^A-Za-z]/g, '').toUpperCase()
+      : null
   }
 
   // ── Reserva de vaga (caminho quente) ───────────────────────────────

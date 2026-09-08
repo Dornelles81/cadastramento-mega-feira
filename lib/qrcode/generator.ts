@@ -1,4 +1,5 @@
 import QRCode from 'qrcode'
+import { identidadeParaQR } from '../participants/documento'
 
 export interface ParticipantQRData {
   id: string
@@ -151,10 +152,11 @@ export function generateCompactQRData(participant: {
   const parts = [
     'MF',
     participant.id.substring(0, 8), // Short ID
-    // `replace` de nao-digitos: para CPF e no-op sobre 11 digitos. Quando o
-    // documento estrangeiro entrar, ESTA linha passa a usar o valor normalizado
-    // de lib/participants/documento.ts — hoje ela apagaria as letras dele.
-    participant.cpf.replace(/\D/g, ''),
+    // Para CPF: os 11 digitos, identico ao que sempre foi gravado (o `replace`
+    // antigo sobre 11 digitos era no-op). Para estrangeiro: o valor inteiro, com
+    // prefixo — sem isto as letras do documento seriam apagadas e o QR passaria
+    // a identificar um numero que nao e de ninguem.
+    identidadeParaQR(participant.cpf),
     participant.eventCode || '-',
     participant.standCode || '-',
     participant.name.substring(0, 30) // Truncate name

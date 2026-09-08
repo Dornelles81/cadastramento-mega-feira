@@ -1,7 +1,7 @@
 import { withApiAuth, OPERATOR_ROLES } from '../../../../lib/api-auth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../../../lib/prisma'
-import { montarBuscaPortaria } from '../../../../lib/participants/documento'
+import { montarBuscaPortaria, resolverDocumentoEstrangeiro } from '../../../../lib/participants/documento'
 import { tryGetFaceImageDataUrl } from '../../../../lib/face-image'
 
 /**
@@ -33,7 +33,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const busca = montarBuscaPortaria(id)
     const whereClause: any = { eventId, ...busca.where }
 
-    const participant = await prisma.participant.findFirst({
+    let participant = await prisma.participant.findFirst({
       where: whereClause,
       include: {
         event: {
@@ -50,6 +50,46 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       }
     })
+
+
+    // ── QUARTA PERNA: documento estrangeiro ─────────────────────────────────
+    // O operador digita o numero solto ("AB1234567") — ele nao conhece o
+    // prefixo "PP-AR:". As tres pernas acima nao acham isso, e o resultado seria
+    // "nao encontrado", que no portao se le como "essa pessoa nao esta
+    // cadastrada". So roda depois de as tres falharem.
+    //
+    // ⚠️ Ambiguidade NAO vira escolha. Se o mesmo numero existir em dois paises,
+    // a resposta e 409 com a instrucao do que fazer — devolver o primeiro seria
+    // liberar a pessoa errada.
+    if (!participant) {
+      const doc = await resolverDocumentoEstrangeiro(prisma as any, eventId, id)
+      if (doc.tipo === 'ambiguo') {
+        return res.status(409).json({
+          error: 'ambiguous_document',
+          message: doc.mensagem,
+          opcoes: doc.opcoes
+        })
+      }
+      if (doc.tipo === 'unico') {
+        participant = await prisma.participant.findFirst({
+          where: { eventId, cpf: doc.identidade },
+          include: {
+        event: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            slug: true,
+            status: true
+          }
+        },
+        stand: {
+          select: { code: true, name: true }
+        }
+      }
+        })
+      }
+    }
 
     if (!participant) {
       return res.status(404).json({

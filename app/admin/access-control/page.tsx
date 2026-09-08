@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import MarcaMegacredenciamento from '../../../components/MarcaMegacredenciamento'
 import jsQR from 'jsqr'
+import { parseCompactQRData } from '../../../lib/qrcode/generator'
 
 interface Participant {
   id: string
@@ -272,11 +273,14 @@ function AccessControlContent() {
         }
       }
 
-      // Check if it's compact format (MF|ID|CPF|EVENT|STAND|NAME)
-      if (query.startsWith('MF|')) {
-        const parts = query.split('|')
-        participantId = parts[1] // Short ID
-        qrEventCode = parts[3] !== '-' ? parts[3] : null // Event code
+      // Formato compacto do QR. O parser vive em lib/qrcode/generator.ts, junto
+      // do construtor — o formato e posicional, e ler por posicao aqui era a
+      // QUARTA implementacao dele espalhada pelo repositorio. Divergir entre
+      // quem escreve e quem le significa QR que nao abre o portao.
+      const compacto = parseCompactQRData(query)
+      if (compacto) {
+        participantId = compacto.id
+        qrEventCode = compacto.eventCode || null
       }
 
       // Track QR event code mismatch to give better error messages if lookup fails
@@ -315,7 +319,11 @@ function AccessControlContent() {
           setParticipant(null)
           setAccessStatus(null)
         } else {
-          setMessage({ type: 'error', text: 'Participante nao encontrado' })
+          // A mensagem da API vem antes do texto fixo. Sem isto, o caso de
+          // DOCUMENTO AMBIGUO (409) apareceria como "nao encontrado", e o
+          // operador nao teria o que fazer com a pessoa na frente e fila atras
+          // — a resposta da API traz o que perguntar e o que digitar.
+          setMessage({ type: 'error', text: data.message || 'Participante nao encontrado' })
           setParticipant(null)
           setAccessStatus(null)
         }
