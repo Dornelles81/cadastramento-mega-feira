@@ -25,7 +25,10 @@ const schema = Joi.object({
   documentType: Joi.string().optional().allow(null, ''),
   documentCountry: Joi.string().optional().allow(null, ''),
   email: Joi.string().email().allow('', null).optional(),
-  phone: Joi.string().min(10).allow('', null).optional(),
+  // Sem regra de comprimento aqui: `min(10)` contava CARACTERES da string
+  // mascarada, aceitava celular com um dígito faltando e recusava em inglês,
+  // depois da foto. O formato mora no registrar, que responde em português.
+  phone: Joi.string().allow('', null).optional(),
   faceImage: Joi.string().allow('', null).optional(),
   faceData: Joi.object().allow(null).optional(),
   consent: Joi.boolean().valid(true).required(),

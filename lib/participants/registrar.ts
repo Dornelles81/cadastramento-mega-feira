@@ -57,6 +57,7 @@ import {
   normalizarNumeroDocumento
 } from './documento'
 import { ehCodigoPaisValido } from './paises'
+import { digitosDoTelefone, erroDeTelefoneOpcional } from './telefone'
 import { occupiedSlotsWhere } from '../stand-access/occupancy'
 import { onBecameEligible, enqueueFaceChange } from '../agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../consent'
@@ -201,6 +202,21 @@ export async function registrarCredenciado(
   }
   const cleanCPF = identidade
 
+  // ── TELEFONE ──────────────────────────────────────────────────────────────
+  // Vazio continua passando: o "obrigatório" é decisão do FORMULÁRIO, por evento
+  // (`_system_phone`), e há eventos com o campo desligado — foi assim que os 480
+  // cadastros do Expofest anteriores a 03/09/2026 nasceram sem telefone. O que o
+  // servidor garante é o FORMATO de quem mandou algo, e em português: a regra
+  // antiga (`Joi.string().min(10)`) contava caracteres da máscara, aceitava
+  // celular com um dígito faltando e recusava quem esqueceu o DDD — depois da
+  // foto, em inglês, sem dizer o campo.
+  const erroTelefone = erroDeTelefoneOpcional(phone)
+  if (erroTelefone) {
+    return { ok: false, recusa: { status: 400, body: {
+      error: 'Invalid phone', message: erroTelefone
+    } } }
+  }
+
   // ── DUPLICIDADE: só cadastro ATIVO bloqueia ───────────────────────────────
   // Até 04/09/2026 esta checagem olhava qualquer linha do CPF no evento, sem
   // filtrar status — então uma linha `removed` bloqueava o recadastro para
@@ -318,7 +334,11 @@ export async function registrarCredenciado(
     name: name.trim(),
     cpf: cleanCPF,
     email: email || null,
-    phone: phone ? phone.replace(/\D/g, '') : '',
+    // Normaliza pelo núcleo: tira máscara, +55 e zero de discagem. O
+    // `replace(/\D/g,'')` anterior guardava o que viesse — há registros de 13 a
+    // 16 caracteres em produção, alguns com espaço e '+' (esses vieram do link
+    // de edição, que não normaliza).
+    phone: digitosDoTelefone(phone),
     eventId: event.id,
     eventCode: event.code,
     standId,

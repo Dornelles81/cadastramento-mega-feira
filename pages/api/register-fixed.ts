@@ -8,6 +8,7 @@ import { faceMetricsForPrisma } from '../../lib/face/metrics'
 import { respostaCpfDuplicado } from '../../lib/participants/cpf-duplicado'
 // Terceira copia do isValidCPF vivia aqui. Agora e a mesma de todo mundo.
 import { isValidCPF } from '../../lib/participants/documento'
+import { digitosDoTelefone, erroDeTelefoneOpcional } from '../../lib/participants/telefone'
 import { rateLimitOrReject } from '../../lib/rate-limit'
 import { onBecameEligible } from '../../lib/agent/sync-enqueue'
 import { resolveConsentStamp, ConsentVersionMismatch } from '../../lib/consent'
@@ -18,7 +19,9 @@ const registrationSchema = Joi.object({
   name: Joi.string().min(2).max(100).required(),
   cpf: Joi.string().required(),
   email: Joi.string().email().allow('', null).optional(),
-  phone: Joi.string().min(10).allow('', null).optional(), // Make phone optional
+  // Formato do telefone: ver a checagem logo após o schema. Aqui só o tipo —
+  // `min(10)` contava caracteres da máscara e respondia em inglês.
+  phone: Joi.string().allow('', null).optional(), // Make phone optional
   eventCode: Joi.string().allow('', null).optional().default('MEGA-FEIRA-2025'), // Optional with default
   standCode: Joi.string().allow('', null).optional(), // Stand code for registration limit control
   faceImage: Joi.string().allow('', null).optional(), // Optional - depends on event config
@@ -53,6 +56,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { name, cpf, email, phone, standCode, faceImage, faceData, consent, consentTermVersion, customData } = value
+
+    // Telefone: mesma regra do link do stand (lib/participants/telefone.ts).
+    // Vazio passa — o "obrigatório" é do formulário, por evento. Esta página é
+    // a pública: sem esta linha, o buraco continuaria aberto de um lado só.
+    const erroTelefone = erroDeTelefoneOpcional(phone)
+    if (erroTelefone) {
+      return res.status(400).json({ error: 'Invalid phone', message: erroTelefone })
+    }
 
     // Get eventCode from customData if it exists, otherwise use default
     const eventCodeOrSlug = customData?.eventCode || customData?.evento || value.eventCode || 'MEGA-FEIRA-2025'
@@ -344,7 +355,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name: name.trim(),
         cpf: cleanCPF,
         email: email || null,
-        phone: phone ? phone.replace(/\D/g, '') : '',
+        phone: digitosDoTelefone(phone), // tira máscara, +55 e zero de discagem
         eventId: event.id, // Use eventId from found event
         eventCode: event.code, // Keep eventCode for backward compatibility
         standId: standId, // Associate with stand if provided

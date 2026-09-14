@@ -83,6 +83,17 @@ export default function StandCadastroFlow({
   const [showTerms, setShowTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [registeredName, setRegisteredName] = useState('')
+  /**
+   * A foto sobrevive a erro de FORMULÁRIO.
+   *
+   * Até aqui qualquer recusa do servidor (CPF duplicado, termo atualizado,
+   * telefone) devolvia a pessoa ao formulário com os dados preenchidos e a foto
+   * no lixo: errar um dígito custava refazer a selfie inteira. A única recusa
+   * que é DA FOTO é o 413 (imagem grande demais) — nessa, e só nessa, a foto
+   * antiga não serve e é descartada, senão reenviar a mesma imagem repetiria o
+   * mesmo erro para sempre.
+   */
+  const [fotoCapturada, setFotoCapturada] = useState<{ imageData: string; faceData?: any } | null>(null)
   const [data, setData] = useState<RegistrationData>({
     name: '',
     cpf: '',
@@ -108,16 +119,23 @@ export default function StandCadastroFlow({
       customData: custom
     }
     setData(updated)
-    if (requireFace) {
-      setStep('capture')
-    } else {
+    if (!requireFace) {
       submit('', undefined, updated)
+      return
     }
+    // Voltou ao formulário depois de uma recusa do servidor: a foto já existe e
+    // reenviar direto evita a segunda selfie.
+    if (fotoCapturada) {
+      submit(fotoCapturada.imageData, fotoCapturada.faceData, updated)
+      return
+    }
+    setStep('capture')
   }
 
   const submit = async (imageData: string, faceData?: any, override?: RegistrationData) => {
     setIsSubmitting(true)
     const reg = override || data
+    if (imageData) setFotoCapturada({ imageData, faceData })
 
     try {
       const response = await fetch('/api/stand-registration', {
@@ -157,6 +175,15 @@ export default function StandCadastroFlow({
         window.location.reload()
         return
       }
+
+      // Única recusa que é da FOTO: a imagem passou do limite de tamanho.
+      // Guardá-la levaria a pessoa a reenviar exatamente a mesma imagem.
+      if (response.status === 413) {
+        setFotoCapturada(null)
+        setStep('capture')
+        return
+      }
+
       setStep('personal')
     } catch {
       alert('Erro de conexão. Verifique sua internet e tente novamente.')
@@ -324,6 +351,33 @@ export default function StandCadastroFlow({
         <div className="p-4 safe-area pb-6">
           <div className="max-w-md mx-auto">
             {header}
+
+            {/* Sem este aviso a foto guardada seria invisível: a pessoa clicaria
+                em "Continuar" esperando a câmera e cairia direto no envio. */}
+            {fotoCapturada && !isSubmitting && (
+              <div className="bg-verde-agua/15 border border-verde-agua/40 rounded-lg p-4 mb-4 flex items-center justify-between gap-3">
+                <p className="text-sm text-white">
+                  📸 Sua foto foi mantida — corrija os dados e continue.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFotoCapturada(null)
+                    setStep('capture')
+                  }}
+                  className="text-xs text-verde-agua underline whitespace-nowrap"
+                >
+                  Tirar outra
+                </button>
+              </div>
+            )}
+
+            {isSubmitting ? (
+              <div className="text-center py-10">
+                <div className="text-5xl mb-3 animate-pulse">⏳</div>
+                <p className="text-white/80">Enviando cadastro...</p>
+              </div>
+            ) : (
             <DynamicForm
               onSubmit={handlePersonalSubmit}
               onBack={() => setStep('consent')}
@@ -338,6 +392,7 @@ export default function StandCadastroFlow({
                 ...data.customData
               }}
             />
+            )}
           </div>
         </div>
       </div>

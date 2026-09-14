@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import DocumentField from './DocumentField'
 import FileField from './FileField'
 import { isValidCPF } from '../lib/participants/documento'
+import { formatarTelefone, validarTelefone, MENSAGEM_TELEFONE } from '../lib/participants/telefone'
 import { paisesDestaque, paisesRestantes, ehCodigoPaisValido } from '../lib/participants/paises'
 
 interface FormField {
@@ -308,6 +309,28 @@ export default function DynamicForm({
         }
       }
 
+      // Telefone: a regra VIVE no servidor desde sempre, mas só lá — quem
+      // digitasse o celular sem DDD preenchia tudo, TIRAVA A FOTO e recebia
+      // «"phone" length must be at least 10 characters long», em inglês e sem
+      // dizer o campo. Mesma história do CPF: a checagem existia no repo
+      // (PersonalDataForm, componente morto) e o formulário vivo não a usava.
+      // Agora é a mesma função dos dois lados — ver lib/participants/telefone.
+      if (field.type === 'tel') {
+        const valor = formData[field.fieldName]
+        if (valor) {
+          const resultado = validarTelefone(valor)
+          if (!resultado.ok) {
+            newErrors[field.fieldName] = resultado.mensagem
+            isValid = false
+          }
+        } else if (field.required) {
+          // Substitui o "Telefone é obrigatório" genérico: dizer o que fazer
+          // custa o mesmo que dizer que faltou.
+          newErrors[field.fieldName] = MENSAGEM_TELEFONE
+          isValid = false
+        }
+      }
+
       if (field.type === 'email' && formData[field.fieldName]) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(formData[field.fieldName])) {
@@ -407,13 +430,10 @@ export default function DynamicForm({
             type="tel"
             name={field.fieldName}
             value={formData[field.fieldName]}
-            onChange={(e) => {
-              let value = e.target.value.replace(/\D/g, '')
-              if (value.length <= 11) {
-                value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
-              }
-              handleFieldChange(field.fieldName, value)
-            }}
+            // Formata celular E fixo. A máscara anterior só casava com 11
+            // dígitos, então o fixo aparecia cru na tela — parecia defeito do
+            // campo antes mesmo de o servidor recusar. Ver telefone.ts.
+            onChange={(e) => handleFieldChange(field.fieldName, formatarTelefone(e.target.value))}
             required={field.required}
             placeholder={field.placeholder}
             className="w-full px-4 py-3 border border-white/30 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary bg-white text-gray-900 placeholder-gray-500"

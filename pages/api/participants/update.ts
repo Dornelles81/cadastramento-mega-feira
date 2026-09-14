@@ -8,6 +8,7 @@ import { rateLimitOrReject, getClientIp } from '../../../lib/rate-limit'
 import { validateEditToken, auditSelfUpdate } from '../../../lib/participant-edit/validate'
 import { enqueueFaceChange, onBecameEligible } from '../../../lib/agent/sync-enqueue'
 import { encryptDocuments } from '../../../lib/documents'
+import { digitosDoTelefone, erroDeTelefoneOpcional } from '../../../lib/participants/telefone'
 
 /**
  * POST /api/participants/update
@@ -50,7 +51,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const updateData: any = {}
     if (name) updateData.name = name
     if (email !== undefined) updateData.email = email
-    if (phone !== undefined) updateData.phone = phone
+    if (phone !== undefined) {
+      // Este endpoint gravava o telefone EXATAMENTE como chegou — sem validar e
+      // sem normalizar. É dele que vêm os registros com '+' e espaço no banco,
+      // e era o último lugar onde o formato podia entrar torto depois de a
+      // correção fechar o cadastro. Mesma regra dos outros dois caminhos.
+      const erroTelefone = erroDeTelefoneOpcional(phone)
+      if (erroTelefone) {
+        return res.status(400).json({ error: 'Invalid phone', message: erroTelefone })
+      }
+      updateData.phone = digitosDoTelefone(phone)
+    }
 
     // Foto: criptografada (AES-256-GCM), nunca plaintext
     let faceChanged = false
