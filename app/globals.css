@@ -359,3 +359,24 @@ textarea:disabled {
     opacity: 1;
   }
 }
+/* ─────────────────────────────────────────────────────────────────────────
+   TABELA COM COLUNA ANCORADA (participantes do evento)
+
+   `position: sticky` em <td>/<th> é instável com `border-collapse: collapse`
+   — no Safari/iOS a célula simplesmente não gruda, ou gruda perdendo a borda.
+   A saída é `border-separate`, e o preço dela é este arquivo: com bordas
+   separadas, borda em <tr> não pinta, então o `divide-y` do Tailwind (que
+   escreve border-top no <tr>) some. Os divisores passam a viver nas CÉLULAS.
+
+   A cor vem de `--divisor`, definida inline na tabela, porque esta tela troca
+   de tema por estado do React (`darkMode`), não pela variante `dark:`.
+   ───────────────────────────────────────────────────────────────────────── */
+.tabela-ancorada {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tabela-ancorada tbody tr > * {
+  border-top: 1px solid var(--divisor, #e5e7eb);
+}
+

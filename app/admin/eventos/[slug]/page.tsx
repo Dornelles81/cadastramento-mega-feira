@@ -1449,7 +1449,12 @@ export default function EventAdminPage() {
         {/* Participants Table */}
         <div className={`rounded-lg shadow-sm overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
           <div className="overflow-x-auto">
-            <table className="min-w-full table-auto">
+            <table
+              className="min-w-full table-auto tabela-ancorada"
+              /* A cor do divisor viaja por variável porque esta tela troca de tema
+                 por estado do React, não pela variante `dark:` do Tailwind. */
+              style={{ ['--divisor' as any]: darkMode ? '#374151' : '#e5e7eb' }}
+            >
               <thead className={darkMode ? 'bg-gray-700' : 'bg-gray-50'}>
                 <tr>
                   <th className="px-2 md:px-4 py-3 w-8">
@@ -1472,16 +1477,24 @@ export default function EventAdminPage() {
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>CPF</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden sm:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Stand</th>
-                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Email</th>
+                  <th className={`px-2 md:px-4 py-3 font-semibold text-xs md:text-sm text-center hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`} title="E-mail — clique no ícone para escrever">✉️</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Telefone</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status da face</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Cadastrado em</th>
-                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm whitespace-nowrap ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Ações</th>
+                  <th
+                    /* ANCORADA a partir de sm:. No celular (<640px) ela NÃO gruda:
+                       uma coluna fixa come 25-30% de uma tela de 360px, e é
+                       justamente o espaço de Nome e CPF, que é o que se lê para
+                       decidir. Lá a coluna já cabe, porque os botões viram emoji. */
+                    className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm whitespace-nowrap sm:sticky sm:right-0 sm:z-20 sm:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.25)] ${darkMode ? 'text-gray-300 bg-gray-700' : 'text-gray-700 bg-gray-50'}`}
+                  >
+                    Ações
+                  </th>
                 </tr>
               </thead>
-              <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+              <tbody>
                 {filteredParticipants.map((participant) => (
-                  <tr key={participant.id} className={darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}>
+                  <tr key={participant.id} className={`group/linha ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}>
                     <td className="px-2 md:px-4 py-3">
                       <input
                         type="checkbox"
@@ -1584,7 +1597,25 @@ export default function EventAdminPage() {
                         🏪 {(participant as any).standName || participant.customData?.standCode || participant.customData?.estande || '-'}
                       </span>
                     </td>
-                    <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{participant.email || '-'}</td>
+                    {/* E-mail como ÍCONE, não como texto: o endereço por
+                        extenso dava à coluna a largura de um e-mail inteiro
+                        (~240px) para uma informação que quase nunca se lê —
+                        se usa. O endereço continua acessível no `title` e na
+                        busca, que filtra por e-mail (ver filteredParticipants). */}
+                    <td className={`px-2 md:px-4 py-3 text-sm text-center hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {participant.email ? (
+                        <a
+                          href={`mailto:${participant.email}`}
+                          className="text-blue-600 hover:text-blue-800"
+                          title={`Escrever para ${participant.email}`}
+                          aria-label={`Escrever para ${participant.email}`}
+                        >
+                          ✉️
+                        </a>
+                      ) : (
+                        <span className={darkMode ? 'text-gray-600' : 'text-gray-300'} title="Sem e-mail cadastrado">—</span>
+                      )}
+                    </td>
                     <td className={`px-2 md:px-4 py-3 font-mono text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {participant.phone ? (
                         <a
@@ -1667,7 +1698,13 @@ export default function EventAdminPage() {
                     <td className={`px-2 md:px-4 py-3 text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
                     </td>
-                    <td className="px-2 md:px-4 py-3">
+                    <td
+                      /* O fundo opaco e o group-hover não são enfeite: a célula
+                         ancorada passa POR CIMA do resto da linha durante a
+                         rolagem, então precisa de fundo próprio — e precisa
+                         acompanhar o hover da linha, senão fica de outra cor. */
+                      className={`px-2 md:px-4 py-3 sm:sticky sm:right-0 sm:z-10 sm:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.25)] ${darkMode ? 'bg-gray-800 group-hover/linha:bg-gray-700' : 'bg-white group-hover/linha:bg-gray-50'}`}
+                    >
                       {/* COLUNA ESTREITA DE PROPÓSITO.
                           Com Aprovar, Rejeitar, Editar, Excluir, Etiqueta e QR
                           lado a lado — e com rótulo por extenso a partir de
