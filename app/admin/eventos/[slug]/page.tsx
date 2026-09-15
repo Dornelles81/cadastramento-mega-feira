@@ -141,6 +141,64 @@ export default function EventAdminPage() {
   const [stands, setStands] = useState<Stand[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
+  /**
+   * Menu "⋯" da coluna Ações.
+   *
+   * A posição é FIXA, calculada a partir do botão, e não um dropdown absoluto
+   * dentro da célula: a tabela vive num contêiner com `overflow-x-auto`, e todo
+   * filho posicionado seria RECORTADO por essa borda — o menu apareceria pela
+   * metade, que é a versão nova do problema que este menu veio resolver.
+   *
+   * Guarda o participante inteiro, e não o id: os itens do menu precisam de
+   * `credentialPrinted` para escolher entre "imprimir" e "reimprimir".
+   */
+  const [menuAcoes, setMenuAcoes] = useState<{ participant: Participant; top: number; right: number } | null>(null)
+
+  const abrirMenuAcoes = (e: React.MouseEvent<HTMLButtonElement>, participant: Participant) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const LARGURA = 208 // w-52
+    setMenuAcoes({
+      participant,
+      top: r.bottom + 6,
+      // Ancorado à DIREITA do botão, que é a borda por onde a tela acaba.
+      // O limite inferior impede que um botão muito à esquerda (tela estreita,
+      // zoom alto) jogue o menu para fora do lado oposto.
+      right: Math.min(
+        Math.max(8, window.innerWidth - r.right),
+        Math.max(8, window.innerWidth - LARGURA - 8)
+      )
+    })
+  }
+
+  /**
+   * O menu não acompanha a página: se algo rolar ou a tela mudar de tamanho, as
+   * coordenadas congeladas viram mentira e ele ficaria pairando longe do botão.
+   * Fechar é mais honesto (e mais barato) do que recalcular.
+   */
+  useEffect(() => {
+    if (!menuAcoes) return
+    const fechar = () => setMenuAcoes(null)
+    const porTecla = (ev: KeyboardEvent) => { if (ev.key === 'Escape') fechar() }
+    window.addEventListener('scroll', fechar, true) // captura: a rolagem da tabela conta
+    window.addEventListener('resize', fechar)
+    window.addEventListener('keydown', porTecla)
+    return () => {
+      window.removeEventListener('scroll', fechar, true)
+      window.removeEventListener('resize', fechar)
+      window.removeEventListener('keydown', porTecla)
+    }
+  }, [menuAcoes])
+
+  /** Item do menu. `py-2.5` não é enfeite: é alvo de toque no celular. */
+  const classeItemMenu = (perigo = false) =>
+    `w-full text-left px-4 py-2.5 text-sm transition-colors ${
+      perigo
+        ? 'text-red-600 hover:bg-red-50'
+        : darkMode
+          ? 'text-gray-200 hover:bg-gray-700'
+          : 'text-gray-700 hover:bg-gray-100'
+    }`
+
   const [viewingImage, setViewingImage] = useState<Participant | null>(null)
   const [loading, setLoading] = useState(false)
   const [participantImages, setParticipantImages] = useState<Record<string, string>>({})
@@ -1610,10 +1668,26 @@ export default function EventAdminPage() {
                       {new Date(participant.createdAt).toLocaleString('pt-BR')}
                     </td>
                     <td className="px-2 md:px-4 py-3">
+                      {/* COLUNA ESTREITA DE PROPÓSITO.
+                          Com Aprovar, Rejeitar, Editar, Excluir, Etiqueta e QR
+                          lado a lado — e com rótulo por extenso a partir de
+                          640px — só esta célula passava de 600px. A tabela
+                          estourava a largura da tela e as Ações, sendo a última
+                          coluna, ficavam além da borda direita. A rolagem
+                          horizontal existia (o contêiner tem overflow-x-auto),
+                          mas rolagem que não se anuncia ninguém descobre.
+
+                          Aprovar e Rejeitar ficam FORA do menu de propósito:
+                          não existe aprovação em massa, então a aprovação é
+                          linha a linha e é o que mais se faz nesta tela.
+                          Enterrá-la no menu dobraria o número de toques no
+                          trabalho do dia — no celular, que é onde ele acontece. */}
                       <div className="flex items-center justify-start gap-1 md:gap-2 flex-wrap">
                         {/* Removido: a única ação que faz sentido é trazer de
                             volta. Aprovar/rejeitar quem saiu não significa nada,
-                            e é o CPF dele que bloqueia o recadastro. */}
+                            e é o CPF dele que bloqueia o recadastro. Fica inline
+                            porque é a ação única deste estado — ela substitui
+                            Aprovar/Rejeitar, não concorre com eles. */}
                         {participant.status === 'removed' && (
                           <button
                             onClick={() => handleReativar(participant)}
@@ -1645,42 +1719,18 @@ export default function EventAdminPage() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleEdit(participant)}
-                          className="px-2 md:px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
-                          title="Editar participante"
+                          onClick={(e) => abrirMenuAcoes(e, participant)}
+                          aria-haspopup="menu"
+                          aria-expanded={menuAcoes?.participant.id === participant.id}
+                          className={`px-3 py-1 rounded text-sm font-bold leading-5 transition-colors ${
+                            menuAcoes?.participant.id === participant.id
+                              ? 'bg-gray-300 text-gray-900'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                          title="Mais ações: editar, etiqueta, QR e excluir"
                         >
-                          <span className="sm:hidden">✏️</span>
-                          <span className="hidden sm:inline">✏️ Editar</span>
+                          ⋯
                         </button>
-                        <button
-                          onClick={() => handleDelete(participant.id)}
-                          className="px-2 md:px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
-                          title="Excluir participante"
-                        >
-                          <span className="sm:hidden">🗑️</span>
-                          <span className="hidden sm:inline">🗑️ Excluir</span>
-                        </button>
-                        <button
-                          onClick={() => handlePrintLabelsPDF([participant.id])}
-                          className="px-2 md:px-3 py-1 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
-                          title={participant.credentialPrinted
-                            ? `Já impressa em ${new Date(participant.credentialPrintedAt!).toLocaleString('pt-BR')} — clique para reimprimir`
-                            : 'Imprimir etiqueta 100×40mm'}
-                        >
-                          <span className="sm:hidden">{participant.credentialPrinted ? '✅' : '🏷️'}</span>
-                          <span className="hidden sm:inline">
-                            {participant.credentialPrinted ? '✅ Reimprimir' : '🏷️ Etiqueta'}
-                          </span>
-                        </button>
-                        <a
-                          href={`/api/export/qrcodes?participantId=${participant.id}&format=png`}
-                          className="px-2 md:px-3 py-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded text-xs font-medium transition-colors whitespace-nowrap inline-flex items-center"
-                          title="Baixar QR Code PNG"
-                          download
-                        >
-                          <span className="sm:hidden">📱</span>
-                          <span className="hidden sm:inline">📱 QR</span>
-                        </a>
                       </div>
                     </td>
                   </tr>
@@ -1696,6 +1746,76 @@ export default function EventAdminPage() {
             </div>
           )}
         </div>
+
+        {/* MENU "⋯" DA COLUNA AÇÕES.
+            Renderizado aqui, fora da tabela, e com position: fixed — dentro da
+            célula ele seria recortado pelo overflow-x-auto do contêiner. */}
+        {menuAcoes && (
+          <>
+            {/* Fundo invisível: fecha ao tocar em qualquer lugar. No celular é
+                o gesto natural, e sem ele o menu só fecharia agindo. */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setMenuAcoes(null)}
+              aria-hidden="true"
+            />
+            <div
+              role="menu"
+              className={`fixed z-50 w-52 rounded-lg shadow-xl border py-1 ${
+                darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+              }`}
+              style={{ top: menuAcoes.top, right: menuAcoes.right }}
+            >
+              <div className={`px-4 py-2 text-xs truncate border-b ${
+                darkMode ? 'text-gray-400 border-gray-700' : 'text-gray-500 border-gray-200'
+              }`}>
+                {menuAcoes.participant.name}
+              </div>
+
+              <button
+                role="menuitem"
+                onClick={() => { const p = menuAcoes.participant; setMenuAcoes(null); handleEdit(p) }}
+                className={classeItemMenu()}
+              >
+                ✏️ Editar
+              </button>
+
+              <button
+                role="menuitem"
+                onClick={() => { const id = menuAcoes.participant.id; setMenuAcoes(null); handlePrintLabelsPDF([id]) }}
+                className={classeItemMenu()}
+                title={menuAcoes.participant.credentialPrinted
+                  ? `Já impressa em ${new Date(menuAcoes.participant.credentialPrintedAt!).toLocaleString('pt-BR')} — clique para reimprimir`
+                  : 'Imprimir etiqueta 100×40mm'}
+              >
+                {menuAcoes.participant.credentialPrinted ? '✅ Reimprimir etiqueta' : '🏷️ Imprimir etiqueta'}
+              </button>
+
+              <a
+                role="menuitem"
+                href={`/api/export/qrcodes?participantId=${menuAcoes.participant.id}&format=png`}
+                download
+                onClick={() => setMenuAcoes(null)}
+                className={`block ${classeItemMenu()}`}
+                title="Baixar QR Code PNG"
+              >
+                📱 Baixar QR Code
+              </a>
+
+              <div className={`my-1 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`} />
+
+              {/* Destrutiva por último e destacada: no menu ela perde a
+                  separação por cor que tinha na linha. */}
+              <button
+                role="menuitem"
+                onClick={() => { const id = menuAcoes.participant.id; setMenuAcoes(null); handleDelete(id) }}
+                className={classeItemMenu(true)}
+              >
+                🗑️ Excluir
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Edit Modal */}
         {editingParticipant && (
