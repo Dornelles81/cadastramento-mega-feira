@@ -9,6 +9,7 @@ import { textoRemocao } from '../../../../lib/participants/removal-label'
 import { riscoDeFace, tituloRiscoDeFace } from '../../../../lib/participants/face-risk'
 import AvisoRecapturaButton from '../../../../components/admin/AvisoRecapturaButton'
 import { generateCompactQRData } from '../../../../lib/qrcode/generator'
+import { digitosDoTelefone, formatarTelefone } from '../../../../lib/participants/telefone'
 
 interface Participant {
   id: string
@@ -1478,7 +1479,7 @@ export default function EventAdminPage() {
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden sm:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden md:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Stand</th>
                   <th className={`px-2 md:px-4 py-3 font-semibold text-xs md:text-sm text-center hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`} title="E-mail — clique no ícone para escrever">✉️</th>
-                  <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Telefone</th>
+                  <th className={`px-2 md:px-4 py-3 font-semibold text-xs md:text-sm text-center hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`} title="Telefone — clique no ícone para abrir o WhatsApp">💬</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Status da face</th>
                   <th className={`text-left px-2 md:px-4 py-3 font-semibold text-xs md:text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Cadastrado em</th>
                   <th
@@ -1616,18 +1617,31 @@ export default function EventAdminPage() {
                         <span className={darkMode ? 'text-gray-600' : 'text-gray-300'} title="Sem e-mail cadastrado">—</span>
                       )}
                     </td>
-                    <td className={`px-2 md:px-4 py-3 font-mono text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {/* Telefone como ÍCONE, mesmo tratamento do e-mail: o que se
+                        faz aqui é ABRIR a conversa, não ler o número — que
+                        continua no `title` e na busca.
+
+                        O link usa `digitosDoTelefone` em vez de um
+                        `replace(/\D/g,'')` cru: as linhas antigas guardam coisas
+                        como "+55 51 99988-7766" (o link de edição gravava sem
+                        normalizar até 14/09/2026), e prefixar 55 no que já vinha
+                        com o 55 do país produzia wa.me/555551999887766 — uma
+                        conversa que não existe. */}
+                    <td className={`px-2 md:px-4 py-3 text-sm text-center hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {participant.phone ? (
                         <a
-                          href={`https://wa.me/55${participant.phone.replace(/\D/g, '')}`}
+                          href={`https://wa.me/55${digitosDoTelefone(participant.phone)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-green-600 hover:text-green-800 hover:underline"
-                          title="Abrir WhatsApp"
+                          className="text-green-600 hover:text-green-800"
+                          title={`Abrir WhatsApp — ${formatarTelefone(participant.phone)}`}
+                          aria-label={`Abrir WhatsApp de ${participant.name}`}
                         >
-                          {participant.phone}
+                          💬
                         </a>
-                      ) : '-'}
+                      ) : (
+                        <span className={darkMode ? 'text-gray-600' : 'text-gray-300'} title="Sem telefone cadastrado">—</span>
+                      )}
                     </td>
                     <td className={`px-2 md:px-4 py-3 text-sm hidden lg:table-cell ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                       {(() => {
