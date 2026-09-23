@@ -981,24 +981,41 @@ export default function CredentialsPage() {
       setTimeout(() => URL.revokeObjectURL(url), 5000)
 
       // Mark targets as printed in the database
+      //
+      // A marca é o que alimenta as abas de filtro e o "Continuar bobina". Se ela
+      // não gravar, não é detalhe cosmético: a próxima bobina sai repetida. Por
+      // isso o `res.ok` — antes, o 500 do endpoint era engolido pelo catch vazio
+      // e o estado local marcava "impressa" mesmo assim, até o reload desfazer.
       const ids = targets.map(v => v.id)
+      let marcadas = true
       try {
-        await fetch('/api/admin/mark-vehicle-printed', {
+        const res = await fetch('/api/admin/mark-vehicle-printed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ vehicleIds: ids })
         })
-        // Update local state
-        setVehicleCredentials(prev =>
-          prev.map(v => ids.includes(v.id) ? { ...v, credentialPrinted: true, credentialPrintedAt: new Date().toISOString() } : v)
-        )
-      } catch {
-        // Non-critical — PDF was already downloaded
+        if (res.ok) {
+          // Update local state
+          setVehicleCredentials(prev =>
+            prev.map(v => ids.includes(v.id) ? { ...v, credentialPrinted: true, credentialPrintedAt: new Date().toISOString() } : v)
+          )
+        } else {
+          marcadas = false
+          console.error('mark-vehicle-printed falhou', res.status, await res.text().catch(() => ''))
+        }
+      } catch (e) {
+        marcadas = false
+        console.error('mark-vehicle-printed falhou', e)
       }
 
       const unprintedCount = vehicleCredentials.filter(v => !v.credentialPrinted && !ids.includes(v.id)).length
       const resumeMsg = unprintedCount > 0 ? ` · ${unprintedCount} credencial(is) ainda não impressa(s).` : ' · Todas impressas!'
-      setMessage({ type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg} Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: 80×40mm → Escala: Tamanho real → Margens: Nenhuma.` })
+      const instrucoes = ` Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: 80×40mm → Escala: Tamanho real → Margens: Nenhuma.`
+      setMessage(
+        marcadas
+          ? { type: 'success', text: `✅ PDF de ${targets.length} credencial(is) baixado!${resumeMsg}${instrucoes}` }
+          : { type: 'error', text: `⚠️ PDF de ${targets.length} credencial(is) baixado, MAS o registro de "impressa" não foi salvo — os filtros e o "Continuar bobina" não vão contar esta bobina.${instrucoes}` }
+      )
     } catch (err) {
       console.error('Erro ao gerar PDF de veículos:', err)
       alert('Erro ao gerar PDF.')

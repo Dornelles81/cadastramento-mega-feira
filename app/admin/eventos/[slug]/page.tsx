@@ -822,19 +822,36 @@ export default function EventAdminPage() {
   }
 
   // Mark participants as printed in DB and update local state
+  //
+  // O `res.ok` não é zelo: sem ele, os 500 que o endpoint devolvia (ver a nota
+  // de bugs em pages/api/admin/mark-credential-printed.ts) passavam batidos e o
+  // estado local marcava "impresso" assim mesmo. O menu virava "Reimprimir" na
+  // hora e voltava para "Imprimir etiqueta" no reload seguinte, sem nenhum
+  // aviso — a tela mentia sobre o que estava no banco. Quando a marca não
+  // grava, o certo é NÃO mexer no estado local e dizer isso a quem imprimiu.
   const markAsPrinted = async (ids: string[]) => {
     try {
-      await fetch('/api/admin/mark-credential-printed', {
+      const res = await fetch('/api/admin/mark-credential-printed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantIds: ids })
       })
+      if (!res.ok) {
+        const detalhe = await res.text().catch(() => '')
+        console.error('mark-credential-printed falhou', res.status, detalhe)
+        alert(
+          `A etiqueta foi gerada, mas o registro de impressão NÃO foi salvo (HTTP ${res.status}).\n\n` +
+          'A lista continua mostrando "Imprimir etiqueta" para essas pessoas.'
+        )
+        return
+      }
       const now = new Date().toISOString()
       setParticipants(prev =>
         prev.map(p => ids.includes(p.id) ? { ...p, credentialPrinted: true, credentialPrintedAt: now } : p)
       )
     } catch (e) {
       console.error('Failed to mark credentials as printed', e)
+      alert('A etiqueta foi gerada, mas o registro de impressão NÃO foi salvo (falha de rede).')
     }
   }
 

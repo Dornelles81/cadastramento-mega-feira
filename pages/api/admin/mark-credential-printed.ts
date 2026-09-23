@@ -4,9 +4,10 @@ import { withApiAuth, ADMIN_ROLES } from '../../../lib/api-auth'
 import { prisma } from '../../../lib/prisma'
 
 /**
- * Marca credencial como impressa. Consumidor unico:
- * app/admin/eventos/[slug] — area de admin, onde o OPERATOR nao entra (o
- * middleware o desvia), entao a regua apertada aqui e ADMIN_ROLES.
+ * Marca credencial como impressa. Consumidores: app/admin/eventos/[slug] e
+ * app/admin/access-control/credentials (onde o maço de etiquetas sai de fato).
+ * Ambas são área de admin, onde o OPERATOR não entra (o middleware o desvia),
+ * então a régua apertada aqui é ADMIN_ROLES.
  *
  * ── AUTORIZAÇÃO ────────────────────────────────────────────────────────────
  * Exigia apenas `getServerSession` sem checagem de role: qualquer sessão
@@ -33,19 +34,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     const now = new Date()
     const adminId = session.user.id
 
-    // Use raw SQL since Prisma client may not have the new fields cached yet
-    await prisma.$executeRawUnsafe(
-      `UPDATE participants
-       SET credential_printed = true,
-           credential_printed_at = $1,
-           credential_printed_by = $2
-       WHERE id = ANY($3::uuid[])`,
-      now,
-      adminId,
-      participantIds
-    )
+    // ── Por que updateMany e não SQL cru ────────────────────────────────────
+    // O $executeRawUnsafe que ficava aqui NUNCA funcionou — nenhum participante
+    // chegou a ser marcado, em nenhum evento, desde que o campo existe. Dois
+    // erros, cada um bastando sozinho para derrubar a query:
+    //   1. escrevia `credential_printed` (snake_case), mas as colunas do banco
+    //      são "credentialPrinted"/"credentialPrintedAt"/"credentialPrintedBy"
+    //      — camelCase entre aspas, como o 0_init as criou → 42703.
+    //   2. comparava `id = ANY($3::uuid[])` sendo `participants.id` uma coluna
+    //      TEXT (uuid gerado na aplicação) → 42883.
+    // O comentário original justificava o SQL cru dizendo que o client Prisma
+    // podia não ter os campos ainda; ele tem (o schema os declara há tempo), e
+    // é o client que garante nome de coluna e tipo de id corretos.
+    const { count } = await prisma.participant.updateMany({
+      where: { id: { in: participantIds } },
+      data: {
+        credentialPrinted: true,
+        credentialPrintedAt: now,
+        credentialPrintedBy: adminId
+      }
+    })
 
-    return res.status(200).json({ updated: participantIds.length })
+    // `count` real, não participantIds.length: ids inexistentes não viram marca.
+    return res.status(200).json({ updated: count })
   } catch (error: any) {
     console.error('Error marking credentials as printed:', error)
     return res.status(500).json({ error: error.message })

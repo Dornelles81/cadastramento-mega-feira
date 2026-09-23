@@ -32,18 +32,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
     const now = new Date()
     const adminId = (session.user as { id?: string }).id ?? 'unknown'
 
-    await prisma.$executeRawUnsafe(
-      `UPDATE vehicle_credentials
-       SET credential_printed = true,
-           credential_printed_at = $1,
-           credential_printed_by = $2
-       WHERE id = ANY($3::uuid[])`,
-      now,
-      adminId,
-      vehicleIds
-    )
+    // Mesmo par de bugs do ./mark-credential-printed.ts, mesma correção — ver a
+    // nota longa lá: colunas camelCase entre aspas no banco (o SQL cru mandava
+    // snake_case → 42703) e `id` TEXT comparado com uuid[] → 42883. As 2.100
+    // credenciais veiculares do Expofest estão todas `false` por causa disso.
+    const { count } = await prisma.vehicleCredential.updateMany({
+      where: { id: { in: vehicleIds } },
+      data: {
+        credentialPrinted: true,
+        credentialPrintedAt: now,
+        credentialPrintedBy: adminId
+      }
+    })
 
-    return res.status(200).json({ updated: vehicleIds.length })
+    return res.status(200).json({ updated: count })
   } catch (error: any) {
     console.error('Error marking vehicle credentials as printed:', error)
     return res.status(500).json({ error: error.message })
