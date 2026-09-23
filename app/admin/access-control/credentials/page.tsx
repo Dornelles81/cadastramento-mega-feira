@@ -660,6 +660,8 @@ export default function CredentialsPage() {
   const [vehicleOrientations, setVehicleOrientations] = useState('')
   const [savingOrientations, setSavingOrientations] = useState(false)
   const [vehiclePrintFilter, setVehiclePrintFilter] = useState<'all' | 'unprinted' | 'printed'>('all')
+  // Aba de impressão dos PARTICIPANTES — espelho do vehiclePrintFilter acima.
+  const [printFilter, setPrintFilter] = useState<'all' | 'unprinted' | 'printed'>('all')
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -710,6 +712,10 @@ export default function CredentialsPage() {
         // O groupBy das contagens é sobre o universo — roda uma vez, na primeira página.
         if (page === 1) params.set('includeStandCounts', 'true')
         if (filterStatus === 'approved') params.set('approvalStatus', 'approved')
+        // "Sem credencial" passou a ser recorte do SERVIDOR: é o que faz as contagens do
+        // groupBy — e portanto os números das abas de impressão — falarem do mesmo
+        // universo que a lista mostra.
+        if (filterStatus === 'no-credential') params.set('semCredencial', 'true')
         if (filterStandId) params.set('standId', filterStandId)
         // Foto é opt-in no endpoint: só os templates que desenham foto pedem.
         if (precisaFoto) params.set('includePhoto', 'true')
@@ -751,17 +757,14 @@ export default function CredentialsPage() {
         }
       }
 
-      // 'approved' já é filtrado no servidor (via approvalStatus na query). Aqui só
-      // resta o caso 'no-credential', que é exclusivamente client-side (o endpoint
-      // não filtra por presença de número). 'all' passa direto.
-      const list = recebidos.filter((p: ParticipantCredential) => {
-        if (filterStatus === 'no-credential') return !p.credentialNumber
-        return true
-      })
+      // Os três recortes de `filterStatus` agora são do servidor — 'approved' por
+      // approvalStatus, 'no-credential' por semCredencial, 'all' sem nenhum. Não sobrou
+      // filtro de cliente aqui: era ele que fazia a lista e as contagens discordarem.
+      //
       // Uma atribuição só, no fim: o efeito que gera os QRs dispara com a lista e só
       // olha o PRIMEIRO item para decidir se precisa rodar — alimentar a lista em
       // pedaços deixaria as páginas seguintes sem QR.
-      setParticipants(list)
+      setParticipants(recebidos)
     } catch {
       setMessage({ type: 'error', text: 'Erro ao carregar participantes' })
     } finally {
@@ -1098,8 +1101,17 @@ export default function CredentialsPage() {
     })
   }
 
+  // Seleciona o que a ABA mostra, não o que está carregado: em "Não impressas",
+  // "Selecionar todos" não pode trazer de volta quem já foi impresso.
   const selectAll = () => {
-    setSelectedIds(new Set(participants.map(p => p.id)))
+    setSelectedIds(new Set(participantesVisiveis.map(p => p.id)))
+  }
+
+  // Trocar de aba limpa a seleção. Sem isso dá para selecionar 5 em "Não impressas",
+  // trocar para "Impressas" e imprimir os 5 de lá — a seleção sobrevive invisível.
+  const trocarAba = (f: 'all' | 'unprinted' | 'printed') => {
+    setPrintFilter(f)
+    setSelectedIds(new Set())
   }
 
   const clearSelection = () => setSelectedIds(new Set())
@@ -1368,8 +1380,18 @@ export default function CredentialsPage() {
     }
   }
 
+  // Aba de impressão — mesmo recorte do modo Veículos, aplicado à lista carregada.
+  const participantesVisiveis = participants.filter(p => {
+    if (printFilter === 'unprinted') return !p.credentialPrinted
+    if (printFilter === 'printed') return p.credentialPrinted
+    return true
+  })
   const selectedParticipants = participants.filter(p => selectedIds.has(p.id))
-  const printTargets = selectedParticipants.length > 0 ? selectedParticipants : participants
+  // O botão "Imprimir todos" imprime o que a ABA mostra, não a lista inteira: estando em
+  // "Não impressas", ele imprime só quem falta — que é o fluxo de quem entrou depois do
+  // maço. Seleção manual continua tendo precedência sobre a aba.
+  const printTargets = selectedParticipants.length > 0 ? selectedParticipants : participantesVisiveis
+
   // O servidor tem mais gente do que coube nesta requisição (teto de 500).
   const listaTruncada = totalNoEvento > carregados
 
@@ -1401,6 +1423,17 @@ export default function CredentialsPage() {
     }
   })()
 
+  // Números das abas: vêm do SERVIDOR (recorteAtual), não da lista carregada. É isso que
+  // os mantém certos no modo com foto, onde a tela ainda para em 500 — ali a aba diz
+  // "faltam 218" mesmo com 500 cartões na grade. Sem recorteAtual (evento não carregado
+  // ainda), cai para a contagem do que está em mãos.
+  const abaTotais = recorteAtual
+    ? { all: recorteAtual.total, unprinted: recorteAtual.faltam, printed: recorteAtual.printed }
+    : {
+        all: participants.length,
+        unprinted: participants.filter(p => !p.credentialPrinted).length,
+        printed: participants.filter(p => p.credentialPrinted).length
+      }
   const filteredVehicleCredentials = vehicleCredentials.filter(v => {
     if (vehiclePrintFilter === 'unprinted') return !v.credentialPrinted
     if (vehiclePrintFilter === 'printed') return v.credentialPrinted
@@ -2052,11 +2085,38 @@ export default function CredentialsPage() {
             </>
           )}
 
+          {/* Abas de impressão — espelho do modo Veículos. Os números vêm do servidor
+              (abaTotais), então continuam certos no modo com foto, que ainda trunca. */}
+          {participants.length > 0 && (
+            <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs font-semibold">
+              {(['all', 'unprinted', 'printed'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => trocarAba(f)}
+                  className={`px-3 py-1.5 ${printFilter === f ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  {f === 'all' && `Todas (${abaTotais.all})`}
+                  {f === 'unprinted' && `Não impressas (${abaTotais.unprinted})`}
+                  {f === 'printed' && `Impressas (${abaTotais.printed})`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* A aba conta o universo; a grade mostra o que coube na carga. Enquanto o modo
+              com foto truncar, os dois números divergem — dizer isso é melhor do que
+              deixar o operador descobrir contando cartões. */}
+          {participants.length > 0 && listaTruncada && participantesVisiveis.length < abaTotais[printFilter] && (
+            <span className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+              ⚠️ {participantesVisiveis.length} de {abaTotais[printFilter]} carregado(s) nesta aba
+            </span>
+          )}
+
           {/* Selection */}
           {participants.length > 0 && (
             <>
               <button onClick={selectAll} className="border border-slate-300 hover:border-slate-400 px-3 py-2 rounded-lg text-sm">
-                {listaTruncada ? 'Selecionar carregados' : 'Selecionar todos'} ({participants.length})
+                {listaTruncada ? 'Selecionar carregados' : 'Selecionar todos'} ({participantesVisiveis.length})
               </button>
               {selectedIds.size > 0 && (
                 <button onClick={clearSelection} className="text-slate-500 hover:text-slate-700 text-sm px-2">
@@ -2077,7 +2137,13 @@ export default function CredentialsPage() {
                 ? 'Gerando...'
                 : selectedIds.size > 0
                 ? `Imprimir selecionados (${selectedIds.size})`
-                : `${listaTruncada ? 'Imprimir carregados' : 'Imprimir todos'} (${participants.length})`}
+                : printFilter === 'unprinted'
+                // O rótulo nomeia a aba: em "Não impressas" o botão imprime só quem falta,
+                // e é isso que ele precisa dizer antes do clique, não depois.
+                ? `Imprimir não impressas (${participantesVisiveis.length})`
+                : printFilter === 'printed'
+                ? `Reimprimir impressas (${participantesVisiveis.length})`
+                : `${listaTruncada ? 'Imprimir carregados' : 'Imprimir todos'} (${participantesVisiveis.length})`}
             </button>
           )}
         </div>
@@ -2187,18 +2253,36 @@ export default function CredentialsPage() {
               {listaTruncada
                 ? `${participants.length} de ${totalNoEvento} participantes (primeiros em ordem alfabética)`
                 : `${participants.length} participante(s)`}
+              {printFilter !== 'all' && ` · mostrando ${participantesVisiveis.length} ${printFilter === 'unprinted' ? 'não impressa(s)' : 'impressa(s)'}`}
               {' · '}
               {selectedIds.size > 0 ? `${selectedIds.size} selecionado(s)` : 'Clique para selecionar'}
             </p>
+            {/* Aba vazia. O caso bom é este: depois de imprimir o maço, "Não impressas"
+                esvazia — e é assim que o operador vê que não sobrou ninguém. */}
+            {participantesVisiveis.length === 0 && (
+              <div className="py-12 text-center text-slate-400">
+                <div className="text-5xl mb-3">{printFilter === 'unprinted' ? '✅' : '🫥'}</div>
+                <p className="text-sm font-medium">
+                  {printFilter === 'unprinted'
+                    ? 'Ninguém pendente aqui — todas as etiquetas deste recorte já foram geradas.'
+                    : printFilter === 'printed'
+                    ? 'Nenhuma etiqueta gerada ainda neste recorte.'
+                    : 'Nenhum participante neste recorte.'}
+                </p>
+              </div>
+            )}
             <div className={`grid gap-4 ${templateStyle === 'badge' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : (templateStyle === 'label' || templateStyle === 'label6') ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
-              {participants.map(p => (
+              {/* Mesmo tratamento visual do modo Veículos: quem já foi impresso fica em
+                  verde e esmaecido, para a pilha do que falta saltar aos olhos mesmo na
+                  aba "Todas". */}
+              {participantesVisiveis.map(p => (
                 <div
                   key={p.id}
                   onClick={() => toggleSelect(p.id)}
-                  className={`cursor-pointer rounded-xl overflow-hidden transition-all ${selectedIds.has(p.id) ? 'ring-2 ring-sky-500 shadow-lg scale-105' : 'ring-1 ring-slate-200 hover:ring-sky-300 hover:shadow'}`}
+                  className={`cursor-pointer rounded-xl overflow-hidden transition-all ${selectedIds.has(p.id) ? 'ring-2 ring-sky-500 shadow-lg scale-105' : p.credentialPrinted ? 'ring-1 ring-emerald-200 opacity-70 hover:opacity-100 hover:ring-emerald-400' : 'ring-1 ring-slate-200 hover:ring-sky-300 hover:shadow'}`}
                 >
                   {/* Selection indicator */}
-                  <div className={`h-1 ${selectedIds.has(p.id) ? 'bg-sky-500' : 'bg-transparent'}`} />
+                  <div className={`h-1 ${selectedIds.has(p.id) ? 'bg-sky-500' : p.credentialPrinted ? 'bg-emerald-400' : 'bg-transparent'}`} />
                   <div className="bg-white p-2 flex justify-center">
                     <CredentialCard
                       participant={p}
@@ -2206,8 +2290,15 @@ export default function CredentialsPage() {
                       templateStyle={templateStyle}
                     />
                   </div>
-                  <div className={`text-xs text-center py-1 ${selectedIds.has(p.id) ? 'bg-sky-50 text-sky-700 font-medium' : 'bg-slate-50 text-slate-500'}`}>
-                    {selectedIds.has(p.id) ? '✓ Selecionado' : p.credentialNumber ? `#${p.credentialNumber}` : 'Sem número'}
+                  <div
+                    className={`text-xs text-center py-1 ${selectedIds.has(p.id) ? 'bg-sky-50 text-sky-700 font-medium' : p.credentialPrinted ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'}`}
+                    title={p.credentialPrintedAt ? `Etiqueta gerada em ${new Date(p.credentialPrintedAt).toLocaleString('pt-BR')}` : undefined}
+                  >
+                    {selectedIds.has(p.id)
+                      ? '✓ Selecionado'
+                      : p.credentialPrinted
+                      ? `✓ Impressa${p.credentialNumber ? ` · #${p.credentialNumber}` : ''}`
+                      : p.credentialNumber ? `#${p.credentialNumber}` : 'Sem número'}
                   </div>
                 </div>
               ))}

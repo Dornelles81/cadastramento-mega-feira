@@ -52,6 +52,16 @@ export default async function handler(
     const whereBase: any = { eventId: event.id, isDeleted: false } // ← ISOLAMENTO GARANTIDO
     if (approvalStatus) whereBase.approvalStatus = approvalStatus
 
+    // "Sem credencial" (sem número atribuído). Era um filtro EXCLUSIVAMENTE do cliente,
+    // aplicado sobre a lista já recebida — o que bastava para a lista, mas deixava as
+    // contagens do groupBy falando de um universo diferente do que a tela mostrava.
+    // Como as abas de impressão leem essas contagens, o recorte precisa existir aqui.
+    // O `''` é defensivo: hoje o banco só tem null, mas o cliente sempre tratou string
+    // vazia como "sem credencial" e as duas pontas têm que concordar.
+    if (req.query.semCredencial === 'true') {
+      whereBase.OR = [{ credentialNumber: null }, { credentialNumber: '' }]
+    }
+
     // Filtro por stand. 'none' = participantes sem stand (standId é nullable no schema);
     // ausente = sem recorte. Coberto por @@index([standId]) em Participant.
     const standIdParam = typeof req.query.standId === 'string' ? req.query.standId : undefined
