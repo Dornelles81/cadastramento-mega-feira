@@ -61,10 +61,15 @@ export default async function handler(
 
     // Ordenação: a tela de credenciais pede 'name' para o maço de etiquetas sair em ordem
     // alfabética. Default segue createdAt desc (comportamento anterior).
+    // O desempate por `id` não é enfeite: a tela de credenciais agora PAGINA sobre esta
+    // ordenação (páginas de 500 até o fim). Com dois participantes de nome idêntico numa
+    // borda de página, o Postgres pode devolvê-los em ordem diferente entre duas
+    // requisições — e aí um deles vem duas vezes e o outro some do maço. Hoje o Expofest
+    // não tem nome repetido; isso é sorte, e o desempate a dispensa.
     const ordenacao =
       req.query.orderBy === 'name'
-        ? ({ name: 'asc' } as const)
-        : ({ createdAt: 'desc' } as const)
+        ? [{ name: 'asc' as const }, { id: 'asc' as const }]
+        : { createdAt: 'desc' as const }
 
     // Foto é OPT-IN: o dado biométrico só sai daqui quando o caller diz que precisa dele.
     // Os templates de etiqueta não têm foto — mandar a face decriptada para eles era o maior
@@ -97,19 +102,43 @@ export default async function handler(
     // Contagens por stand para o dropdown — groupBy sobre o UNIVERSO (whereBase), nunca
     // sobre a amostra carregada. Stands sem ninguém sob o filtro atual não entram: não há
     // o que imprimir neles.
-    let standCounts: { id: string; name: string; code: string; count: number }[] | undefined
+    //
+    // `printed` sai do MESMO groupBy, só quebrando também por `credentialPrinted` —
+    // nenhuma requisição a mais. Isso importa: por vir do servidor sobre o universo,
+    // a contagem de impressos é exata mesmo quando a tela só carregou uma fatia (o
+    // teto de 500). Calcular "impressos" sobre a lista carregada daria número errado
+    // — 12 de 500 quando a verdade é 12 de 1.718.
+    let standCounts:
+      | { id: string; name: string; code: string; count: number; printed: number }[]
+      | undefined
     let semStandCount: number | undefined
+    let semStandPrinted: number | undefined
+    // Totais do universo (whereBase = sem o recorte de stand): alimentam as abas e o
+    // resumo "faltam N" sem depender de quanto a tela carregou.
+    let universo: { total: number; printed: number } | undefined
     if (req.query.includeStandCounts === 'true') {
       const grupos = await prisma.participant.groupBy({
-        by: ['standId'],
+        by: ['standId', 'credentialPrinted'],
         where: whereBase,
         _count: { _all: true }
       })
-      const porId = new Map<string, number>()
+      const porId = new Map<string, { count: number; printed: number }>()
       semStandCount = 0
+      semStandPrinted = 0
+      universo = { total: 0, printed: 0 }
       for (const g of grupos) {
-        if (g.standId) porId.set(g.standId, g._count._all)
-        else semStandCount += g._count._all
+        const n = g._count._all
+        universo.total += n
+        if (g.credentialPrinted) universo.printed += n
+        if (g.standId) {
+          const acc = porId.get(g.standId) ?? { count: 0, printed: 0 }
+          acc.count += n
+          if (g.credentialPrinted) acc.printed += n
+          porId.set(g.standId, acc)
+        } else {
+          semStandCount += n
+          if (g.credentialPrinted) semStandPrinted += n
+        }
       }
       const stands = porId.size
         ? await prisma.stand.findMany({
@@ -118,7 +147,11 @@ export default async function handler(
             orderBy: { name: 'asc' }
           })
         : []
-      standCounts = stands.map(s => ({ ...s, count: porId.get(s.id) ?? 0 }))
+      standCounts = stands.map(s => ({
+        ...s,
+        count: porId.get(s.id)?.count ?? 0,
+        printed: porId.get(s.id)?.printed ?? 0
+      }))
     }
 
     // ========================================================================
@@ -156,7 +189,7 @@ export default async function handler(
       total,
       page,
       totalPages: Math.ceil(total / limit),
-      ...(standCounts ? { standCounts, semStandCount } : {}),
+      ...(standCounts ? { standCounts, semStandCount, semStandPrinted, universo } : {}),
       admin: { name: admin.name, role: admin.role }
     })
   } catch (error: any) {

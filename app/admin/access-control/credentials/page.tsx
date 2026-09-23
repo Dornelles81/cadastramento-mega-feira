@@ -29,6 +29,9 @@ interface StandCount {
   name: string
   code: string
   count: number
+  // Quantos daquele stand já tiveram etiqueta gerada. Vem do groupBy do servidor
+  // sobre o UNIVERSO, não da lista carregada — é exato mesmo com a tela truncada.
+  printed: number
 }
 
 interface ParticipantCredential {
@@ -41,6 +44,10 @@ interface ParticipantCredential {
   stand?: StandInfo | null
   customData?: Record<string, unknown> | null
   qrDataUrl?: string
+  // O endpoint de participantes já devolvia estes dois campos; a interface é que
+  // não os declarava, então a tela recebia a marca de impressão e a jogava fora.
+  credentialPrinted?: boolean
+  credentialPrintedAt?: string | null
 }
 
 interface VehicleCredential {
@@ -612,7 +619,8 @@ export default function CredentialsPage() {
   const [participants, setParticipants] = useState<ParticipantCredential[]>([])
   // Universo no servidor × o que veio nesta página. O endpoint tem teto de 500 por
   // requisição e a tela não pagina: sem estes dois números ela dizia "Imprimir todos"
-  // sobre uma fatia dos mais recentes, calada.
+  // sobre uma fatia calada. A fatia sai em ORDEM ALFABÉTICA (a tela pede orderBy=name),
+  // não "os mais recentes" — são os primeiros 500 por nome.
   const [totalNoEvento, setTotalNoEvento] = useState(0)
   const [carregados, setCarregados] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -626,6 +634,10 @@ export default function CredentialsPage() {
   const [filterStandId, setFilterStandId] = useState('')
   const [standCounts, setStandCounts] = useState<StandCount[]>([])
   const [semStandCount, setSemStandCount] = useState(0)
+  const [semStandPrinted, setSemStandPrinted] = useState(0)
+  // Totais do universo sob o filtro de status atual, SEM o recorte de stand — vêm do
+  // mesmo groupBy. São o denominador honesto: "12 de 1.718", não "12 de 500".
+  const [universo, setUniverso] = useState<{ total: number; printed: number } | null>(null)
   // Progresso da geração do PDF. null = não está gerando.
   const [progresso, setProgresso] = useState<
     { feitas: number; total: number; parte: number; partes: number } | null
@@ -673,6 +685,11 @@ export default function CredentialsPage() {
   // trocar de um grupo para o outro recarrega a lista; trocar dentro do grupo, não.
   const precisaFoto = templateStyle === 'badge' || templateStyle === 'landscape'
 
+  // Teto do endpoint por requisição — é o mesmo Math.min(limit, 500) que o servidor
+  // aplica, então pedir mais numa só não adianta; o jeito de passar dele é paginar.
+  const PAGINA = 500
+  const MAX_PAGINAS = 30
+
   const loadParticipants = useCallback(async (event: Event) => {
     setLoading(true)
     setParticipants([])
@@ -680,24 +697,60 @@ export default function CredentialsPage() {
     setCarregados(0)
     setSelectedIds(new Set())
     try {
-      const params = new URLSearchParams({
-        eventId: event.id,
-        limit: '500',
-        // Maço de etiquetas em ordem alfabética, ordenado no servidor — ordenar aqui só
-        // ordenaria a amostra.
-        orderBy: 'name',
-        includeStandCounts: 'true'
-      })
-      if (filterStatus === 'approved') params.set('approvalStatus', 'approved')
-      if (filterStandId) params.set('standId', filterStandId)
-      // Foto é opt-in no endpoint: só os templates que desenham foto pedem.
-      if (precisaFoto) params.set('includePhoto', 'true')
+      const buscarPagina = async (page: number) => {
+        const params = new URLSearchParams({
+          eventId: event.id,
+          limit: String(PAGINA),
+          page: String(page),
+          // Maço de etiquetas em ordem alfabética, ordenado no servidor — ordenar aqui só
+          // ordenaria a amostra. Com paginação a ordem também é o que garante que as
+          // páginas se encaixem sem buraco nem repetição.
+          orderBy: 'name'
+        })
+        // O groupBy das contagens é sobre o universo — roda uma vez, na primeira página.
+        if (page === 1) params.set('includeStandCounts', 'true')
+        if (filterStatus === 'approved') params.set('approvalStatus', 'approved')
+        if (filterStandId) params.set('standId', filterStandId)
+        // Foto é opt-in no endpoint: só os templates que desenham foto pedem.
+        if (precisaFoto) params.set('includePhoto', 'true')
 
-      const res = await fetch(`/api/admin/eventos/${event.slug}/participantes?${params}`)
-      const data = await res.json()
-      setStandCounts(Array.isArray(data.standCounts) ? data.standCounts : [])
-      setSemStandCount(typeof data.semStandCount === 'number' ? data.semStandCount : 0)
-      const recebidos: ParticipantCredential[] = data.participants || data || []
+        const res = await fetch(`/api/admin/eventos/${event.slug}/participantes?${params}`)
+        return res.json()
+      }
+
+      const primeira = await buscarPagina(1)
+      setStandCounts(Array.isArray(primeira.standCounts) ? primeira.standCounts : [])
+      setSemStandCount(typeof primeira.semStandCount === 'number' ? primeira.semStandCount : 0)
+      setSemStandPrinted(typeof primeira.semStandPrinted === 'number' ? primeira.semStandPrinted : 0)
+      setUniverso(
+        primeira.universo && typeof primeira.universo.total === 'number' ? primeira.universo : null
+      )
+      let recebidos: ParticipantCredential[] = primeira.participants || primeira || []
+      const total = typeof primeira.total === 'number' ? primeira.total : recebidos.length
+      setTotalNoEvento(total)
+      setCarregados(recebidos.length)
+
+      // ── Paginação automática — SÓ nos templates sem foto ───────────────────
+      // Etiqueta (o maço, que é a operação real) pesa 646 B por registro: o evento
+      // inteiro sai em ~1,06 MB e 4 requisições de ~160ms. Carregar tudo é o que faz
+      // "Imprimir todos" significar TODOS e o filtro por impresso bater com o banco.
+      //
+      // Com foto é outra ordem de grandeza — a face cifrada tem ~88 KB, então os 1.720
+      // aprovados dariam ~148 MB, com decriptação no servidor dentro do limite de 30s
+      // da função. Ali o teto FICA, e o caminho é o filtro por stand: o maior stand do
+      // Expofest tem 251 pessoas, cabe inteiro numa carga.
+      if (!precisaFoto) {
+        // Trava contra laço infinito se o `total` e o que o servidor devolve
+        // discordarem (alguém apagado no meio da carga, filtro mudando).
+        for (let page = 2; recebidos.length < total && page <= MAX_PAGINAS; page++) {
+          const proxima = await buscarPagina(page)
+          const lote: ParticipantCredential[] = proxima.participants || []
+          if (lote.length === 0) break
+          recebidos = recebidos.concat(lote)
+          setCarregados(recebidos.length)
+        }
+      }
+
       // 'approved' já é filtrado no servidor (via approvalStatus na query). Aqui só
       // resta o caso 'no-credential', que é exclusivamente client-side (o endpoint
       // não filtra por presença de número). 'all' passa direto.
@@ -705,9 +758,10 @@ export default function CredentialsPage() {
         if (filterStatus === 'no-credential') return !p.credentialNumber
         return true
       })
+      // Uma atribuição só, no fim: o efeito que gera os QRs dispara com a lista e só
+      // olha o PRIMEIRO item para decidir se precisa rodar — alimentar a lista em
+      // pedaços deixaria as páginas seguintes sem QR.
       setParticipants(list)
-      setCarregados(recebidos.length)
-      setTotalNoEvento(typeof data.total === 'number' ? data.total : recebidos.length)
     } catch {
       setMessage({ type: 'error', text: 'Erro ao carregar participantes' })
     } finally {
@@ -733,11 +787,16 @@ export default function CredentialsPage() {
     setLoadingQR(false)
   }, [])
 
+  // O label6 não desenha QR em lugar nenhum — nem na prévia (Label6Card), nem no PDF
+  // (showQR: false). Gerar QR invisível era desperdício barato com 500 registros; com a
+  // carga completa seriam 1.718 codificações para jogar fora.
+  const precisaQR = templateStyle !== 'label6'
+
   useEffect(() => {
-    if (participants.length > 0 && selectedEvent && !participants[0].qrDataUrl) {
+    if (precisaQR && participants.length > 0 && selectedEvent && !participants[0].qrDataUrl) {
       buildQRCodes(participants, selectedEvent)
     }
-  }, [participants, selectedEvent, buildQRCodes])
+  }, [participants, selectedEvent, buildQRCodes, precisaQR])
 
   // ── Generate credential numbers ───────────────────────────────────────────
   const generateCredentials = async (reset = false) => {
@@ -1045,10 +1104,91 @@ export default function CredentialsPage() {
 
   const clearSelection = () => setSelectedIds(new Set())
 
+  // ── Marca "impresso" nos participantes ────────────────────────────────────
+  // Mesma régua do modo Veículos: marca EXATAMENTE quem entrou na impressão —
+  // a seleção manual, ou a lista carregada quando não há seleção (printTargets,
+  // que é também o que `#print-area` desenha). Esta tela é onde o maço de
+  // etiquetas sai de fato; até aqui só a tela do evento marcava, então a
+  // operação real não deixava registro nenhum.
+  //
+  // O gatilho é a geração do PDF / a abertura do diálogo de impressão, não a
+  // impressão confirmada no papel — o navegador não nos conta o que a Elgin fez.
+  // É a mesma régua dos veículos e da tela do evento, e é por isso que existe o
+  // "Reimprimir": a marca diz "esta etiqueta já saiu daqui", não "já está colada".
+  //
+  // Devolve se gravou, para a mensagem final não afirmar o que não aconteceu.
+  const markParticipantsAsPrinted = async (ids: string[]): Promise<boolean> => {
+    if (ids.length === 0) return true
+    try {
+      const res = await fetch('/api/admin/mark-credential-printed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantIds: ids })
+      })
+      if (!res.ok) {
+        console.error('mark-credential-printed falhou', res.status, await res.text().catch(() => ''))
+        return false
+      }
+      const agora = new Date().toISOString()
+      const alvo = new Set(ids)
+      setParticipants(prev =>
+        prev.map(p => (alvo.has(p.id) ? { ...p, credentialPrinted: true, credentialPrintedAt: agora } : p))
+      )
+
+      // As contagens do seletor vêm do servidor e não se atualizariam sozinhas —
+      // recarregar a lista inteira só por isso custaria outra carga e a regeração de
+      // todos os QRs. Aplico o delta: conta só quem AINDA NÃO estava impresso
+      // (reimpressão não pode inflar o número), agrupado pelo stand de cada um.
+      const novos = participants.filter(p => alvo.has(p.id) && !p.credentialPrinted)
+      if (novos.length > 0) {
+        const porStand = new Map<string, number>()
+        let novosSemStand = 0
+        for (const p of novos) {
+          if (p.stand?.id) porStand.set(p.stand.id, (porStand.get(p.stand.id) ?? 0) + 1)
+          else novosSemStand++
+        }
+        setStandCounts(prev =>
+          prev.map(s => (porStand.has(s.id) ? { ...s, printed: s.printed + porStand.get(s.id)! } : s))
+        )
+        if (novosSemStand > 0) setSemStandPrinted(prev => prev + novosSemStand)
+        setUniverso(prev => (prev ? { ...prev, printed: prev.printed + novos.length } : prev))
+      }
+      return true
+    } catch (e) {
+      console.error('mark-credential-printed falhou', e)
+      return false
+    }
+  }
+
   // ── Print via jsPDF — gera PDF 80×40mm com dimensões físicas fixas ─────────
   const handlePrint = async () => {
+    // Imprimir SEM seleção com a lista truncada pelo teto de 500 é o caso perigoso:
+    // sai etiqueta para os carregados e o resto do evento fica sem etiqueta E sem
+    // marca — indistinguível, no banco, de quem ainda não foi impresso de fato. A
+    // faixa laranja já avisa do teto; aqui o aviso vira uma decisão consciente, com
+    // o número exato de quem fica de fora. (Some quando o teto sair — item 3.)
+    if (listaTruncada && selectedIds.size === 0) {
+      const deFora = totalNoEvento - carregados
+      const segue = confirm(
+        `Esta tela carregou ${carregados} de ${totalNoEvento} participantes do evento.\n\n` +
+        `Imprimir sem seleção gera etiqueta para esses ${carregados} e marca os ${carregados} como impressos.\n` +
+        `Os outros ${deFora} ficam SEM etiqueta e SEM marca de impressão.\n\n` +
+        `Para um conjunto completo, cancele e use o filtro por stand — cada stand cabe inteiro em uma carga.\n\n` +
+        `Continuar assim mesmo?`
+      )
+      if (!segue) return
+    }
+
     if (templateStyle !== 'label' && templateStyle !== 'label6') {
       window.print()
+      // `#print-area` desenha exatamente printTargets — mesma régua do PDF.
+      const marcados = await markParticipantsAsPrinted(printTargets.map(p => p.id))
+      if (!marcados) {
+        setMessage({
+          type: 'error',
+          text: `⚠️ ${printTargets.length} credencial(is) enviada(s) para impressão, MAS o registro de "impresso" não foi salvo — elas não vão contar como impressas.`
+        })
+      }
       return
     }
 
@@ -1204,12 +1344,22 @@ export default function CredentialsPage() {
         if (parte < partes - 1) await new Promise(resolve => setTimeout(resolve, 400))
       }
 
-      setMessage({
-        type: 'success',
-        text: partes > 1
-          ? `✅ ${printTargets.length} etiquetas em ${partes} PDFs de até ${porArquivo} (baixados como "-parte1de${partes}"…). Imprima um de cada vez: Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma`
-          : `✅ PDF baixado! Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma → Imprimir`
-      })
+      // Marca depois que TODOS os arquivos saíram: um PDF por parte, mas uma
+      // impressão só. Marcar por lote deixaria o maço metade marcado se o
+      // navegador engasgasse no meio dos downloads.
+      const marcados = await markParticipantsAsPrinted(printTargets.map(p => p.id))
+      const instrucoes = `Ctrl+P → Impressora: Elgin L42PRO FULL → Tamanho do papel: ${PW}×${PH}mm → Escala: Tamanho real → Margens: Nenhuma`
+      const corpo = partes > 1
+        ? `${printTargets.length} etiquetas em ${partes} PDFs de até ${porArquivo} (baixados como "-parte1de${partes}"…). Imprima um de cada vez: ${instrucoes}`
+        : `PDF baixado! ${instrucoes} → Imprimir`
+      setMessage(
+        marcados
+          ? { type: 'success', text: `✅ ${corpo}` }
+          : {
+              type: 'error',
+              text: `⚠️ ${corpo} — MAS o registro de "impresso" NÃO foi salvo para estas ${printTargets.length} credencial(is): elas não vão contar como impressas.`
+            }
+      )
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
       alert('Erro ao gerar PDF de etiquetas. Verifique o console.')
@@ -1222,6 +1372,34 @@ export default function CredentialsPage() {
   const printTargets = selectedParticipants.length > 0 ? selectedParticipants : participants
   // O servidor tem mais gente do que coube nesta requisição (teto de 500).
   const listaTruncada = totalNoEvento > carregados
+
+  // Recorte atual — um stand, "sem stand", ou o evento inteiro — com os números do
+  // groupBy do SERVIDOR. É o que responde "quantos deste stand já foram impressos e
+  // quantos faltam", e responde certo mesmo com a lista truncada: nada aqui é contado
+  // sobre `participants`.
+  const recorteAtual = (() => {
+    if (filterStandId === 'none') {
+      if (semStandCount === 0) return null
+      return {
+        rotulo: 'Sem stand',
+        total: semStandCount,
+        printed: semStandPrinted,
+        faltam: semStandCount - semStandPrinted
+      }
+    }
+    if (filterStandId) {
+      const s = standCounts.find(s => s.id === filterStandId)
+      if (!s) return null
+      return { rotulo: s.name, total: s.count, printed: s.printed, faltam: s.count - s.printed }
+    }
+    if (!universo || universo.total === 0) return null
+    return {
+      rotulo: 'Evento',
+      total: universo.total,
+      printed: universo.printed,
+      faltam: universo.total - universo.printed
+    }
+  })()
 
   const filteredVehicleCredentials = vehicleCredentials.filter(v => {
     if (vehiclePrintFilter === 'unprinted') return !v.credentialPrinted
@@ -1803,14 +1981,43 @@ export default function CredentialsPage() {
               value={filterStandId}
               onChange={e => setFilterStandId(e.target.value)}
             >
-              <option value="">Stand: todos</option>
+              {/* Rótulo "(impressos/total)": o denominador é o que já estava aqui, o
+                  numerador é novo. Quem procura "o que falta imprimir" varre 91 stands
+                  neste dropdown — ver os dois números lado a lado é o que evita abrir
+                  stand por stand. A legenda ao lado explica a barra. */}
+              <option value="">
+                Stand: todos{universo ? ` (${universo.printed}/${universo.total})` : ''}
+              </option>
               {standCounts.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
+                <option key={s.id} value={s.id}>{s.name} ({s.printed}/{s.count})</option>
               ))}
               {semStandCount > 0 && (
-                <option value="none">Sem stand ({semStandCount})</option>
+                <option value="none">Sem stand ({semStandPrinted}/{semStandCount})</option>
               )}
             </select>
+          )}
+
+          {selectedEvent && standCounts.length > 0 && (
+            <span className="text-xs text-slate-500 -ml-1" title="Impressos / total no stand">
+              impressos/total
+            </span>
+          )}
+
+          {/* Resumo do recorte atual. Sai do groupBy do servidor, então continua correto
+              mesmo quando a lista abaixo está truncada pelo teto de 500. */}
+          {selectedEvent && recorteAtual && (
+            <span
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                recorteAtual.faltam === 0
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+              }`}
+              title={`${recorteAtual.rotulo}: ${recorteAtual.printed} impresso(s) de ${recorteAtual.total}`}
+            >
+              {recorteAtual.faltam === 0
+                ? `✅ ${recorteAtual.rotulo}: ${recorteAtual.total} impresso(s), nada falta`
+                : `🏷️ ${recorteAtual.rotulo}: ${recorteAtual.printed} impresso(s) · faltam ${recorteAtual.faltam}`}
+            </span>
           )}
 
           {filterStandId && (
@@ -1927,11 +2134,14 @@ export default function CredentialsPage() {
             </p>
             <p className="text-orange-800">
               Esta tela carregou <strong>{carregados}</strong> de <strong>{totalNoEvento}</strong> participantes
-              do evento — os mais recentes. O que estiver fora não aparece na prévia nem entra no PDF.
+              do evento — os <strong>primeiros em ordem alfabética</strong>. O que estiver fora não aparece
+              na prévia, não entra no PDF e não é marcado como impresso.
             </p>
             <p className="text-orange-800 mt-1">
-              Para imprimir um conjunto completo, use o <strong>filtro por stand</strong>: cada stand cabe
-              inteiro em uma carga.
+              Só os templates <strong>com foto</strong> (Crachá e Paisagem) param no teto: cada foto pesa
+              ~88 KB, e o evento inteiro passaria de 100 MB numa carga só. Saídas: use o{' '}
+              <strong>filtro por stand</strong> — nenhum stand chega perto do teto — ou troque para um
+              template de <strong>etiqueta</strong>, que carrega o evento inteiro.
             </p>
           </div>
         )}
@@ -1948,7 +2158,14 @@ export default function CredentialsPage() {
           <div className="flex items-center justify-center py-16 no-print">
             <div className="text-center text-slate-500">
               <div className="text-4xl mb-3">{loading ? '⏳' : '🔲'}</div>
-              <p className="text-sm">{loading ? 'Carregando participantes...' : 'Gerando QR codes...'}</p>
+              <p className="text-sm">
+                {loading
+                  ? totalNoEvento > 0 && carregados < totalNoEvento
+                    // Carga paginada: sem este número a tela fica muda por 4 requisições.
+                    ? `Carregando participantes… ${carregados} de ${totalNoEvento}`
+                    : 'Carregando participantes...'
+                  : 'Gerando QR codes...'}
+              </p>
             </div>
           </div>
         )}
@@ -1968,7 +2185,7 @@ export default function CredentialsPage() {
           <div className="p-6 no-print">
             <p className="text-sm text-slate-500 mb-4">
               {listaTruncada
-                ? `${participants.length} de ${totalNoEvento} participantes (carregados os mais recentes)`
+                ? `${participants.length} de ${totalNoEvento} participantes (primeiros em ordem alfabética)`
                 : `${participants.length} participante(s)`}
               {' · '}
               {selectedIds.size > 0 ? `${selectedIds.size} selecionado(s)` : 'Clique para selecionar'}
