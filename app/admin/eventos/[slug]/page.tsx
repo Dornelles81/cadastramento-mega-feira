@@ -258,7 +258,12 @@ export default function EventAdminPage() {
       code,
       name: data.name,
       count: data.count
-    })).sort((a, b) => b.count - a.count) // Sort by count descending
+    })).sort((a, b) => {
+      // "Sem stand" não é um stand: vai por último, como na tela de credenciais.
+      if (a.name === 'Sem stand') return 1
+      if (b.name === 'Sem stand') return -1
+      return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+    })
 
     setStands(standsArray)
   }, [participants])
