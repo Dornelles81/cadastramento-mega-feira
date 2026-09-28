@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import type { Session } from 'next-auth'
 import { prisma } from '../../../../../lib/prisma'
-import { withApiAuth, ADMIN_ROLES } from '../../../../../lib/api-auth'
+import { withApiAuth, ADMIN_ROLES, hasEventPermission } from '../../../../../lib/api-auth'
 import { generateParticipantEditToken, buildEditLink } from '../../../../../lib/participant-edit/tokens'
 
 /**
@@ -27,9 +27,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
 
   const participant = await prisma.participant.findUnique({
     where: { id },
-    select: { id: true }
+    select: { id: true, eventId: true, event: { select: { slug: true } } }
   })
   if (!participant) {
+    return res.status(404).json({ error: 'Participante não encontrado' })
+  }
+
+  // ESCOPO DE EVENTO. Até 28/09/2026 só o papel era conferido: qualquer admin
+  // de QUALQUER evento gerava link de edição — que troca a foto — de qualquer
+  // participante do sistema, sabendo o id. `canEdit` porque é o que quem usa
+  // este botão já tem (a Leise, no Expofest); permissões só são lidas no
+  // login, e uma recém-concedida faria o botão parecer quebrado.
+  // Fora do escopo responde 404, como o de id inexistente: 403 confirmaria que
+  // o cadastro existe.
+  const escopos = [participant.eventId, participant.event?.slug].filter(Boolean) as string[]
+  if (!escopos.some((e) => hasEventPermission(session, e, 'canEdit'))) {
     return res.status(404).json({ error: 'Participante não encontrado' })
   }
 

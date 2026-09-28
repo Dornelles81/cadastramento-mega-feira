@@ -1310,6 +1310,18 @@ export default function EventAdminPage() {
                     envio (POST), sempre: mandar e-mail em nome da organização para
                     dezenas de responsáveis é ação externa e irreversível. */}
                 {eventSlug && <AvisoRecapturaButton slug={eventSlug} />}
+                {/* Texto, não ícone: emoji vira quadrado vazio em algumas máquinas
+                    (ver o comentário de IconeWhatsApp). A API por trás exige
+                    canManageAdmins; o botão aparece para todos e a tela explica. */}
+                {eventSlug && (
+                  <a
+                    href={`/admin/eventos/${eventSlug}/balcao`}
+                    className="inline-flex items-center px-3 py-2 text-sm bg-teal-700 text-white rounded-lg hover:bg-teal-800 transition-colors shadow-sm"
+                    title="Links do balcão de recoleta facial"
+                  >
+                    Balcão
+                  </a>
+                )}
                 <button
                   onClick={toggleDarkMode}
                   className={`inline-flex items-center px-3 py-2 text-sm rounded-lg transition-colors shadow-sm ${

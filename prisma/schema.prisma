@@ -111,6 +111,7 @@ model Event {
   terminals          Terminal[]
   terminalEvents     TerminalEvent[]
   agentTokens        AgentToken[]
+  balcaoTokens      BalcaoAccessToken[]
 
   @@index([slug])
   @@index([code])
@@ -461,6 +462,34 @@ model Stand {
   @@index([isActive])
   @@index([eventId, isActive])
   @@map("stands")
+}
+
+
+// Link de BALCÃO de recoleta facial (feira): quem opera é pessoa temporária,
+// no celular, sem conta no painel. Faz UMA coisa: achar alguém pelo documento e
+// trocar a foto. Só o hash SHA-256 do token fica aqui; o link em claro existe
+// uma vez, na geração. Vários ativos por evento (um por operador, pelo `label`).
+// `revokedAt` é conferido em TODA chamada — revogar corta na hora, sem esperar
+// JWT nenhum expirar. Ver lib/balcao.
+model BalcaoAccessToken {
+  id String @id @default(uuid())
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  tokenHash String @unique
+  label     String // quem opera, ex.: "Maria — balcão 1"
+
+  createdBy      String? // EventAdmin.id
+  createdByEmail String?
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime? // NULL = ativo
+  revokedBy      String?
+  lastUsedAt     DateTime?
+
+  @@index([eventId])
+  @@map("balcao_access_tokens")
 }
 
 // Stand Access Token - delegated access via magic link

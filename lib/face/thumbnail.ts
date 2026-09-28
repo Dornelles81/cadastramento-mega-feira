@@ -22,13 +22,13 @@ const QUALIDADE = 60
  * URL WebP. Devolve null para o que não é imagem embutida — URL http legada
  * não é baixada daqui (o servidor não sai buscando imagem de terceiros).
  */
-export async function miniaturaDeDataUrl(dataUrl: string): Promise<string | null> {
+export async function miniaturaDeDataUrl(dataUrl: string, px: number = MINIATURA_PX): Promise<string | null> {
   const m = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/i.exec(dataUrl)
   if (!m) return null
   const entrada = Buffer.from(m[1], 'base64')
   const saida = await sharp(entrada, { failOn: 'none' })
     .rotate() // respeita a orientação EXIF da câmera do celular
-    .resize(MINIATURA_PX, MINIATURA_PX, { fit: 'cover', position: 'attention' })
+    .resize(px, px, { fit: 'cover', position: 'attention' })
     .webp({ quality: QUALIDADE })
     .toBuffer()
   return `data:image/webp;base64,${saida.toString('base64')}`
