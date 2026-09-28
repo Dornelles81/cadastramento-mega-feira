@@ -7,7 +7,8 @@
  * O agente passa o roster do device (paginado lá); aqui só decidimos.
  */
 import { prisma } from '../prisma'
-import { isEligible } from './eligibility'
+import { isEligiblePorPresenca } from './eligibility'
+import { idsComFotoNoEvento } from '../face/presence'
 import { resolveActiveAllocation } from '../terminals/allocation'
 import { isExhausted } from './retry-policy'
 
@@ -70,14 +71,25 @@ export async function reconcileTerminal(
   }
 
   // DESEJADO: participantes ELEGÍVEIS do evento com employeeNo.
+  //
+  // SEM `faceData`/`faceImageUrl` no select, de propósito. Até 28/09/2026 esta
+  // consulta trazia a biometria do evento inteiro — 135 MB por chamada, uma
+  // chamada por terminal a cada ciclo — só para responder "tem foto?". Foi o
+  // que levou a fatura do Neon de setembro a 3.883 GB. A presença agora vem do
+  // banco como conjunto de ids (lib/face/presence), sem os bytes.
+  //
+  // As duas consultas não são atômicas, e não precisam ser: a presença só passa
+  // de "tem" para "não tem" por remoção ou expurgo, que já tornam a pessoa
+  // inelegível por status/isDeleted. Recaptura troca a foto sem apagá-la.
   const parts = await prisma.participant.findMany({
     where: { eventId, isDeleted: false, employeeNo: { not: null } },
     select: {
       id: true, employeeNo: true, cardNumber: true, status: true, isDeleted: true,
-      approvalStatus: true, faceData: true, faceImageUrl: true, faceVersion: true,
+      approvalStatus: true, faceVersion: true,
       event: { select: { requiresApprovalForAccess: true } }
     }
   })
+  const comFoto = await idsComFotoNoEvento(eventId)
   // Linhas de sync deste terminal (estado atual + detectar órfão-com-linha).
   const rows = await prisma.participantTerminalSync.findMany({
     where: { terminalId },
@@ -99,13 +111,13 @@ export async function reconcileTerminal(
 
   for (const p of parts) {
     const requiresApproval = p.event?.requiresApprovalForAccess ?? true
-    if (!isEligible(p, { requiresApproval })) continue
+    const hasFace = comFoto.has(p.id)
+    if (!isEligiblePorPresenca(p, hasFace, { requiresApproval })) continue
     const emp = p.employeeNo as string
     desired.add(emp)
 
     const act = actual.get(emp)
     const row = rowByPid.get(p.id)
-    const hasFace = p.faceData != null || p.faceImageUrl != null
 
     // F5: face trocada (re-captura). Calculada aqui porque decide DUAS coisas:
     // o que re-empurrar, e se a linha ganha um contador de tentativas novo.
