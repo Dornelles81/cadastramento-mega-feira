@@ -47,11 +47,25 @@ export function linkDoBalcao(token: string): string {
 }
 
 /**
- * Expira no fim do evento (a feira) — nunca depois. Evento já encerrado: 12h,
- * para um uso excepcional não virar link eterno.
+ * Expira às 23:59:59 do ÚLTIMO DIA do evento, no horário de Brasília.
+ *
+ * Não no `endDate` cru: ele é gravado como um instante (o do Expofest é
+ * 19/10 12:00 UTC = 9h em Brasília), e o link morreria na manhã do último dia
+ * de feira, com o balcão ainda atendendo.
+ *
+ * Offset fixo -03:00: o Brasil não tem horário de verão desde 2019. O DIA é
+ * tirado no fuso de São Paulo, não em UTC — um `endDate` às 01:00 UTC ainda é
+ * o dia anterior em Brasília.
+ *
+ * Evento já encerrado: 12h a partir de agora, para um uso excepcional não
+ * virar link eterno.
  */
 export function validadeDoBalcao(eventEnd: Date, agora: Date = new Date()): Date {
-  return eventEnd > agora ? eventEnd : new Date(agora.getTime() + 12 * 60 * 60 * 1000)
+  const dia = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(eventEnd) // AAAA-MM-DD
+  const fimDoDia = new Date(`${dia}T23:59:59.999-03:00`)
+  return fimDoDia > agora ? fimDoDia : new Date(agora.getTime() + 12 * 60 * 60 * 1000)
 }
 
 export async function gerarLinkBalcao(

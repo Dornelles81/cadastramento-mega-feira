@@ -25,6 +25,7 @@ import { prisma } from '../lib/prisma'
 import { encryptString } from '../lib/crypto'
 import { faceVersionOf } from '../lib/face/version'
 import { createAllocation } from '../lib/terminals/allocation'
+import { validadeDoBalcao } from '../lib/balcao/acesso'
 
 const BASE = process.env.AGENT_TEST_BASE || 'http://localhost:3000'
 const SUF = Date.now().toString().slice(-6)
@@ -137,6 +138,13 @@ async function main() {
     const o = cliente(); check('login admin de outro evento', await o.login(outroEv.email))
     const rotaLinks = `/api/admin/eventos/${evE.slug}/balcao-links`
 
+    console.log('\n=== 0) validade do link ===')
+    const agoraFixo = new Date('2026-10-01T12:00:00Z')
+    const iso = (d: Date) => d.toISOString()
+    check('Expofest (19/10 12:00 UTC) → 19/10 23:59:59 Brasília', iso(validadeDoBalcao(new Date('2026-10-19T12:00:00Z'), agoraFixo)) === '2026-10-20T02:59:59.999Z')
+    check('01:00 UTC ainda é o dia ANTERIOR em Brasília', iso(validadeDoBalcao(new Date('2026-10-20T01:00:00Z'), agoraFixo)) === '2026-10-20T02:59:59.999Z')
+    check('evento encerrado → 12h a partir de agora', iso(validadeDoBalcao(new Date('2026-09-01T12:00:00Z'), agoraFixo)) === '2026-10-02T00:00:00.000Z')
+
     console.log('\n=== 1) gestão dos links ===')
     check('sem sessão → 401', (await anonimo.req('GET', rotaLinks)).status === 401)
     check('sem canManageAdmins → 403', (await v.req('GET', rotaLinks)).status === 403)
@@ -147,7 +155,8 @@ async function main() {
     const token = String(gerado.json?.link ?? '').split('/balcao/')[1] ?? ''
     check('link com token no formato', /^[A-Za-z0-9_-]{43}$/.test(token))
     const expira = new Date(gerado.json?.expiresAt)
-    check('expira no fim do evento', Math.abs(expira.getTime() - evE.endDate.getTime()) < 1000, gerado.json?.expiresAt)
+    const diaFim = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(evE.endDate)
+    check('expira às 23:59:59 (Brasília) do último dia', expira.getTime() === new Date(`${diaFim}T23:59:59.999-03:00`).getTime(), gerado.json?.expiresAt)
     const lista = await g.req('GET', rotaLinks)
     check('lista mostra ativo, sem token/hash', lista.json?.links?.length === 1 && lista.json.links[0].ativo === true && !JSON.stringify(lista.json).includes(token) && !('tokenHash' in lista.json.links[0]))
     check('audit BALCAO_LINK_GERADO', !!(await prisma.auditLog.findFirst({ where: { eventId: evE.id, action: 'BALCAO_LINK_GERADO' } })))
