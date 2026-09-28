@@ -8,6 +8,7 @@ import SyncResumo from '../../../../components/admin/SyncResumo'
 import { textoRemocao } from '../../../../lib/participants/removal-label'
 import { riscoDeFace, tituloRiscoDeFace } from '../../../../lib/participants/face-risk'
 import AvisoRecapturaButton from '../../../../components/admin/AvisoRecapturaButton'
+import { useMiniaturas } from '../../../../components/admin/useMiniaturas'
 import { generateCompactQRData } from '../../../../lib/qrcode/generator'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { digitosDoTelefone, formatarTelefone } from '../../../../lib/participants/telefone'
@@ -226,7 +227,10 @@ export default function EventAdminPage() {
 
   const [viewingImage, setViewingImage] = useState<Participant | null>(null)
   const [loading, setLoading] = useState(false)
-  const [participantImages, setParticipantImages] = useState<Record<string, string>>({})
+  // Miniatura (lista) e foto cheia (modais) vêm por caminhos separados — ver
+  // loadParticipants. Os dois ficam só na memória da aba.
+  const { miniaturas, refMiniatura } = useMiniaturas(eventSlug)
+  const [fotosCheias, setFotosCheias] = useState<Record<string, string>>({})
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set())
   const [printingBulk, setPrintingBulk] = useState(false)
@@ -409,35 +413,13 @@ export default function EventAdminPage() {
         // registros" eram calculados sobre esse subconjunto.
         const participants = data.participants || []
 
+        // A lista chega SEM foto nenhuma (só `temFoto`). A miniatura de cada
+        // linha é pedida quando ela aparece na tela (useMiniaturas), e a foto
+        // cheia quando alguém abre o participante. Antes vinha a foto cheia de
+        // todos no JSON — ~180 MB para o Expofest — e ainda havia aqui um laço
+        // que pedia /api/participant-image, UMA A UMA e em sequência, para cada
+        // pessoa sem foto.
         setParticipants(participants)
-        
-        // Load images for each participant (only if not already in data)
-        const images: Record<string, string> = {}
-        for (const participant of data.participants || []) {
-          // Use faceImageUrl if available, otherwise try to fetch.
-          // Removido não tem foto: a exclusão apagou a biometria e o
-          // /api/participant-image responde 404 para ele (esse é o controle).
-          // Pular aqui só evita um request inútil e o flash de carregamento.
-          if (participant.status === 'removed') {
-            continue
-          }
-          if (participant.faceImageUrl) {
-            images[participant.id] = participant.faceImageUrl
-          } else {
-            try {
-              const imgResponse = await fetch(`/api/participant-image?id=${participant.id}`)
-              if (imgResponse.ok) {
-                const imgData = await imgResponse.json()
-                if (imgData.imageUrl) {
-                  images[participant.id] = imgData.imageUrl
-                }
-              }
-            } catch (error) {
-              console.error(`Failed to load image for ${participant.id}`)
-            }
-          }
-        }
-        setParticipantImages(images)
       }
     } catch (error) {
       console.error('Failed to load participants:', error)
@@ -470,6 +452,27 @@ export default function EventAdminPage() {
     loadParticipants()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess, temEvento, eventId, showRemoved])
+
+  // ── Foto cheia: só para quem está ABERTO num modal ─────────────────────
+  // Enquanto ela não chega, o modal mostra a miniatura (se já veio) e segue
+  // utilizável. Este hook fica aqui em cima, antes de qualquer early-return
+  // (regra dos Hooks — ver o comentário do editLinkRef).
+  const idAberto = viewingImage?.id ?? editingParticipant?.id ?? null
+  const semFotoAberto =
+    (viewingImage?.id === idAberto ? viewingImage : editingParticipant)?.temFoto === false
+  useEffect(() => {
+    if (!idAberto || semFotoAberto || fotosCheias[idAberto]) return
+    const ctrl = new AbortController()
+    fetch(`/api/participant-image?id=${idAberto}`, { signal: ctrl.signal, cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        // `placeholder` é o SVG de iniciais do endpoint: não é foto, não guarda.
+        if (d?.type === 'url' && d.imageUrl) setFotosCheias(prev => ({ ...prev, [idAberto]: d.imageUrl }))
+      })
+      .catch(() => {})
+    return () => ctrl.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idAberto, semFotoAberto])
 
   // Show loading while checking authentication
   if (status === 'loading') {
@@ -1557,19 +1560,32 @@ export default function EventAdminPage() {
                     </td>
                     <td className="px-2 md:px-4 py-3">
                       <div className="flex items-center">
-                        {participantImages[participant.id] ? (
+                        {participant.temFoto !== false && participant.status !== 'removed' ? (
+                          // Mesmo tamanho com ou sem a miniatura: enquanto ela não
+                          // chega (rede ruim da feira), aparecem as iniciais no
+                          // lugar — sem buraco, sem pulo de layout, e o botão já
+                          // abre o participante. O ref é o que faz a linha pedir a
+                          // miniatura só quando está na tela (useMiniaturas).
                           <button
+                            ref={refMiniatura(participant.id)}
                             onClick={() => setViewingImage(participant)}
-                            className="relative group"
+                            className="relative group shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-200 hover:border-mega-500 transition-colors flex items-center justify-center"
+                            title={`Ver foto e detalhes de ${participant.name}`}
                           >
-                            <img
-                              src={participantImages[participant.id]}
-                              alt={`Foto de ${participant.name}`}
-                              className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border-2 border-gray-200 group-hover:border-mega-500 transition-colors"
-                            />
-                            <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-20 flex items-center justify-center transition-opacity">
-                              <span className="text-white opacity-0 group-hover:opacity-100 text-xs">👁️</span>
-                            </div>
+                            {miniaturas[participant.id] ? (
+                              <img
+                                src={miniaturas[participant.id]}
+                                alt={`Foto de ${participant.name}`}
+                                width={40}
+                                height={40}
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-[10px] md:text-xs font-semibold text-gray-500 select-none" aria-hidden="true">
+                                {participant.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                              </span>
+                            )}
                           </button>
                         ) : (
                           <button
@@ -1917,20 +1933,22 @@ export default function EventAdminPage() {
         {/* Edit Modal */}
         {editingParticipant && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="bg-white text-gray-900 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">
                 ✏️ Editar Participante
               </h3>
 
               {/* Display participant image if available */}
-              {(editingParticipant.faceImageUrl || participantImages[editingParticipant.id]) && (
+              {(fotosCheias[editingParticipant.id] || miniaturas[editingParticipant.id]) && (
                 <div className="mb-4 text-center">
-                  <img 
-                    src={editingParticipant.faceImageUrl || participantImages[editingParticipant.id]}
+                  <img
+                    src={fotosCheias[editingParticipant.id] || miniaturas[editingParticipant.id]}
                     alt={`Foto de ${editingParticipant.name}`}
                     className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-200 shadow-lg"
                   />
-                  <p className="text-sm text-gray-500 mt-2">Foto do participante</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    {fotosCheias[editingParticipant.id] ? 'Foto do participante' : 'Carregando foto em tamanho cheio…'}
+                  </p>
                 </div>
               )}
 
@@ -2255,7 +2273,11 @@ export default function EventAdminPage() {
         {/* Image View Modal */}
         {viewingImage && (
           <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto">
+            {/* text-gray-900 no contêiner: o <body> do app é `text-white`
+                (app/layout.tsx), e todo texto daqui sem cor própria herdava
+                branco sobre fundo claro — "Status da face", "Registrado em" e
+                "Consentimento" saíam ilegíveis. */}
+            <div className="bg-white text-gray-900 rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto">
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -2280,14 +2302,24 @@ export default function EventAdminPage() {
                   {/* Left Column - Facial Image */}
                   <div className="space-y-4">
                     <h4 className="font-semibold text-gray-800">📸 Foto Facial</h4>
-                    {viewingImage.faceImageUrl || participantImages[viewingImage.id] ? (
+                    {fotosCheias[viewingImage.id] || miniaturas[viewingImage.id] ? (
                       <div className="text-center">
-                        <img 
-                          src={viewingImage.faceImageUrl || participantImages[viewingImage.id]}
+                        <img
+                          src={fotosCheias[viewingImage.id] || miniaturas[viewingImage.id]}
                           alt={`Foto facial de ${viewingImage.name}`}
                           className="w-full h-auto rounded-lg border border-gray-200 shadow-lg"
                           style={{ maxHeight: '400px', objectFit: 'contain' }}
                         />
+                        {!fotosCheias[viewingImage.id] && (
+                          <p className="text-sm text-gray-500 mt-2">Carregando foto em tamanho cheio…</p>
+                        )}
+                      </div>
+                    ) : viewingImage.temFoto !== false && viewingImage.status !== 'removed' ? (
+                      <div className="bg-gray-100 rounded-lg p-12 text-center">
+                        <div className="text-6xl font-bold text-gray-400 mb-2">
+                          {viewingImage.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <p className="text-sm text-gray-500">Carregando foto…</p>
                       </div>
                     ) : (
                       <div className="bg-purple-100 rounded-lg p-12 text-center">
@@ -2406,7 +2438,7 @@ export default function EventAdminPage() {
                 </div>
 
                 {/* Image Info - Below the columns */}
-                {participantImages[viewingImage.id] && (
+                {viewingImage.temFoto !== false && viewingImage.status !== 'removed' && (
                   <div className="space-y-4 mt-6">
 
                     {/* Image Info */}

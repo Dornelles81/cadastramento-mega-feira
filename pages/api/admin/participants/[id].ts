@@ -192,7 +192,7 @@ async function handleUpdate(id: string, data: any, adminIp: string, adminUser: s
     //
     // De quebra, para de vazar `faceData` (a biometria cifrada) numa resposta de
     // edicao, que era o que a linha crua do Prisma trazia.
-    const participanteFormatado = await lerParticipanteParaAdmin(id, 'admin/participants/[id] PUT')
+    const participanteFormatado = await lerParticipanteParaAdmin(id)
 
     return res.status(200).json({
       success: true,

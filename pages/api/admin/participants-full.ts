@@ -9,6 +9,7 @@ import { buscarRemocoes } from '../../../lib/participants/removal-badge'
 // eram justamente o que fazia a linha editada perder `standName` e sumir do
 // filtro por stand.
 import { ADMIN_PARTICIPANT_SELECT, formatAdminParticipant } from '../../../lib/participants/admin-view'
+import { idsComFoto } from '../../../lib/face/presence'
 
 async function handler(req: NextApiRequest, res: NextApiResponse, session: Session) {
   // CORS headers (restricted to same origin for authenticated endpoint)
@@ -133,14 +134,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse, session: Sessi
 
     console.log(`✅ Returning ${participants.length} participants`)
 
-    // Ator da exclusão para o badge (audit log + fallback denormalizado)
-    const exclusaoPorParticipante = await buscarRemocoes(
-      participants.filter(p => p.status === 'removed').map(p => p.id)
-    )
+    // Ator da exclusão para o badge (audit log + fallback denormalizado) e
+    // presença da foto sem trazer os bytes (lib/face/presence).
+    const [exclusaoPorParticipante, comFoto] = await Promise.all([
+      buscarRemocoes(participants.filter(p => p.status === 'removed').map(p => p.id)),
+      idsComFoto(participants.map(p => p.id))
+    ])
 
     // Format response — mesmo formato que o PUT de edicao devolve.
     const formattedParticipants = participants.map(participant =>
-      formatAdminParticipant(participant, exclusaoPorParticipante, 'admin/participants-full')
+      formatAdminParticipant(participant, exclusaoPorParticipante, comFoto)
     )
 
     res.status(200).json({

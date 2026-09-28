@@ -1,5 +1,5 @@
 import { prisma } from '../prisma'
-import { tryGetFaceImageDataUrl } from '../face-image'
+import { idsComFoto } from '../face/presence'
 import { deriveFaceStatus, isValidFace } from '../face/status'
 import { decryptDocuments } from '../documents'
 import { buscarRemocoes, montarRemocao } from './removal-badge'
@@ -41,8 +41,12 @@ export const ADMIN_PARTICIPANT_SELECT = {
   removedBy: true,
   consentAccepted: true,
   faceInterocularPx: true,
-  faceImageUrl: true, // Foto legada (data URL em claro)
-  faceData: true, // Foto nova (AES-256-GCM) — decriptada server-side, nunca enviada crua
+  // SEM faceData/faceImageUrl, de propósito. Até 28/09/2026 a listagem trazia
+  // a foto em tamanho cheio de todos — 135 MB do Neon e ~180 MB de JSON por
+  // abertura da tela do Expofest — só para usar como miniatura de 40 px. A
+  // presença (`temFoto`) vem do banco sem os bytes (lib/face/presence); a
+  // miniatura, de /api/admin/eventos/[slug]/miniaturas; a foto cheia, de
+  // /api/participant-image quando alguém abre o participante.
   // Estado REAL nos terminais. Sem isto a coluna "Status da face" mostra só a
   // nossa validação e mente.
   terminalSyncs: {
@@ -78,12 +82,12 @@ export const ADMIN_PARTICIPANT_SELECT = {
  *
  * @param exclusoes  Mapa vindo de `buscarRemocoes` (o ator da exclusão). Só é
  *                   consultado para `status === 'removed'`.
- * @param origem     Identificador para o log de biometria corrompida.
+ * @param comFoto    Ids com foto, de `idsComFoto` — decide `temFoto`.
  */
 export function formatAdminParticipant(
   participant: any,
   exclusoes: Awaited<ReturnType<typeof buscarRemocoes>>,
-  origem: string
+  comFoto: Set<string>
 ) {
   // Removido pelo gestor: a exclusão já apagou biometria/documentos no banco
   // (SENSITIVE_PARTICIPANT_CLEAR). Zerar de novo aqui é cinto e suspensório —
@@ -108,10 +112,10 @@ export function formatAdminParticipant(
     // (null sem a chave). Conferência operacional: badge + filtro + coluna no export.
     faceUnvalidated: !!(participant.customData as any)?.__faceUnvalidated,
     // ── ESTADO REAL DA FOTO ────────────────────────────────────────────────
-    // `temFoto` vem de faceData/faceImageUrl, NUNCA de faceVersion: até 03/09 o
-    // faceVersion sobrevivia à remoção que apagava a foto, e linhas antigas
-    // ainda estão assim.
-    temFoto: !!(participant.faceData || participant.faceImageUrl),
+    // `temFoto` vem da presença de faceData/faceImageUrl no banco, NUNCA de
+    // faceVersion: até 03/09 o faceVersion sobrevivia à remoção que apagava a
+    // foto, e linhas antigas ainda estão assim.
+    temFoto: !removido && comFoto.has(participant.id),
     // Contagem por estado, só das linhas em push (`removalState: 'none'`).
     sync: (() => {
       const emPush = participant.terminalSyncs.filter((t: any) => t.removalState === 'none')
@@ -129,11 +133,6 @@ export function formatAdminParticipant(
         pendentes: emPush.filter((t: any) => t.faceState === 'pending').length
       }
     })(),
-    // Tolerante: uma biometria corrompida vira card sem foto, não 500 na
-    // listagem inteira. A falha sai no log com o participantId.
-    faceImageUrl: removido
-      ? ''
-      : tryGetFaceImageDataUrl(participant, { participantId: participant.id, where: origem }) || '',
     customData: removido ? {} : participant.customData || {},
     documents: removido ? {} : decryptDocuments(participant.documents) || {}, // decifra server-side p/ o modal
     approvalStatus: participant.approvalStatus || 'pending',
@@ -153,12 +152,15 @@ export function formatAdminParticipant(
  * Lê UM participante já no formato das telas do admin. Usado pelo PUT de edição
  * para devolver o registro como a listagem o representa.
  */
-export async function lerParticipanteParaAdmin(id: string, origem: string) {
+export async function lerParticipanteParaAdmin(id: string) {
   const participant = await prisma.participant.findUnique({
     where: { id },
     select: ADMIN_PARTICIPANT_SELECT
   })
   if (!participant) return null
-  const exclusoes = await buscarRemocoes(participant.status === 'removed' ? [participant.id] : [])
-  return formatAdminParticipant(participant, exclusoes, origem)
+  const [exclusoes, comFoto] = await Promise.all([
+    buscarRemocoes(participant.status === 'removed' ? [participant.id] : []),
+    idsComFoto([participant.id])
+  ])
+  return formatAdminParticipant(participant, exclusoes, comFoto)
 }
