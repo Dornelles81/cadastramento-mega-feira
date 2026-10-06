@@ -26,8 +26,14 @@
  */
 import { prisma } from '../prisma'
 
+// O primeiro byte é lido de `substring(... from 1 for 1)`, não de
+// `get_byte("faceData", 0)` direto: `get_byte` destoasta a foto INTEIRA (~60 KB)
+// só para olhar um byte, e o `substring` de bytea busca só o pedaço do TOAST
+// que contém o início. Mesmo resultado (conferido nos 4.147 participantes de
+// produção em 2026-10-06); medido no /work do Expofest: 75 ms → 24 ms por
+// chamada. `octet_length` não destoasta: lê o tamanho do cabeçalho.
 export const SQL_TEM_FOTO = `(
-  (octet_length("faceData") > 29 AND get_byte("faceData", 0) = 1)
+  (octet_length("faceData") > 29 AND get_byte(substring("faceData" from 1 for 1), 0) = 1)
   OR "faceImageUrl" LIKE 'data:%'
   OR "faceImageUrl" ~ '^https?://'
 )`

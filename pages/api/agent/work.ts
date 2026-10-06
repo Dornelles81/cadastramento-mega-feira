@@ -25,6 +25,7 @@ import { listAllocatedTerminalIds, hadAllocationToEvent } from '../../../lib/ter
 // operador assume. Constantes compartilhadas com a tela de saúde do sync, que
 // precisa contar como "falha" exatamente o que aqui deixa de ser servido.
 import { isExhausted, MAX_ATTEMPTS } from '../../../lib/agent/retry-policy'
+import { idsServiveisDaFila } from '../../../lib/agent/work-queue'
 
 const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
@@ -74,24 +75,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse, agent: AgentCo
   //
   // `nextAttemptAt: null` entra: é linha que nunca falhou (ou que acabou de
   // ser devolvida à fila pelo botão de re-tentar, que zera o agendamento).
+  //
+  // O `limit` é aplicado DEPOIS de tirar as esgotadas e as não elegíveis, no
+  // banco (lib/agent/work-queue). Antes o corte vinha primeiro e as linhas
+  // mortas, por serem as mais antigas, tomavam as vagas de quem estava atrás
+  // delas — 40 de 50 no Expofest em 2026-10-06.
   const agora = new Date()
-  const retriable = {
-    OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: agora } }]
-  }
-  const rows = semEscopoVigente ? [] : await prisma.participantTerminalSync.findMany({
-    where: {
-      terminalId: terminalId ? terminalId : { in: allocatedIds },
-      OR: [
-        { faceState: 'pending' },
-        { cardState: 'pending' },
-        { removalState: 'pending' },
-        { faceState: 'failed', ...retriable },
-        { cardState: 'failed', ...retriable },
-        { removalState: 'failed', ...retriable }
-      ]
-    },
-    take: limit,
-    orderBy: { createdAt: 'asc' },
+  const ids = semEscopoVigente
+    ? []
+    : await idsServiveisDaFila(terminalId ? [terminalId] : allocatedIds, agora, limit)
+  const rows = ids.length === 0 ? [] : await prisma.participantTerminalSync.findMany({
+    where: { id: { in: ids } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     include: {
       participant: {
         select: {
