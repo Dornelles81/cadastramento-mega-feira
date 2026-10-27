@@ -91,6 +91,11 @@ export default async function handler(
         // Aceita cadastro com documento estrangeiro (sem CPF) neste evento.
         // Default false no schema: nenhum evento muda sem alguem ligar aqui.
         allowForeignDocument,
+        // Aprovacao pelo responsavel do stand (painel de gestao). Default false:
+        // aprovar da acesso fisico, entao delegar e decisao explicita da
+        // organizacao. Desligar nao mexe em aprovacoes ja feitas — so o botao
+        // do gestor some e /api/stand-approval passa a recusar.
+        standApprovalEnabled,
         enableCheckIn,
         enableQRCode,
         successMessage,
@@ -120,6 +125,14 @@ export default async function handler(
         if (!Number.isInteger(n) || n < 0) {
           return res.status(400).json({ error: 'substitutionsPerSlot deve ser um inteiro >= 0' })
         }
+      }
+      // Os dois interruptores auditados: valor que nao e booleano e erro, nao
+      // "ignorado" — senao "false" (string) sairia como sucesso sem mudar nada.
+      if (standApprovalEnabled !== undefined && typeof standApprovalEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'standApprovalEnabled deve ser booleano' })
+      }
+      if (allowForeignDocument !== undefined && typeof allowForeignDocument !== 'boolean') {
+        return res.status(400).json({ error: 'allowForeignDocument deve ser booleano' })
       }
 
       // Find existing event
@@ -173,21 +186,24 @@ export default async function handler(
           substitutionQuotaEnabled !== existingEvent.substitutionQuotaEnabled) ||
         (substitutionsPerSlot !== undefined &&
           Number(substitutionsPerSlot) !== existingEvent.substitutionsPerSlot)
+      const auditActor = {
+        eventId: existingEvent.id,
+        entityType: 'event',
+        entityId: existingEvent.id,
+        actorType: 'admin',
+        actorIdentifier: session.user?.email ?? null,
+        adminEmail: session.user?.email ?? null,
+        ip:
+          ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() ||
+          req.socket.remoteAddress ||
+          null,
+        userAgent: (req.headers['user-agent'] as string) ?? null
+      }
       if (policyChanged) {
         await prisma.auditLog.create({
           data: {
-            eventId: existingEvent.id,
+            ...auditActor,
             action: 'EVENT_POLICY_CHANGED',
-            entityType: 'event',
-            entityId: existingEvent.id,
-            actorType: 'admin',
-            actorIdentifier: session.user?.email ?? null,
-            adminEmail: session.user?.email ?? null,
-            ip:
-              ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() ||
-              req.socket.remoteAddress ||
-              null,
-            userAgent: (req.headers['user-agent'] as string) ?? null,
             previousData: {
               dayResetHour: existingEvent.dayResetHour,
               substitutionQuotaEnabled: existingEvent.substitutionQuotaEnabled,
@@ -204,6 +220,13 @@ export default async function handler(
         })
       }
 
+      // Valores ANTES da escrita, para o audit abaixo. Sem EventConfig, vale o
+      // default do schema (false) — que e o que o resto do sistema ja enxerga.
+      const flagsAntes = {
+        standApprovalEnabled: existingEvent.eventConfigs?.standApprovalEnabled ?? false,
+        allowForeignDocument: existingEvent.eventConfigs?.allowForeignDocument ?? false
+      }
+
       // Update or create EventConfig
       if (logoUrl !== undefined || primaryColor || secondaryColor || accentColor ||
           typeof requireConsent === 'boolean' ||
@@ -211,6 +234,7 @@ export default async function handler(
           typeof requireDocuments === 'boolean' ||
           typeof autoApprove === 'boolean' ||
           typeof allowForeignDocument === 'boolean' ||
+          typeof standApprovalEnabled === 'boolean' ||
           typeof enableCheckIn === 'boolean' ||
           typeof enableQRCode === 'boolean' ||
           successMessage !== undefined ||
@@ -230,6 +254,7 @@ export default async function handler(
               ...(typeof requireDocuments === 'boolean' && { requireDocuments }),
               ...(typeof autoApprove === 'boolean' && { autoApprove }),
               ...(typeof allowForeignDocument === 'boolean' && { allowForeignDocument }),
+              ...(typeof standApprovalEnabled === 'boolean' && { standApprovalEnabled }),
               ...(typeof enableCheckIn === 'boolean' && { enableCheckIn }),
               ...(typeof enableQRCode === 'boolean' && { enableQRCode }),
               ...(successMessage !== undefined && { successMessage }),
@@ -253,6 +278,7 @@ export default async function handler(
               requireDocuments: requireDocuments !== undefined ? requireDocuments : false,
               autoApprove: autoApprove !== undefined ? autoApprove : false,
               allowForeignDocument: allowForeignDocument === true,
+              standApprovalEnabled: standApprovalEnabled === true,
               enableCheckIn: enableCheckIn !== undefined ? enableCheckIn : true,
               enableQRCode: enableQRCode !== undefined ? enableQRCode : true,
               // Sem default: evento novo nasce com a tela final padrao.
@@ -260,6 +286,32 @@ export default async function handler(
             }
           })
         }
+      }
+
+      // Interruptores que mudam QUEM aprova e QUEM pode se cadastrar: cada
+      // mudanca de valor vira uma linha EVENT_CONFIG_CHANGED (quem, quando, de
+      // onde, antes/depois). O form manda os dois sempre, entao so registra o
+      // que de fato mudou.
+      const ROTULOS = {
+        standApprovalEnabled: 'Aprovação pelo responsável do stand',
+        allowForeignDocument: 'Aceitar documento estrangeiro'
+      } as const
+      const pedidos = { standApprovalEnabled, allowForeignDocument }
+      for (const campo of Object.keys(ROTULOS) as (keyof typeof ROTULOS)[]) {
+        const novo = pedidos[campo]
+        if (typeof novo !== 'boolean' || novo === flagsAntes[campo]) continue
+        await prisma.auditLog.create({
+          data: {
+            ...auditActor,
+            action: 'EVENT_CONFIG_CHANGED',
+            previousData: { [campo]: flagsAntes[campo] },
+            newData: { [campo]: novo },
+            description:
+              `"${ROTULOS[campo]}" ${novo ? 'LIGADA' : 'DESLIGADA'} no evento ` +
+              `${existingEvent.slug} por ${session.user?.email ?? 'admin desconhecido'}`,
+            severity: 'WARNING'
+          }
+        })
       }
 
       // Fetch updated event with all relations

@@ -34,6 +34,7 @@ interface Event {
     requireDocuments?: boolean
     autoApprove?: boolean
     allowForeignDocument?: boolean
+    standApprovalEnabled?: boolean
     enableCheckIn?: boolean
     enableQRCode?: boolean
     successMessage?: string
@@ -75,6 +76,7 @@ export default function EditarEventoPage() {
     requireDocuments: false,
     autoApprove: false,
     allowForeignDocument: false,
+    standApprovalEnabled: false,
     enableCheckIn: true,
     enableQRCode: true,
     successMessage: '',
@@ -145,6 +147,7 @@ export default function EditarEventoPage() {
         requireDocuments: event.eventConfigs?.requireDocuments !== undefined ? event.eventConfigs.requireDocuments : false,
         autoApprove: event.eventConfigs?.autoApprove !== undefined ? event.eventConfigs.autoApprove : false,
         allowForeignDocument: event.eventConfigs?.allowForeignDocument === true,
+        standApprovalEnabled: event.eventConfigs?.standApprovalEnabled === true,
         enableCheckIn: event.eventConfigs?.enableCheckIn !== undefined ? event.eventConfigs.enableCheckIn : true,
         enableQRCode: event.eventConfigs?.enableQRCode !== undefined ? event.eventConfigs.enableQRCode : true,
         successMessage: event.eventConfigs?.successMessage || 'Cadastro realizado com sucesso! Retire sua credencial física na secretaria do parque.',
@@ -630,6 +633,22 @@ export default function EditarEventoPage() {
                   <div className="text-sm text-gray-600">
                     Permite cadastro sem CPF, com passaporte ou documento de identidade de outro
                     país. Desligado, o CPF continua obrigatório para todo mundo.
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                <input
+                  type="checkbox"
+                  checked={formData.standApprovalEnabled}
+                  onChange={(e) => setFormData({ ...formData, standApprovalEnabled: e.target.checked })}
+                  className="w-5 h-5 text-purple-600 rounded"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">Aprovação pelo responsável do stand</div>
+                  <div className="text-sm text-gray-600">
+                    Ligado: o responsável de cada stand aprova a própria equipe pelo painel de
+                    gestão. Desligado: só a organização aprova.
                   </div>
                 </div>
               </label>
